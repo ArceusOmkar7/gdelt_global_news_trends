@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gniem-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-key.json
+      - GDELT_DATASET=${GDELT_DATASET:-bigquery-public-data.gdelt_2_events}
+      - GDELT_TABLE=${GDELT_TABLE:-events}
+      - DEFAULT_LOOKBACK_DAYS=${DEFAULT_LOOKBACK_DAYS:-7}
+      - DEFAULT_QUERY_LIMIT=${DEFAULT_QUERY_LIMIT:-10000}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ${GOOGLE_APPLICATION_CREDENTIALS}:/secrets/gcp-key.json:ro
+    restart: unless-stopped
