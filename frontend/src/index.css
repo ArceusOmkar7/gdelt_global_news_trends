@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-terminal-green: #00ff41;
+  --color-terminal-dim: #003b00;
+  --color-cyber-blue: #00f3ff;
+  --color-cyber-red: #ff003c;
+  
+  --color-surface-900: #0a0a0a;
+  --color-surface-800: #121212;
+  --color-surface-700: #1a1a1a;
+  --color-surface-600: #2a2a2a;
+}
+
+@layer base {
+  body {
+    @apply bg-surface-900 text-white font-sans antialiased m-0 overflow-hidden;
+  }
+
+  code {
+    @apply font-mono;
+  }
+}
+
+/* Custom GNIEM Aesthetics */
+@utility panel-border {
+  @apply border border-white/10;
+}
+
+@utility data-ink {
+  @apply text-cyber-blue font-mono uppercase tracking-widest text-[10px];
+}
+
+@utility glass-panel {
+  @apply bg-surface-800/80 backdrop-blur-md panel-border;
+}
+
+@utility glowing-text {
+  text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-surface-900;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-white/10 hover:bg-white/20;
+}

@@ -1,0 +1,37 @@
+# GNIEM Project Tasks
+
+## Phase 1: Foundation (Completed)
+- [x] Set up FastAPI app with Clean Architecture structure
+- [x] Create BigQuery client and repository
+- [x] Implement event retrieval domain models and use cases
+- [x] Establish health check and event endpoints
+- [x] Unit tests for Phase 1
+
+## Phase 2: AI Analytics (Completed)
+- [x] Implement NLP clustering service (TF-IDF + KMeans)
+- [x] Implement time-series forecasting service (Prophet)
+- [x] Integrate ML models with domain models and use cases
+- [x] Create `/api/v1/analytics/clusters` and `/api/v1/analytics/forecast` endpoints
+- [x] Unit tests for AI analytics models and services
+- [x] Fix BigQuery dataset access permissions to `gdelt-bq.gdeltv2`
+
+## Phase 3: Palantir-Inspired Map & On-Demand Intelligence (To Do)
+- [x] **Backend: Geospatial Event API**
+  - [x] Implement `/api/v1/events/map` with semantic zoom support
+  - [x] Implement spatial aggregation query for low zoom levels
+  - [x] Implement individual event + GKG join query for high zoom levels
+- [x] **Backend: On-Demand LLM Analysis**
+  - [x] Implement website scraper for `source_url`
+  - [x] Create `/api/v1/events/{id}/analyze` LLM endpoint using Structured Output prompts
+- [x] **Frontend: Foundation & Aesthetics**
+  - [x] Initialize React/TypeScript Vite app with Zustand
+  - [x] Configure Tailwind & custom distinctive fonts (e.g., JetBrains Mono / Archivo) for a bold, dark intelligence theme
+- [x] **Frontend: Interactive Map (Deck.gl/Leaflet)**
+  - [x] Render global heatmap/hexbin layer for Zoom < 5
+  - [x] Render individual distinct points for Zoom >= 5
+- [x] **Frontend: Intelligence Side Panel (Level 3)**
+  - [x] Build detailed view showing raw GDELT + GKG metrics
+  - [x] Integrate "Analyze Source" button to fetch LLM insights dynamically
+- [ ] **Integration & Testing**
+  - [ ] Pytest integration tests for new endpoints
+  - [ ] Manual end-to-end verification of the map UI and LLM flow

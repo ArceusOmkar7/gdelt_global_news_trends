@@ -1,0 +1,71 @@
+# Phase 3 Implementation Plan
+
+## Goal Description
+The objective of Phase 3 is to build the frontend interactive map dashboard and the advanced data integration layer for the Global News Intelligence & Event Monitoring System (GNIEM). As requested, the UI will be Palantir-inspired: dark-themed, data-dense, and distinctively designed (leveraging the `frontend-design` skill to avoid generic UI tropes). It will feature a semantic-zoom map where low zoom levels show aggregated events and high zoom levels show indivdual events with rich GDELT and GKG (Global Knowledge Graph) metadata. To optimize resources, news article scraping and LLM-based analysis will be strictly "on-demand" when a user zooms in and requests a deep dive on a specific event, utilizing the `prompt-engineering-patterns` skill.
+
+## Proposed Changes
+
+### Backend APIs & SQL Queries
+We will introduce new domain models, infrastructure queries, and API endpoints to handle map data.
+#### [NEW] `backend/api/routers/map.py`
+Endpoints:
+- `GET /api/v1/events/map`
+  - Accepts bounding box (`bbox_n`, `bbox_s`, `bbox_e`, `bbox_w`) and `zoom` level.
+  - If `zoom < 5`: Returns geographically aggregated intensity (via BigQuery clustering/grid counting).
+  - If `zoom >= 5`: Returns individual event coordinates and basic metadata.
+- `GET /api/v1/events/{event_id}/analyze`
+  - The "on-demand" intelligence endpoint.
+  - Scrapes the `source_url` text.
+  - Sends the text to an LLM (e.g., Claude/OpenAI) using a structured output pattern (from `prompt-engineering-patterns`) to extract sentiment, entities, and summaries.
+
+#### [MODIFY] [backend/infrastructure/data_access/gdelt_repository.py](file:///home/sasuke/gdelt_project/backend/infrastructure/data_access/gdelt_repository.py)
+We will add two new query methods utilizing the `sql-optimization-patterns` skill:
+- `get_map_aggregations(bbox)`: Uses approximate counts or grid-snapping (e.g., grouping by rounded lat/long) to quickly return heat intensities.
+- `get_event_details(event_id)`: A joined BigQuery query between `gdelt-bq.gdeltv2.events` and `gdelt-bq.gdeltv2.gkg` (if available) to pull deep context for the side panel.
+
+#### [NEW] `backend/infrastructure/services/scraper_service.py`
+- Implements a lightweight web scraper (using `BeautifulSoup` or `newspaper3k`) to fetch article text purely on-demand, caching the result.
+
+#### [NEW] `backend/infrastructure/services/llm_analysis_service.py`
+- Uses structured JSON outputs and Chain-of-Thought prompts to analyze article text and return reliable, typed JSON for the frontend.
+
+---
+
+### Frontend Map Dashboard
+We will construct the React application using Vite and styled using the principles from the `frontend-design` skill. Ensure no generic fonts (Inter/Roboto) are used; we will opt for a high-contrast industrial/intelligence theme (e.g., utilizing `Oswald` or `JetBrains Mono`).
+
+#### [NEW] `frontend/package.json` & `frontend/vite.config.ts`
+- Setup React, TypeScript, Vite.
+- Dependencies: `deck.gl` (for high-performance WebGL mapping), `react-map-gl`, `zustand` (state), `tailwindcss`, `lucide-react` (icons).
+
+#### [NEW] `frontend/src/components/map/GlobalEventMap.tsx`
+- The Level 1/Level 2 view.
+- Uses `deck.gl`. Configures a `HexagonLayer` or `HeatmapLayer` when `zoom < 5`. Configures a `ScatterplotLayer` with distinct color-coding (based on Goldstein scale or event root code) when `zoom >= 5`.
+- Employs progressive disclosure: clicking an event updates Zustand state with the selected `eventId`.
+
+#### [NEW] `frontend/src/components/tables/IntelligencePanel.tsx`
+- The Level 3 view.
+- Slides in from the side when an event is clicked.
+- Displays raw GDELT metrics (Goldstein Scale, Media Mentions, Actor Country Codes).
+- Integrates a prominent "Analyze Source via LLM" button. Clicking this hits the `/analyze` endpoint and reveals the LLM's structured insights asynchronously.
+
+#### [MODIFY] `frontend/src/index.css`
+- Core aesthetic rules: dark mode strictly, high-visibility data ink, glowing map points, geometric layout. 
+
+## Verification Plan
+
+### Automated Tests
+1. **Scraper & LLM Integration (Unit/Mocked)**
+   - Run `pytest backend/tests/unit/test_llm_analysis.py` to verify the LLM prompt templates output the expected Pydantic schema correctly.
+   - Run `pytest backend/tests/unit/test_scraper.py` on a mock HTML piece.
+2. **BigQuery Map Queries (Integration)**
+   - Run `pytest backend/tests/integration/test_map_queries.py` to ensure `get_map_aggregations` returns valid geocoded objects within a reasonable response time without scanning the whole dataset (verifying SQL optimization).
+
+### Manual Verification
+1. Open the terminal and navigate to the project root.
+2. Run `docker-compose up --build` or manually start the backend with `uvicorn api.main:app --reload` and frontend with `npm run dev`.
+3. Open `http://localhost:5173`.
+4. **Level 1 Verification**: Observe the global map loading aggregated data points. Confirm the visual aesthetics align with the bold, Palantir-inspired dark intelligence theme (not generic UI).
+5. **Level 2 Verification**: Zoom in on a hot zone. Confirm that as you zoom past level 5, the Deck.gl map switches smoothly from heat aggregation to discrete event dots.
+6. **Level 3 Verification**: Click on a distinct point. Verify that the side panel opens showing GDELT/GKG data.
+7. **On-Demand Intelligence Verification**: In the side panel, click "Analyze Source via LLM". Wait for the loading state to complete and verify that an LLM-derived summary and structured entity list appears.
