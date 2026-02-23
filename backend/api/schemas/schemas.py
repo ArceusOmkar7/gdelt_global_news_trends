@@ -135,6 +135,45 @@ class ForecastResponse(BaseModel):
     predictions: list[ForecastPointResponse]
 
 
+class MapAggregationResponse(BaseModel):
+    """Serialised representation of a geospatial aggregation."""
+    lat: float
+    lon: float
+    intensity: float
+
+
+class MapEventDetailResponse(BaseModel):
+    """Serialised representation of an individual event for the map."""
+    global_event_id: int
+    sql_date: date
+    lat: float
+    lon: float
+    actor1_country_code: str | None = None
+    actor2_country_code: str | None = None
+    event_root_code: str | None = None
+    goldstein_scale: float | None = None
+    num_mentions: int = 0
+    source_url: str | None = None
+    gkg_record_id: str | None = None
+
+
+class MapDataResponse(BaseModel):
+    """Unified response for the geospatial event map."""
+    zoom: int
+    is_aggregated: bool
+    count: int
+    data: list[MapAggregationResponse] | list[MapEventDetailResponse]
+
+
+class EventAnalysisResponse(BaseModel):
+    """Serialised representation of an LLM intelligence analysis."""
+    summary: str
+    sentiment: str
+    entities: list[str] = Field(default_factory=list)
+    themes: list[str] = Field(default_factory=list)
+    confidence: float
+
+
 class BigQueryHealthDetail(BaseModel):
     """Nested detail for BigQuery connectivity in health check."""
 

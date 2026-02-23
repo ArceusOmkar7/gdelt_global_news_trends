@@ -12,7 +12,13 @@ from typing import Any
 import structlog
 from google.cloud import bigquery
 
-from backend.domain.models.event import Event, EventCountByDate, EventFilter
+from backend.domain.models.event import (
+    Event,
+    EventCountByDate,
+    EventFilter,
+    MapAggregation,
+    MapEventDetail,
+)
 from backend.domain.ports.ports import IEventRepository
 from backend.infrastructure.config.settings import Settings
 from backend.infrastructure.data_access.bigquery_client import BigQueryClient
@@ -148,6 +154,190 @@ class GdeltRepository(IEventRepository):
 
         rows = self._bq.execute_query(sql, params)
         return [self._row_to_count(row) for row in rows]
+
+    def get_map_aggregations(
+        self,
+        bbox_n: float,
+        bbox_s: float,
+        bbox_e: float,
+        bbox_w: float,
+        filters: EventFilter,
+        grid_precision: int = 2
+    ) -> list[MapAggregation]:
+        """Get aggregated event counts for a geographic region."""
+        start_date, end_date = self._resolve_dates(filters)
+        limit = filters.limit or self._settings.default_query_limit
+
+        where_clauses = [
+            "SQLDATE >= @start_date",
+            "SQLDATE <= @end_date",
+            "ActionGeo_Lat <= @bbox_n",
+            "ActionGeo_Lat >= @bbox_s",
+            "ActionGeo_Long <= @bbox_e",
+            "ActionGeo_Long >= @bbox_w",
+        ]
+        params: dict[str, Any] = {
+            "start_date": bigquery.ScalarQueryParameter(
+                "start_date", "INT64", int(start_date.strftime("%Y%m%d"))
+            ),
+            "end_date": bigquery.ScalarQueryParameter(
+                "end_date", "INT64", int(end_date.strftime("%Y%m%d"))
+            ),
+            "bbox_n": bigquery.ScalarQueryParameter("bbox_n", "FLOAT64", bbox_n),
+            "bbox_s": bigquery.ScalarQueryParameter("bbox_s", "FLOAT64", bbox_s),
+            "bbox_e": bigquery.ScalarQueryParameter("bbox_e", "FLOAT64", bbox_e),
+            "bbox_w": bigquery.ScalarQueryParameter("bbox_w", "FLOAT64", bbox_w),
+            "grid_precision": bigquery.ScalarQueryParameter("grid_precision", "INT64", grid_precision),
+            "limit": bigquery.ScalarQueryParameter("limit", "INT64", limit),
+        }
+
+        if filters.event_root_code:
+            where_clauses.append("EventRootCode = @event_root_code")
+            params["event_root_code"] = bigquery.ScalarQueryParameter(
+                "event_root_code", "STRING", filters.event_root_code
+            )
+
+        sql = f"""
+            SELECT
+                ROUND(ActionGeo_Lat, @grid_precision) AS lat,
+                ROUND(ActionGeo_Long, @grid_precision) AS lon,
+                COUNT(*) AS intensity
+            FROM {self._table}
+            WHERE {' AND '.join(where_clauses)}
+            GROUP BY lat, lon
+            LIMIT @limit
+        """
+
+        rows = self._bq.execute_query(sql, params)
+        return [
+            MapAggregation(
+                lat=row["lat"],
+                lon=row["lon"],
+                intensity=row["intensity"]
+            )
+            for row in rows
+        ]
+
+    def get_event_details(
+        self,
+        bbox_n: float,
+        bbox_s: float,
+        bbox_e: float,
+        bbox_w: float,
+        filters: EventFilter,
+    ) -> list[MapEventDetail]:
+        """Get detailed events for a geographic region."""
+        start_date, end_date = self._resolve_dates(filters)
+        limit = filters.limit or self._settings.default_query_limit
+
+        where_clauses = [
+            "SQLDATE >= @start_date",
+            "SQLDATE <= @end_date",
+            "ActionGeo_Lat <= @bbox_n",
+            "ActionGeo_Lat >= @bbox_s",
+            "ActionGeo_Long <= @bbox_e",
+            "ActionGeo_Long >= @bbox_w",
+        ]
+        params: dict[str, Any] = {
+            "start_date": bigquery.ScalarQueryParameter(
+                "start_date", "INT64", int(start_date.strftime("%Y%m%d"))
+            ),
+            "end_date": bigquery.ScalarQueryParameter(
+                "end_date", "INT64", int(end_date.strftime("%Y%m%d"))
+            ),
+            "bbox_n": bigquery.ScalarQueryParameter("bbox_n", "FLOAT64", bbox_n),
+            "bbox_s": bigquery.ScalarQueryParameter("bbox_s", "FLOAT64", bbox_s),
+            "bbox_e": bigquery.ScalarQueryParameter("bbox_e", "FLOAT64", bbox_e),
+            "bbox_w": bigquery.ScalarQueryParameter("bbox_w", "FLOAT64", bbox_w),
+            "limit": bigquery.ScalarQueryParameter("limit", "INT64", limit),
+        }
+
+        if filters.event_root_code:
+            where_clauses.append("EventRootCode = @event_root_code")
+            params["event_root_code"] = bigquery.ScalarQueryParameter(
+                "event_root_code", "STRING", filters.event_root_code
+            )
+
+        # Simple query for now, joining with GKG could be added if needed for specific IDs.
+        # But for map dots, we just need basic metadata.
+        sql = f"""
+            SELECT
+                GLOBALEVENTID,
+                SQLDATE,
+                ActionGeo_Lat AS lat,
+                ActionGeo_Long AS lon,
+                Actor1CountryCode,
+                Actor2CountryCode,
+                EventRootCode,
+                GoldsteinScale,
+                NumMentions,
+                SOURCEURL
+            FROM {self._table}
+            WHERE {' AND '.join(where_clauses)}
+            LIMIT @limit
+        """
+
+        rows = self._bq.execute_query(sql, params)
+        return [self._row_to_map_detail(row) for row in rows]
+
+    def get_event_by_id(self, event_id: int) -> Event | None:
+        """Retrieve a single event by its unique GLOBALEVENTID."""
+        sql = f"""
+            SELECT
+                GLOBALEVENTID,
+                SQLDATE,
+                Actor1CountryCode,
+                Actor2CountryCode,
+                EventRootCode,
+                EventCode,
+                GoldsteinScale,
+                NumMentions,
+                NumArticles,
+                NumSources,
+                AvgTone,
+                ActionGeo_CountryCode,
+                ActionGeo_Lat,
+                ActionGeo_Long,
+                SOURCEURL
+            FROM {self._table}
+            WHERE GLOBALEVENTID = @event_id
+            LIMIT 1
+        """
+        params = {
+            "event_id": bigquery.ScalarQueryParameter("event_id", "INT64", event_id)
+        }
+
+        rows = self._bq.execute_query(sql, params)
+        if not rows:
+            return None
+        return self._row_to_event(rows[0])
+
+    @staticmethod
+    def _row_to_map_detail(row: dict[str, Any]) -> MapEventDetail:
+        """Map a BigQuery row to a MapEventDetail model."""
+        sql_date_raw = row.get("SQLDATE")
+        if isinstance(sql_date_raw, int):
+            sql_date_str = str(sql_date_raw)
+            parsed_date = date(
+                int(sql_date_str[:4]),
+                int(sql_date_str[4:6]),
+                int(sql_date_str[6:8]),
+            )
+        else:
+            parsed_date = sql_date_raw
+
+        return MapEventDetail(
+            global_event_id=row["GLOBALEVENTID"],
+            sql_date=parsed_date,
+            lat=row["lat"],
+            lon=row["lon"],
+            actor1_country_code=row.get("Actor1CountryCode"),
+            actor2_country_code=row.get("Actor2CountryCode"),
+            event_root_code=row.get("EventRootCode"),
+            goldstein_scale=row.get("GoldsteinScale"),
+            num_mentions=row.get("NumMentions", 0),
+            source_url=row.get("SOURCEURL"),
+        )
 
     # ------------------------------------------------------------------
     # Private helpers

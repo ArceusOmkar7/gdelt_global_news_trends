@@ -6,7 +6,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from backend.application.use_cases.get_events import GetEventsUseCase
-from backend.domain.models.event import Event, EventCountByDate, EventFilter
+from backend.domain.models.event import (
+    Event,
+    EventCountByDate,
+    EventFilter,
+    MapAggregation,
+    MapEventDetail,
+)
 from backend.domain.ports.ports import IEventRepository
 
 
@@ -107,3 +113,43 @@ class TestGetEventsUseCase:
         call_args = self.mock_repo.get_event_counts_by_date.call_args
         assert call_args[0][0] is None
         assert result == []
+
+    def test_get_map_aggregations_delegates_to_repository(self) -> None:
+        expected = [MapAggregation(lat=0, lon=0, intensity=10)]
+        self.mock_repo.get_map_aggregations.return_value = expected
+
+        result = self.use_case.get_map_aggregations(
+            bbox_n=10.0, bbox_s=-10.0, bbox_e=10.0, bbox_w=-10.0,
+            grid_precision=2,
+            limit=100
+        )
+
+        self.mock_repo.get_map_aggregations.assert_called_once()
+        args, kwargs = self.mock_repo.get_map_aggregations.call_args
+        assert args[0] == 10.0
+        assert args[1] == -10.0
+        assert args[2] == 10.0
+        assert args[3] == -10.0
+        assert args[5] == 2  # grid_precision
+        assert result == expected
+
+    def test_get_map_event_details_delegates_to_repository(self) -> None:
+        expected = [
+            MapEventDetail(
+                global_event_id=1,
+                sql_date=date(2024, 1, 1),
+                lat=0,
+                lon=0
+            )
+        ]
+        self.mock_repo.get_event_details.return_value = expected
+
+        result = self.use_case.get_map_event_details(
+            bbox_n=10.0, bbox_s=-10.0, bbox_e=10.0, bbox_w=-10.0,
+            limit=100
+        )
+
+        self.mock_repo.get_event_details.assert_called_once()
+        args, _ = self.mock_repo.get_event_details.call_args
+        assert args[0] == 10.0
+        assert result == expected

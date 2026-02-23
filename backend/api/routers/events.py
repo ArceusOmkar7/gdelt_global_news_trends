@@ -12,12 +12,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from backend.api.schemas.schemas import (
+    EventAnalysisResponse,
     EventCountListResponse,
     EventCountResponse,
     EventFilterRequest,
     EventListResponse,
     EventResponse,
 )
+from backend.application.use_cases.analyze_event import AnalyzeEventUseCase
 from backend.application.use_cases.get_events import GetEventsUseCase
 from backend.domain.models.event import EventFilter
 
@@ -27,6 +29,11 @@ router = APIRouter(prefix="/events", tags=["events"])
 def _get_use_case() -> GetEventsUseCase:
     """Dependency stub — overridden at app startup via dependency_overrides."""
     raise NotImplementedError("GetEventsUseCase dependency not wired")
+
+
+def _get_analyze_use_case() -> AnalyzeEventUseCase:
+    """Dependency stub."""
+    raise NotImplementedError("AnalyzeEventUseCase dependency not wired")
 
 
 @router.get(
@@ -120,3 +127,20 @@ def event_counts_global(
     )
     data = [EventCountResponse.model_validate(c.model_dump()) for c in counts]
     return EventCountListResponse(count=len(data), data=data)
+
+
+@router.get(
+    "/{event_id}/analyze",
+    response_model=EventAnalysisResponse,
+    summary="Analyze event via LLM",
+    description=(
+        "Performs on-demand deep intelligence analysis for a single event. "
+        "Scrapes the source article and uses an LLM to generate insights."
+    ),
+)
+async def analyze_event(
+    event_id: int,
+    use_case: Annotated[AnalyzeEventUseCase, Depends(_get_analyze_use_case)],
+) -> EventAnalysisResponse:
+    analysis = await use_case.execute(event_id)
+    return EventAnalysisResponse.model_validate(analysis.model_dump())

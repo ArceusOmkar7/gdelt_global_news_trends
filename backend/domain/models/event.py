@@ -203,3 +203,43 @@ class EventCountByDate(BaseModel):
     )
 
     model_config = {"frozen": True}
+
+
+class MapAggregation(BaseModel):
+    """Geospatial aggregation for low zoom levels."""
+    
+    lat: float = Field(description="Rounded latitude of the aggregated grid cell.")
+    lon: float = Field(description="Rounded longitude of the aggregated grid cell.")
+    intensity: float = Field(description="Aggregated intensity, typically event count.")
+
+    model_config = {"frozen": True}
+
+
+class MapEventDetail(BaseModel):
+    """Details for a single event displayed at high zoom levels."""
+    
+    global_event_id: int
+    sql_date: _dt.date
+    lat: float
+    lon: float
+    actor1_country_code: str | None = None
+    actor2_country_code: str | None = None
+    event_root_code: str | None = None
+    goldstein_scale: float | None = None
+    num_mentions: int = 0
+    source_url: str | None = None
+    gkg_record_id: str | None = Field(default=None, description="Global Knowledge Graph ID if joined.")
+
+    model_config = {"frozen": True}
+
+
+class EventAnalysis(BaseModel):
+    """LLM-generated intelligence analysis for a news article."""
+    
+    summary: str = Field(description="A concise summary of the event.")
+    sentiment: str = Field(description="Overall sentiment (Positive, Neutral, Negative).")
+    entities: list[str] = Field(default_factory=list, description="Key entities mentioned (people, orgs, places).")
+    themes: list[str] = Field(default_factory=list, description="Thematic categories detected.")
+    confidence: float = Field(description="LLM's confidence in the analysis (0.0 to 1.0).")
+
+    model_config = {"frozen": True}

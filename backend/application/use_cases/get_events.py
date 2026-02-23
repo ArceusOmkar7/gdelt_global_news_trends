@@ -10,7 +10,13 @@ from datetime import date, timedelta
 
 import structlog
 
-from backend.domain.models.event import Event, EventCountByDate, EventFilter
+from backend.domain.models.event import (
+    Event,
+    EventCountByDate,
+    EventFilter,
+    MapAggregation,
+    MapEventDetail,
+)
 from backend.domain.ports.ports import IEventRepository
 
 logger = structlog.get_logger(__name__)
@@ -105,3 +111,61 @@ class GetEventsUseCase:
             end_date=str(end_date),
         )
         return self._repository.get_event_counts_by_date(country_code, filters)
+
+    def get_map_aggregations(
+        self,
+        bbox_n: float,
+        bbox_s: float,
+        bbox_e: float,
+        bbox_w: float,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        event_root_code: str | None = None,
+        grid_precision: int = 2,
+        limit: int = 10000,
+    ) -> list[MapAggregation]:
+        """Get aggregated event counts for a geographic region."""
+        filters = EventFilter(
+            start_date=start_date,
+            end_date=end_date,
+            event_root_code=event_root_code,
+            limit=limit,
+        )
+        logger.info(
+            "get_map_aggregations",
+            bbox_n=bbox_n, bbox_s=bbox_s, bbox_e=bbox_e, bbox_w=bbox_w,
+            grid_precision=grid_precision,
+            start_date=str(start_date),
+            end_date=str(end_date),
+        )
+        return self._repository.get_map_aggregations(
+            bbox_n, bbox_s, bbox_e, bbox_w, filters, grid_precision
+        )
+
+    def get_map_event_details(
+        self,
+        bbox_n: float,
+        bbox_s: float,
+        bbox_e: float,
+        bbox_w: float,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        event_root_code: str | None = None,
+        limit: int = 5000,
+    ) -> list[MapEventDetail]:
+        """Get detailed events for a geographic region."""
+        filters = EventFilter(
+            start_date=start_date,
+            end_date=end_date,
+            event_root_code=event_root_code,
+            limit=limit,
+        )
+        logger.info(
+            "get_map_event_details",
+            bbox_n=bbox_n, bbox_s=bbox_s, bbox_e=bbox_e, bbox_w=bbox_w,
+            start_date=str(start_date),
+            end_date=str(end_date),
+        )
+        return self._repository.get_event_details(
+            bbox_n, bbox_s, bbox_e, bbox_w, filters
+        )

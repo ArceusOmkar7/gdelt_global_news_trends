@@ -15,6 +15,9 @@ from backend.domain.models.event import (
     EventCountByDate,
     EventFilter,
     ForecastResult,
+    MapAggregation,
+    MapEventDetail,
+    EventAnalysis,
 )
 
 
@@ -67,6 +70,42 @@ class IEventRepository(ABC):
             List of ``EventCountByDate`` records ordered by date ascending.
         """
 
+    @abstractmethod
+    def get_map_aggregations(
+        self,
+        bbox_n: float,
+        bbox_s: float,
+        bbox_e: float,
+        bbox_w: float,
+        filters: EventFilter,
+        grid_precision: int = 2
+    ) -> list[MapAggregation]:
+        """Get aggregated event counts for a geographic region.
+
+        Args:
+            bbox_n: North latitude bound.
+            bbox_s: South latitude bound.
+            bbox_e: East longitude bound.
+            bbox_w: West longitude bound.
+            filters: Additional filter parameters.
+            grid_precision: Number of decimal places to round lat/lon for grouping.
+        """
+
+    @abstractmethod
+    def get_event_details(
+        self,
+        bbox_n: float,
+        bbox_s: float,
+        bbox_e: float,
+        bbox_w: float,
+        filters: EventFilter,
+    ) -> list[MapEventDetail]:
+        """Get detailed events for a geographic region."""
+
+    @abstractmethod
+    def get_event_by_id(self, event_id: int) -> Event | None:
+        """Retrieve a single event by its unique GLOBALEVENTID."""
+
 
 class IClusteringService(ABC):
     """Interface for NLP-based event clustering."""
@@ -103,4 +142,19 @@ class IForecastingService(ABC):
             
         Returns:
             A ForecastResult containing the predictions.
+        """
+
+
+class ILLMAnalysisService(ABC):
+    """Interface for on-demand LLM intelligence analysis."""
+
+    @abstractmethod
+    async def analyze_event(self, article_text: str) -> EventAnalysis:
+        """Perform deep analysis on article text using an LLM.
+
+        Args:
+            article_text: The full text content of a news article.
+
+        Returns:
+            An EventAnalysis object containing summary, entities, etc.
         """

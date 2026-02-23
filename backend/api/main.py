@@ -18,17 +18,22 @@ from fastapi.responses import JSONResponse
 from backend.api.routers import events as events_router
 from backend.api.routers import health as health_router
 from backend.api.routers import analytics as analytics_router
-from backend.api.routers.events import _get_use_case
+from backend.api.routers import map as map_router
+from backend.api.routers.events import _get_use_case, _get_analyze_use_case
 from backend.api.routers.health import _get_bq_client, _get_settings, set_app_start_time
 from backend.api.routers.analytics import _get_cluster_use_case, _get_forecast_use_case
+from backend.api.routers.map import _get_use_case as _get_map_use_case
 from backend.application.use_cases.get_events import GetEventsUseCase
 from backend.application.use_cases.cluster_events import ClusterEventsUseCase
 from backend.application.use_cases.forecast_events import ForecastEventsUseCase
+from backend.application.use_cases.analyze_event import AnalyzeEventUseCase
 from backend.domain.services.clustering_service import ClusteringService
 from backend.domain.services.forecasting_service import ForecastingService
 from backend.infrastructure.config.settings import Settings, settings
 from backend.infrastructure.data_access.bigquery_client import BigQueryClient, BigQueryClientError
 from backend.infrastructure.data_access.gdelt_repository import GdeltRepository
+from backend.infrastructure.services.scraper_service import ScraperService
+from backend.infrastructure.services.llm_analysis_service import LLMAnalysisService
 
 logger = structlog.get_logger(__name__)
 
@@ -52,8 +57,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     cluster_use_case = ClusterEventsUseCase(repository, clustering_service)
     forecast_use_case = ForecastEventsUseCase(repository, forecasting_service)
 
+    # Phase 3
+    scraper_service = ScraperService()
+    llm_service = LLMAnalysisService(settings)
+    analyze_use_case = AnalyzeEventUseCase(repository, scraper_service, llm_service)
+
     # --- Wire dependencies into routers via overrides ---
     app.dependency_overrides[_get_use_case] = lambda: events_use_case
+    app.dependency_overrides[_get_map_use_case] = lambda: events_use_case
+    app.dependency_overrides[_get_analyze_use_case] = lambda: analyze_use_case
     app.dependency_overrides[_get_cluster_use_case] = lambda: cluster_use_case
     app.dependency_overrides[_get_forecast_use_case] = lambda: forecast_use_case
     app.dependency_overrides[_get_bq_client] = lambda: bq_client
@@ -97,6 +109,10 @@ def create_app() -> FastAPI:
     )
     app.include_router(
         analytics_router.router,
+        prefix=settings.api_v1_prefix,
+    )
+    app.include_router(
+        map_router.router,
         prefix=settings.api_v1_prefix,
     )
 

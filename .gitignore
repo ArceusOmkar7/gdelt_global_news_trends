@@ -8,6 +8,10 @@ build/
 .eggs/
 *.egg
 
+.agents/
+skills-lock.json
+
+
 # Virtual environments
 .venv/
 venv/
