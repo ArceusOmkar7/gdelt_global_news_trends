@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     # Stored as a plain string to avoid pydantic-settings JSON decode issues.
     # Use the `cors_origins` property for the parsed list.
     cors_origins_raw: str = Field(
-        default='["http://localhost:3000","http://localhost:5173"]',
+        default='["http://localhost:3000","http://localhost:5173","http://127.0.0.1:5173"]',
         alias="CORS_ORIGINS",
         description="Allowed CORS origins (JSON array string or comma-separated).",
     )

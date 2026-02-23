@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import Map from 'react-map-gl/mapbox';
-import DeckGL from '@deck.gl/react';
+import Map, { useControl } from 'react-map-gl/mapbox';
+import { MapboxOverlay } from '@deck.gl/mapbox';
+import type { MapboxOverlayProps } from '@deck.gl/mapbox';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { ScatterplotLayer } from '@deck.gl/layers';
 import { useQuery } from '@tanstack/react-query';
@@ -10,6 +11,14 @@ import { apiService } from '../../services/api';
 import type { MapAggregation, Event } from '../../types';
 
 const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+
+// Helper to use DeckGL with react-map-gl
+function DeckGLOverlay(props: MapboxOverlayProps & { getCursor?: (info: any) => string }) {
+  const overlay = useMemo(() => new MapboxOverlay(props), []);
+  useControl(() => overlay);
+  overlay.setProps(props);
+  return null;
+}
 
 export const GlobalEventMap: React.FC = () => {
   const { 
@@ -23,7 +32,7 @@ export const GlobalEventMap: React.FC = () => {
 
   const [mapBBox, setMapBBox] = useState({ n: 90, s: -90, e: 180, w: -180 });
 
-  // Update BBOX when viewState changes (debounced-like)
+  // Update BBOX when viewState changes
   useEffect(() => {
     const timer = setTimeout(() => {
       const viewport = new WebMercatorViewport({
@@ -54,10 +63,6 @@ export const GlobalEventMap: React.FC = () => {
     placeholderData: (previousData) => previousData,
     staleTime: 1000 * 30,
   });
-
-  const onViewStateChange = ({ viewState: nextViewState }: any) => {
-    setViewState(nextViewState);
-  };
 
   const layers = useMemo(() => {
     if (!mapResponse) return [];
@@ -113,19 +118,23 @@ export const GlobalEventMap: React.FC = () => {
 
   return (
     <div className="relative w-full h-full">
-      <DeckGL
-        initialViewState={viewState}
-        onViewStateChange={onViewStateChange}
-        controller={true}
-        layers={layers}
-        getCursor={({ isHovering }) => (isHovering ? 'pointer' : 'grab')}
+      <Map
+        {...viewState}
+        onMove={evt => setViewState(evt.viewState)}
+        mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
+        mapStyle="mapbox://styles/mapbox/dark-v11"
+        style={{ width: '100%', height: '100%' }}
       >
-        <Map
-          mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
-          mapStyle="mapbox://styles/mapbox/dark-v11"
-          reuseMaps
-        />
-      </DeckGL>
+        <DeckGLOverlay layers={layers} />
+      </Map>
+
+      {/* Invalid Token Alert Overlay */}
+      {(!MAPBOX_ACCESS_TOKEN || MAPBOX_ACCESS_TOKEN.includes('pk.eyJ1IjoiamF2aWVyc2VndXJh')) && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-cyber-red/20 border border-cyber-red p-4 rounded backdrop-blur-md max-w-md text-center">
+          <p className="text-cyber-red font-bold font-mono text-sm">CRITICAL SYSTEM ALERT: INVALID MAPBOX TOKEN</p>
+          <p className="text-white/70 text-[10px] mt-2 font-mono uppercase">Please provide a valid VITE_MAPBOX_ACCESS_TOKEN in frontend/.env.local to activate global mapping.</p>
+        </div>
+      )}
 
       {isLoading && (
         <div className="absolute top-4 right-4 z-10 px-3 py-1 bg-surface-800/80 border border-cyber-blue/30 rounded flex items-center gap-2">
