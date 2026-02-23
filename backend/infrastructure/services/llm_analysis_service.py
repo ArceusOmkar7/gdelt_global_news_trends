@@ -7,6 +7,8 @@ analysis on news article text.
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from google.oauth2 import service_account
 import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig
 import structlog
@@ -23,7 +25,18 @@ class LLMAnalysisService(ILLMAnalysisService):
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        vertexai.init(project=settings.gcp_project_id)
+        
+        # Load credentials if provided to ensure Vertex AI uses the correct service account
+        credentials = None
+        creds_path = settings.google_application_credentials
+        if creds_path and Path(creds_path).is_file():
+            credentials = service_account.Credentials.from_service_account_file(creds_path)
+            logger.info("llm_analysis_using_service_account", path=creds_path)
+
+        vertexai.init(
+            project=settings.gcp_project_id,
+            credentials=credentials
+        )
         self._model = GenerativeModel("gemini-1.5-pro")
 
     async def analyze_event(self, article_text: str) -> EventAnalysis:
