@@ -32,6 +32,8 @@
 - [x] **Frontend: Intelligence Side Panel (Level 3)**
   - [x] Build detailed view showing raw GDELT + GKG metrics
   - [x] Integrate "Analyze Source" button to fetch LLM insights dynamically
-- [ ] **Integration & Testing**
-  - [ ] Pytest integration tests for new endpoints
-  - [ ] Manual end-to-end verification of the map UI and LLM flow
+- [x] **Integration & Testing**
+  - [x] Pytest integration tests for new endpoints
+  - [x] Manual end-to-end verification of the map UI and LLM flow
+  - [x] Fixed CORS and Environment configuration issues
+  - [x] Optimized Heatmap vs. Points transition at Zoom 9

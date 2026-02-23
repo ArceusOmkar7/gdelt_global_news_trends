@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@math.gl/web-mercator": "^4.1.0",
     "@tanstack/react-query": "^5.90.21",
     "autoprefixer": "^10.4.24",
     "deck.gl": "^9.2.9",

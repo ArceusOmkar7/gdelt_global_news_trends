@@ -38,6 +38,12 @@ class Settings(BaseSettings):
         description="Table name within the GDELT dataset.",
     )
 
+    # --- AI / LLM ---
+    llm_model_name: str = Field(
+        default="gemini-1.5-flash",
+        description="Gemini model to use for analysis (e.g., gemini-1.5-flash, gemini-1.5-pro).",
+    )
+
     # --- Query Defaults ---
     default_lookback_days: int = Field(
         default=7,
@@ -76,6 +82,8 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         """Parse cors_origins_raw into a list of origin strings."""
+        if self.environment == "development":
+            return ["*"]
         raw = self.cors_origins_raw.strip()
         if raw.startswith("["):
             try:

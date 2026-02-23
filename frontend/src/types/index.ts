@@ -8,7 +8,11 @@ export interface Event {
   event_root_code?: string;
   goldstein_scale?: number;
   num_mentions: number;
+  num_sources?: number;
+  avg_tone?: number;
   source_url?: string;
+  actor1_type?: string;
+  actor2_type?: string;
 }
 
 export interface MapAggregation {

@@ -256,15 +256,22 @@ export const IntelligencePanel: React.FC = () => {
 
       {/* Footer */}
       <div className="p-4 bg-surface-900/80 border-t border-white/10">
-        <a 
-          href={selectedEvent.source_url || '#'} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 text-white/40 hover:text-white transition-colors text-xs font-mono"
-        >
-          <ExternalLink size={14} />
-          VIEW RAW SOURCE DATA
-        </a>
+        {analyzeMutation.isPending ? (
+          <div className="flex items-center justify-center gap-2">
+            <span className="w-1.5 h-1.5 bg-cyber-blue rounded-full animate-pulse" />
+            <span className="data-ink animate-pulse">TRANSMITTING...</span>
+          </div>
+        ) : (
+          <a 
+            href={selectedEvent.source_url || '#'} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 text-white/40 hover:text-white transition-colors text-xs font-mono"
+          >
+            <ExternalLink size={14} />
+            VIEW RAW SOURCE DATA
+          </a>
+        )}
       </div>
     </div>
   );

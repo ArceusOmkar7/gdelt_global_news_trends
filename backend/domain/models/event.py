@@ -227,7 +227,11 @@ class MapEventDetail(BaseModel):
     event_root_code: str | None = None
     goldstein_scale: float | None = None
     num_mentions: int = 0
+    num_sources: int = 0
+    avg_tone: float | None = None
     source_url: str | None = None
+    actor1_type: str | None = None
+    actor2_type: str | None = None
     gkg_record_id: str | None = Field(default=None, description="Global Knowledge Graph ID if joined.")
 
     model_config = {"frozen": True}

@@ -98,9 +98,9 @@ export const GlobalEventMap: React.FC = () => {
           data: aggData,
           getPosition: (d: MapAggregation) => [d.lon, d.lat],
           getWeight: (d: MapAggregation) => d.intensity,
-          radiusPixels: 40,
-          intensity: 3,
-          threshold: 0.01,
+          radiusPixels: 60,
+          intensity: 5,
+          threshold: 0.005,
           colorRange: [
             [0, 243, 255, 0],
             [0, 243, 255, 100],
@@ -113,10 +113,10 @@ export const GlobalEventMap: React.FC = () => {
           id: 'agg-points',
           data: aggData,
           getPosition: (d: MapAggregation) => [d.lon, d.lat],
-          getFillColor: [0, 243, 255, 150],
-          getRadius: 10,
+          getFillColor: [0, 243, 255, 80],
+          getRadius: 15,
           radiusMinPixels: 1,
-          radiusMaxPixels: 5,
+          radiusMaxPixels: 3,
           pickable: false,
         })
       ];
@@ -152,6 +152,14 @@ export const GlobalEventMap: React.FC = () => {
 
   return (
     <div className="relative w-full h-full">
+      {/* Data Scanning Progress Bar */}
+      {isLoading && (
+        <div className="absolute top-0 left-0 w-full h-[2px] z-50 overflow-hidden bg-cyber-blue/10">
+          <div className="h-full bg-cyber-blue animate-[progress_2s_infinite_linear]" 
+               style={{ width: '30%', boxShadow: '0 0 10px #00f3ff' }} />
+        </div>
+      )}
+
       <Map
         ref={mapRef}
         {...viewState}

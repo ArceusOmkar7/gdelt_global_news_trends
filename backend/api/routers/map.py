@@ -31,8 +31,8 @@ def _get_use_case() -> GetEventsUseCase:
     response_model=MapDataResponse,
     summary="Get geospatial event data",
     description=(
-        "Returns geographically aggregated heat intensities (zoom < 5) "
-        "or individual event coordinates and metadata (zoom >= 5)."
+        "Returns geographically aggregated heat intensities (zoom < 9) "
+        "or individual event coordinates and metadata (zoom >= 9)."
     ),
 )
 def get_map_data(
@@ -47,10 +47,15 @@ def get_map_data(
     event_root_code: str | None = Query(default=None, max_length=2),
     limit: int = Query(default=10000, ge=1, le=100_000, description="Row limit"),
 ) -> MapDataResponse:
-    if zoom < 5:
+    if zoom < 9:
         # Level 1/2: Aggregated view
-        # Dynamic grid precision based on zoom level to prevent data density issues
-        grid_precision = 2 if zoom >= 4 else (1 if zoom >= 2 else 0)
+        # Finer grid as we zoom in
+        if zoom >= 7:
+            grid_precision = 2
+        elif zoom >= 5:
+            grid_precision = 1
+        else:
+            grid_precision = 0
         
         aggregations = use_case.get_map_aggregations(
             bbox_n=bbox_n,

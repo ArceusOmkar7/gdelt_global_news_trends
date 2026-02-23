@@ -271,7 +271,11 @@ class GdeltRepository(IEventRepository):
                 EventRootCode,
                 GoldsteinScale,
                 NumMentions,
-                SOURCEURL
+                NumSources,
+                AvgTone,
+                SOURCEURL,
+                Actor1Type1Code AS Actor1Type,
+                Actor2Type1Code AS Actor2Type
             FROM {self._table}
             WHERE {' AND '.join(where_clauses)}
             LIMIT @limit
@@ -336,7 +340,11 @@ class GdeltRepository(IEventRepository):
             event_root_code=row.get("EventRootCode"),
             goldstein_scale=row.get("GoldsteinScale"),
             num_mentions=row.get("NumMentions", 0),
+            num_sources=row.get("NumSources", 0),
+            avg_tone=row.get("AvgTone"),
             source_url=row.get("SOURCEURL"),
+            actor1_type=row.get("Actor1Type"),
+            actor2_type=row.get("Actor2Type"),
         )
 
     # ------------------------------------------------------------------
