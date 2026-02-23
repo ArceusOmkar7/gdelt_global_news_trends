@@ -37,7 +37,7 @@ class LLMAnalysisService(ILLMAnalysisService):
             project=settings.gcp_project_id,
             credentials=credentials
         )
-        self._model = GenerativeModel("gemini-1.5-pro")
+        self._model = GenerativeModel(settings.llm_model_name)
 
     async def analyze_event(self, article_text: str) -> EventAnalysis:
         """Analyze article text and return structured intelligence."""
@@ -89,11 +89,4 @@ class LLMAnalysisService(ILLMAnalysisService):
             
         except Exception as e:
             logger.error("llm_analysis_failed", error=str(e))
-            # Fallback for demonstration/resilience
-            return EventAnalysis(
-                summary="Analysis failed due to a service error.",
-                sentiment="Neutral",
-                entities=[],
-                themes=[],
-                confidence=0.0
-            )
+            raise

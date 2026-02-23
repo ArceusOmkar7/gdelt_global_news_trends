@@ -7,9 +7,11 @@ import {
   ExternalLink, 
   Brain, 
   CheckCircle, 
+  AlertTriangle,
   Activity,
   User,
-  MapPin
+  MapPin,
+  RefreshCcw
 } from 'lucide-react';
 
 export const IntelligencePanel: React.FC = () => {
@@ -26,17 +28,12 @@ export const IntelligencePanel: React.FC = () => {
     mutationFn: (eventId: number) => apiService.analyzeEvent(eventId),
     onSuccess: (data) => {
       setCurrentAnalysis(data);
-      setIsAnalyzing(false);
     },
-    onError: () => {
-      setIsAnalyzing(false);
-    }
   });
 
   if (!selectedEvent) return null;
 
   const handleAnalyze = () => {
-    setIsAnalyzing(true);
     analyzeMutation.mutate(selectedEvent.global_event_id);
   };
 
@@ -76,9 +73,23 @@ export const IntelligencePanel: React.FC = () => {
             </div>
           </div>
           <div className="bg-surface-900/40 p-3 rounded panel-border">
+            <span className="data-ink">Tone</span>
+            <div className={`text-xl font-bold font-mono mt-1 ${
+              selectedEvent.avg_tone && selectedEvent.avg_tone < 0 ? 'text-cyber-red' : 'text-terminal-green'
+            }`}>
+              {selectedEvent.avg_tone?.toFixed(1) || '0.0'}
+            </div>
+          </div>
+          <div className="bg-surface-900/40 p-3 rounded panel-border">
             <span className="data-ink">Mentions</span>
             <div className="text-xl font-bold font-mono mt-1 text-white">
               {selectedEvent.num_mentions}
+            </div>
+          </div>
+          <div className="bg-surface-900/40 p-3 rounded panel-border">
+            <span className="data-ink">Sources</span>
+            <div className="text-xl font-bold font-mono mt-1 text-white">
+              {selectedEvent.num_sources || 0}
             </div>
           </div>
         </section>
@@ -113,18 +124,42 @@ export const IntelligencePanel: React.FC = () => {
             <User size={16} className="text-cyber-blue" />
             <span className="data-ink">Key Actors</span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {selectedEvent.actor1_country_code && (
-              <span className="px-2 py-1 bg-surface-900/60 rounded text-xs font-mono panel-border">
-                {selectedEvent.actor1_country_code}
-              </span>
+          <div className="grid grid-cols-1 gap-3">
+            {(selectedEvent.actor1_country_code || selectedEvent.actor1_type) && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-white/40 uppercase font-mono">Actor 1</span>
+                <div className="flex gap-2">
+                  {selectedEvent.actor1_country_code && (
+                    <span className="px-2 py-1 bg-surface-900/60 rounded text-xs font-mono panel-border">
+                      {selectedEvent.actor1_country_code}
+                    </span>
+                  )}
+                  {selectedEvent.actor1_type && (
+                    <span className="px-2 py-1 bg-cyber-blue/10 text-cyber-blue rounded text-xs font-mono border border-cyber-blue/20">
+                      {selectedEvent.actor1_type}
+                    </span>
+                  )}
+                </div>
+              </div>
             )}
-            {selectedEvent.actor2_country_code && (
-              <span className="px-2 py-1 bg-surface-900/60 rounded text-xs font-mono panel-border">
-                {selectedEvent.actor2_country_code}
-              </span>
+            {(selectedEvent.actor2_country_code || selectedEvent.actor2_type) && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-white/40 uppercase font-mono">Actor 2</span>
+                <div className="flex gap-2">
+                  {selectedEvent.actor2_country_code && (
+                    <span className="px-2 py-1 bg-surface-900/60 rounded text-xs font-mono panel-border">
+                      {selectedEvent.actor2_country_code}
+                    </span>
+                  )}
+                  {selectedEvent.actor2_type && (
+                    <span className="px-2 py-1 bg-cyber-blue/10 text-cyber-blue rounded text-xs font-mono border border-cyber-blue/20">
+                      {selectedEvent.actor2_type}
+                    </span>
+                  )}
+                </div>
+              </div>
             )}
-            {!selectedEvent.actor1_country_code && !selectedEvent.actor2_country_code && (
+            {!selectedEvent.actor1_country_code && !selectedEvent.actor2_country_code && !selectedEvent.actor1_type && (
               <span className="text-white/30 text-xs font-mono">Anonymous Actors</span>
             )}
           </div>
@@ -132,7 +167,7 @@ export const IntelligencePanel: React.FC = () => {
 
         {/* LLM Analysis Section */}
         <section className="pt-4">
-          {!currentAnalysis && !isAnalyzing ? (
+          {!currentAnalysis && !analyzeMutation.isPending && !analyzeMutation.isError ? (
             <button 
               onClick={handleAnalyze}
               className="w-full py-4 bg-cyber-blue hover:bg-cyber-blue/90 text-surface-900 font-bold font-mono flex items-center justify-center gap-2 transition-all group"
@@ -140,13 +175,30 @@ export const IntelligencePanel: React.FC = () => {
               <Brain size={20} className="group-hover:animate-pulse" />
               ANALYZE SOURCE VIA LLM
             </button>
-          ) : isAnalyzing ? (
+          ) : analyzeMutation.isPending ? (
             <div className="w-full p-8 border border-cyber-blue/20 bg-cyber-blue/5 flex flex-col items-center justify-center gap-4 text-center">
               <div className="w-10 h-10 border-2 border-t-cyber-blue border-transparent rounded-full animate-spin" />
               <div className="space-y-1">
                 <div className="text-cyber-blue font-bold font-mono">COGNITIVE PROCESSING</div>
                 <div className="text-[10px] text-cyber-blue/60 font-mono animate-pulse">EXTRACTING SEMANTIC VECTORS...</div>
               </div>
+            </div>
+          ) : analyzeMutation.isError ? (
+            <div className="w-full p-6 border border-cyber-red/30 bg-cyber-red/5 space-y-4 rounded">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-cyber-red" />
+                <span className="data-ink text-cyber-red">Analysis Failed</span>
+              </div>
+              <p className="text-[11px] text-white/60 font-mono uppercase leading-tight">
+                {analyzeMutation.error instanceof Error ? analyzeMutation.error.message : 'Uplink synchronization error detected in neural net.'}
+              </p>
+              <button 
+                onClick={handleAnalyze}
+                className="w-full py-2 bg-cyber-red/20 hover:bg-cyber-red/30 border border-cyber-red/50 text-cyber-red font-mono text-[10px] flex items-center justify-center gap-2 transition-all"
+              >
+                <RefreshCcw size={12} />
+                RETRY UPLINK
+              </button>
             </div>
           ) : (
             <div className="space-y-6 animate-in fade-in duration-1000">

@@ -12,8 +12,6 @@ interface DashboardState {
   setSelectedEvent: (event: Event | null) => void;
   
   // Analysis State
-  isAnalyzing: boolean;
-  setIsAnalyzing: (loading: boolean) => void;
   currentAnalysis: EventAnalysis | null;
   setCurrentAnalysis: (analysis: EventAnalysis | null) => void;
   
@@ -53,8 +51,6 @@ export const useStore = create<DashboardState>((set) => ({
     currentAnalysis: null // Clear analysis when event changes
   }),
   
-  isAnalyzing: false,
-  setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
   currentAnalysis: null,
   setCurrentAnalysis: (currentAnalysis) => set({ currentAnalysis }),
   
