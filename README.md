@@ -4,7 +4,13 @@ GNIEM is an AI-powered intelligence dashboard built on top of the GDELT 2.1 data
 
 ## Architecture
 
-The project is structured into three phases, currently completing Phase 2. The backend is built with FastAPI, Pydantic, and Clean Architecture:
+The project is structured into three phases:
+
+- **Phase 1 (Completed)**: Core backend foundation, BigQuery integration, event retrieval.
+- **Phase 2 (Completed)**: AI Analytics (NLP Clustering, Time-Series Forecasting).
+- **Phase 3 (Upcoming)**: Frontend dashboard and advanced live analytics.
+
+The current backend is built with FastAPI, Pydantic, and Clean Architecture:
 
 1. **Domain Layer (`domain/`)**: Pure business logic, containing `Event`, `EventFilter`, `EventCluster`, `ForecastResult` models. Defines interfaces (`ports`) for external services.
 2. **Application Layer (`application/`)**: Use cases orchestrating domain models and ports (`GetEventsUseCase`, `ClusterEventsUseCase`, `ForecastEventsUseCase`).
