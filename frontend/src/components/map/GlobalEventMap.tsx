@@ -1,19 +1,18 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import Map, { useControl } from 'react-map-gl/mapbox';
+import type { MapRef } from 'react-map-gl/mapbox';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { MapboxOverlayProps } from '@deck.gl/mapbox';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { ScatterplotLayer } from '@deck.gl/layers';
 import { useQuery } from '@tanstack/react-query';
-import { WebMercatorViewport } from '@math.gl/web-mercator';
 import { useStore } from '../../store/useStore';
 import { apiService } from '../../services/api';
 import type { MapAggregation, Event } from '../../types';
 
 const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
-// Helper to use DeckGL with react-map-gl
-function DeckGLOverlay(props: MapboxOverlayProps & { getCursor?: (info: any) => string }) {
+function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useMemo(() => new MapboxOverlay(props), []);
   useControl(() => overlay);
   overlay.setProps(props);
@@ -30,61 +29,96 @@ export const GlobalEventMap: React.FC = () => {
     selectedEventId
   } = useStore();
 
+  const mapRef = useRef<MapRef>(null);
   const [mapBBox, setMapBBox] = useState({ n: 90, s: -90, e: 180, w: -180 });
 
-  // Update BBOX when viewState changes
+  // Helper to validate BBOX
+  const isValidBBox = (bbox: any) => {
+    return !Object.values(bbox).some(val => typeof val !== 'number' || isNaN(val));
+  };
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const viewport = new WebMercatorViewport({
-        ...viewState,
-        width: window.innerWidth,
-        height: window.innerHeight
-      });
-      const bounds: any = viewport.getBounds();
-      setMapBBox({ 
-        w: bounds[0], 
-        s: bounds[1], 
-        e: bounds[2], 
-        n: bounds[3] 
-      });
-    }, 300);
+    const updateBBox = () => {
+      const map = mapRef.current?.getMap();
+      if (!map) return;
+
+      const bounds = map.getBounds();
+      if (!bounds) return;
+
+      const nextBBox = {
+        w: bounds.getWest(),
+        s: bounds.getSouth(),
+        e: bounds.getEast(),
+        n: bounds.getNorth()
+      };
+
+      if (isValidBBox(nextBBox)) {
+        setMapBBox(nextBBox);
+        console.log('Map BBOX Updated:', nextBBox, 'Zoom:', viewState.zoom);
+      } else {
+        console.warn('Map BBOX calculation resulted in NaN, skipping update.');
+      }
+    };
+
+    const timer = setTimeout(updateBBox, 300);
     return () => clearTimeout(timer);
   }, [viewState]);
 
   const { data: mapResponse, isLoading } = useQuery({
     queryKey: ['map-data', mapBBox, Math.round(viewState.zoom), dateRange, eventRootCode],
-    queryFn: () => apiService.getMapData(
-      mapBBox,
-      viewState.zoom,
-      dateRange[0],
-      dateRange[1],
-      eventRootCode
-    ),
+    queryFn: async () => {
+      // Final guard against NaN in query
+      if (!isValidBBox(mapBBox)) {
+        console.error('Blocking API call due to invalid BBOX:', mapBBox);
+        return { zoom: viewState.zoom, is_aggregated: true, count: 0, data: [] };
+      }
+
+      const res = await apiService.getMapData(
+        mapBBox,
+        viewState.zoom,
+        dateRange[0],
+        dateRange[1],
+        eventRootCode
+      );
+      console.log('API Response:', res.count, 'items', 'Aggregated:', res.is_aggregated);
+      return res;
+    },
     placeholderData: (previousData) => previousData,
     staleTime: 1000 * 30,
   });
 
   const layers = useMemo(() => {
-    if (!mapResponse) return [];
+    if (!mapResponse || mapResponse.count === 0) return [];
 
     if (mapResponse.is_aggregated) {
+      const aggData = mapResponse.data as MapAggregation[];
       return [
         new HeatmapLayer({
           id: 'heatmap',
-          data: mapResponse.data as MapAggregation[],
+          data: aggData,
           getPosition: (d: MapAggregation) => [d.lon, d.lat],
           getWeight: (d: MapAggregation) => d.intensity,
-          radiusPixels: 25,
-          intensity: 1,
-          threshold: 0.05,
+          radiusPixels: 40,
+          intensity: 3,
+          threshold: 0.01,
           colorRange: [
-            [0, 243, 255, 50],
+            [0, 243, 255, 0],
             [0, 243, 255, 100],
             [0, 243, 255, 150],
-            [0, 243, 255, 200],
-            [0, 243, 255, 255],
+            [0, 255, 65, 200],
+            [255, 255, 255, 255],
           ],
         }),
+        new ScatterplotLayer({
+          id: 'agg-points',
+          data: aggData,
+          getPosition: (d: MapAggregation) => [d.lon, d.lat],
+          getFillColor: [0, 243, 255, 150],
+          getRadius: 10,
+          radiusMinPixels: 1,
+          radiusMaxPixels: 5,
+          pickable: false,
+        })
       ];
     } else {
       return [
@@ -98,9 +132,9 @@ export const GlobalEventMap: React.FC = () => {
             if (goldstein > 2) return [0, 255, 65];
             return [0, 243, 255];
           },
-          getRadius: (d: Event) => Math.max(5, d.num_mentions / 5),
-          radiusMinPixels: 3,
-          radiusMaxPixels: 20,
+          getRadius: (d: Event) => Math.max(10, d.num_mentions),
+          radiusMinPixels: 4,
+          radiusMaxPixels: 30,
           pickable: true,
           onClick: ({ object }) => {
             if (object) setSelectedEvent(object);
@@ -119,6 +153,7 @@ export const GlobalEventMap: React.FC = () => {
   return (
     <div className="relative w-full h-full">
       <Map
+        ref={mapRef}
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
         mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
@@ -128,7 +163,6 @@ export const GlobalEventMap: React.FC = () => {
         <DeckGLOverlay layers={layers} />
       </Map>
 
-      {/* Invalid Token Alert Overlay */}
       {(!MAPBOX_ACCESS_TOKEN || MAPBOX_ACCESS_TOKEN.includes('pk.eyJ1IjoiamF2aWVyc2VndXJh')) && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-cyber-red/20 border border-cyber-red p-4 rounded backdrop-blur-md max-w-md text-center">
           <p className="text-cyber-red font-bold font-mono text-sm">CRITICAL SYSTEM ALERT: INVALID MAPBOX TOKEN</p>
@@ -142,9 +176,15 @@ export const GlobalEventMap: React.FC = () => {
           <span className="data-ink text-cyber-blue">Uplink Active</span>
         </div>
       )}
+
+      {mapResponse?.count === 0 && !isLoading && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-surface-900/80 border border-white/10 rounded">
+           <span className="data-ink text-white/50">NO SIGNAL DETECTED IN THIS SECTOR</span>
+        </div>
+      )}
       
       <div className="absolute bottom-4 left-4 z-10 bg-surface-900/50 backdrop-blur-sm p-2 panel-border rounded">
-         <span className="data-ink">Zoom: {viewState.zoom.toFixed(1)}</span>
+         <span className="data-ink">Zoom: {viewState.zoom.toFixed(1)} | Points: {mapResponse?.count || 0}</span>
       </div>
     </div>
   );
