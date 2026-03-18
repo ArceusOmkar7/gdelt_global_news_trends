@@ -19,6 +19,16 @@
     - Forecasting service lazy-loads Prophet/Pandas during forecast execution to reduce API startup latency.
 - **Environment migration**
     - Active project has been copied to WSL-native path for faster dev workflows: `/home/sasuke/projects/gdelt_global_news_trends`.
+- **Hot/cold routing and cold-tier policy enforcement completed**
+    - Added `backend/infrastructure/data_access/routed_repository.py` to route requests across DuckDB hot tier and BigQuery cold tier using a shared 90-day cutoff.
+    - Implemented cold-tier guardrails in the routed repository: max 30-day window, max 3 cold queries per user per month, and parquet cache for repeated cold requests.
+    - Added request-scoped user identity context via `backend/api/request_context.py` and middleware in `backend/api/main.py` (`x-user-id` -> `x-forwarded-for` -> client IP fallback).
+    - Added `ColdTierPolicyError` handling in FastAPI with clear `400/429` responses.
+    - Health endpoint now reports hot-tier availability and parquet file count alongside BigQuery status.
+- **Backend verification expanded**
+    - Added `backend/tests/unit/test_routed_repository.py` covering hot/cold/hybrid routing, cold window limit, monthly quota, and cache reuse.
+    - Updated map integration test threshold to align with router behavior (`zoom >= 9` => detailed view).
+    - Backend unit + integration suite currently passes: **45 passed**.
 
 ---
 
@@ -290,7 +300,8 @@ backend/
     ├── data_access/
     │   ├── bigquery_client.py# BigQuery wrapper with mandatory dry_run guard
     │   ├── gdelt_repository.py# Cold tier Events queries (partition-pruned)
-    │   └── duckdb_repository.py # Hot tier Parquet queries via DuckDB
+    │   ├── duckdb_repository.py # Hot tier Parquet queries via DuckDB
+    │   └── routed_repository.py # Hot/cold router + cold-tier policy + cache
     └── services/
         ├── llm_analysis_service.py
         └── scraper_service.py
@@ -313,6 +324,9 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 GDELT_DATASET=gdelt-bq.gdeltv2
 HOT_TIER_PATH=/data/hot_tier
 CACHE_PATH=/data/cache
+HOT_TIER_CUTOFF_DAYS=90
+COLD_TIER_MAX_WINDOW_DAYS=30
+COLD_TIER_MONTHLY_QUERY_LIMIT=3
 GROQ_API_KEY=
 MAPBOX_TOKEN=
 ENVIRONMENT=production
@@ -324,6 +338,10 @@ BQ_MAX_SCAN_BYTES=2000000000
 - `gdelt_repository.py` now uses explicit Events column lists and SQLDATE partition filters with `>=` and `<` bounds.
 - `duckdb_repository.py` has been added under `infrastructure/data_access/` and implements `IEventRepository` against local Parquet hot-tier files.
 - Hot-tier repository initialization is a hard failure when `HOT_TIER_PATH` is missing or contains no `.parquet` files.
+- `routed_repository.py` now enforces a single 90-day hot/cold boundary and applies it consistently to events, map details, map aggregations, and daily counts.
+- Cold-tier requests are now policy-guarded: max 30-day window, max 3 queries/user/month, and result caching in parquet keyed by request shape.
+- FastAPI now captures per-request user identity for quota accounting (`x-user-id`, `x-forwarded-for`, fallback client IP).
+- `/health` now includes hot-tier readiness (`path`, `available`, `parquet_files`, `cutoff_days`) in addition to BigQuery status.
 - `num_articles` and `total_articles` were removed from domain/API response models to align with the column-pruned Events schema.
 - Backend settings now ignore unrelated `.env` keys (for example frontend `VITE_*` keys), preventing startup failure when frontend and backend share one `.env`.
 - Prophet/Pandas imports in forecasting are lazy-loaded inside `forecast()` to improve API startup latency.
@@ -462,13 +480,12 @@ Current state (as of March 2026):
 - Phase 2 (AI analytics): complete — KMeans/TF-IDF clustering, Prophet forecasting
 - Phase 3 (frontend): Mapbox React frontend exists but partially built
 - **Known issue (resolved in codebase):** BigQuery full-scan risk in repository layer has been mitigated with partition filters, column pruning, and dry-run byte guard.
-- **Current top pending item:** Wire FastAPI hot/cold routing so recent windows go to DuckDB and older windows go to guarded BigQuery.
+- **Current top pending item:** Implement production ingestion jobs (`scripts/`) and deployment wiring (cron/systemd) for daily, realtime, and nightly pipelines.
 
 The architecture described in this CONTEXT.md may require significant refactoring of the existing code, particularly:
-- `backend/api/main.py` and router/use-case wiring — switch repository based on date window (hot vs cold tier)
-- Cold-tier policy enforcement in API layer — max 30-day window, per-user monthly limits, cold result caching
 - Add `scripts/` directory for cron jobs and systemd timers
 - Frontend needs environment variable wiring for deployed API endpoint
+- Tighten production robustness around quota identity/counter durability for multi-process deployment
 
 ---
 
@@ -520,32 +537,35 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 | `backend/infrastructure/data_access/gdelt_repository.py` | 🟢 FIXED | Explicit column list + SQLDATE partition filters (`>=` / `<`) |
 | `backend/infrastructure/data_access/bigquery_client.py` | 🟢 FIXED | Mandatory dry_run guard + scan budget (`BQ_MAX_SCAN_BYTES`) |
 | `backend/infrastructure/data_access/duckdb_repository.py` | 🟢 ADDED | Hot-tier repository implemented; hard-fails when HOT_TIER_PATH has no parquet |
-| `backend/infrastructure/config/settings.py` | 🟢 UPDATED | Added `HOT_TIER_PATH`, `BQ_MAX_SCAN_BYTES`; ignores unrelated extra env keys |
-| `backend/api/routers/events.py` | 🟡 PARTIAL | Routing logic needs hot/cold tier split |
-| `backend/api/routers/analytics.py` | 🟡 PARTIAL | Clustering works, forecasting wired |
+| `backend/infrastructure/data_access/routed_repository.py` | 🟢 ADDED | Shared hot/cold router with policy enforcement and cold parquet caching |
+| `backend/api/request_context.py` | 🟢 ADDED | Request-scoped user identity for cold-tier monthly quota accounting |
+| `backend/infrastructure/config/settings.py` | 🟢 UPDATED | Added `CACHE_PATH`, `HOT_TIER_CUTOFF_DAYS`, `COLD_TIER_MAX_WINDOW_DAYS`, `COLD_TIER_MONTHLY_QUERY_LIMIT` |
+| `backend/api/main.py` | 🟢 UPDATED | Wired routed repository + request identity middleware + cold policy exception handler |
+| `backend/api/routers/events.py` | 🟢 ROUTED | Uses use case backed by routed repository; no direct BigQuery dependency |
+| `backend/api/routers/map.py` | 🟢 ROUTED | Uses routed repository via use case; zoom behavior unchanged (`<9` aggregate, `>=9` detail) |
+| `backend/api/routers/analytics.py` | 🟢 ROUTED | Clustering/forecasting now query via routed repository abstraction |
+| `backend/api/routers/health.py` | 🟢 UPDATED | Adds hot-tier diagnostics (availability + parquet count + cutoff days) |
 | `scripts/daily_bq_pull.py` | 🔴 MISSING | Create with partition filter + dry_run |
 | `scripts/realtime_fetcher.py` | 🔴 MISSING | Create from pattern in §13 |
 | `scripts/nightly_ai.py` | 🔴 MISSING | Prophet + Groq batch |
-| `frontend/src/` | 🟡 PARTIAL | Mapbox map exists, env var wiring missing |
+| `frontend/src/` | 🟡 PARTIAL | Mapbox map and env vars exist; needs smoke tests and production deployment validation |
+
+## 15. Known Edge Cases (Post-Routing)
+
+1. **Per-user cold quota identity can be coarse in production proxies.**
+    - Current fallback uses client IP when `x-user-id` is absent; users behind shared NAT/proxy may share quota.
+2. **Cold query counter persistence is file-based and process-local locked.**
+    - Thread lock is safe in a single process, but not strongly synchronized across multiple Uvicorn workers or multiple VM instances.
+3. **Cold cache retention policy is not implemented yet.**
+    - Cache files can grow over time; no TTL/LRU cleanup job currently runs.
+4. **Cold-cache keying is shape-based with hash digest.**
+    - Correct for functional reuse, but operators should still monitor duplicate near-equivalent queries (e.g., different limits) for cache fragmentation.
 
 ---
 
-## 15. What Next (Execution Order)
+## 16. What Next (Execution Order)
 
-### Priority 1 — Wire hot/cold routing in FastAPI
-1. Add routing decision logic in API/use-case layer:
-    - Last 90 days -> `DuckDbRepository`
-    - Older than 90 days -> guarded BigQuery cold tier (`GdeltRepository`)
-2. Keep a strict boundary rule in one shared helper so all endpoints apply the same cutoff.
-3. Ensure map endpoints (`/map/data`) follow the same hot/cold behavior.
-
-### Priority 2 — Enforce cold-tier policy limits
-1. Reject cold requests with date windows > 30 days.
-2. Enforce max 3 cold queries per user per month (simple in-memory/file counter).
-3. Cache cold query results as Parquet by key `{country_code}_{start_date}_{end_date}`.
-4. Serve cache hits without re-querying BigQuery.
-
-### Priority 3 — Complete ingestion scripts
+### Priority 1 — Complete ingestion scripts
 1. Create `scripts/daily_bq_pull.py`:
     - yesterday partition pull (`SQLDATE` int)
     - explicit Events columns
@@ -558,12 +578,19 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
     - precompute forecasts
     - precompute LLM briefings cache
 
-### Priority 4 — Ops and deployment hygiene
+### Priority 2 — Ops and deployment hygiene
 1. Add systemd unit + timer files for 15-minute fetcher.
 2. Add cron examples for daily and nightly jobs.
-3. Add startup readiness checks (health endpoint includes repository mode and hot-tier availability).
+3. Add startup readiness checks in deployment docs (health now includes hot-tier availability).
+4. Add a cache cleanup job (TTL or size cap) for `CACHE_PATH/cold_queries`.
+5. Add monthly cold-counter rotation/pruning task.
 
-### Priority 5 — Frontend wiring and validation
+### Priority 3 — Frontend wiring and validation
 1. Confirm frontend uses `VITE_API_URL` and `VITE_MAPBOX_ACCESS_TOKEN`.
 2. Validate API response shape changes (article-count fields removed) in UI types/components.
 3. Add smoke tests for: events list, map layer load, forecast chart, analyze-event flow.
+
+### Priority 4 — Quota robustness hardening
+1. Replace IP fallback with authenticated user/session ID for quota keys.
+2. Move quota counters from file-only persistence to a deployment-safe shared store or single-writer service process.
+3. Add metrics for cold cache hit rate, cold query rejections, and monthly quota utilization.

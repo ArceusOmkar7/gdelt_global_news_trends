@@ -7,11 +7,16 @@ environment details, application version, and uptime.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from backend.api.schemas.schemas import BigQueryHealthDetail, HealthResponse
+from backend.api.schemas.schemas import (
+    BigQueryHealthDetail,
+    HealthResponse,
+    HotTierHealthDetail,
+)
 from backend.infrastructure.config.settings import Settings
 from backend.infrastructure.data_access.bigquery_client import BigQueryClient
 
@@ -53,6 +58,9 @@ def health_check(
     settings: Annotated[Settings, Depends(_get_settings)],
 ) -> HealthResponse:
     bq_health = bq_client.health_check()
+    hot_tier_path = Path(settings.hot_tier_path)
+    parquet_files = len(list(hot_tier_path.glob("*.parquet"))) if hot_tier_path.exists() else 0
+
     bq_detail = BigQueryHealthDetail(
         connected=bq_health["connected"],
         project=bq_health["project"],
@@ -60,8 +68,14 @@ def health_check(
         latency_ms=bq_health.get("latency_ms"),
         error=bq_health.get("error"),
     )
+    hot_tier_detail = HotTierHealthDetail(
+        path=str(hot_tier_path),
+        available=hot_tier_path.exists() and parquet_files > 0,
+        parquet_files=parquet_files,
+        cutoff_days=settings.hot_tier_cutoff_days,
+    )
 
-    overall_status = "healthy" if bq_detail.connected else "degraded"
+    overall_status = "healthy" if (bq_detail.connected and hot_tier_detail.available) else "degraded"
     uptime = round(time.monotonic() - _app_start_time, 2)
 
     return HealthResponse(
@@ -69,5 +83,6 @@ def health_check(
         environment=settings.environment,
         version=APP_VERSION,
         bigquery=bq_detail,
+        hot_tier=hot_tier_detail,
         uptime_seconds=uptime,
     )

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
         default="/data/hot_tier",
         description="Local directory path containing hot-tier Parquet files.",
     )
+    cache_path: str = Field(
+        default="/data/cache",
+        description="Local directory path for cached query artifacts and counters.",
+    )
     bq_max_scan_bytes: int = Field(
         default=2_000_000_000,
         ge=1,
@@ -48,6 +52,24 @@ class Settings(BaseSettings):
             "Maximum allowed BigQuery bytes scanned for a single query. "
             "Queries above this threshold are aborted after dry run."
         ),
+    )
+    hot_tier_cutoff_days: int = Field(
+        default=90,
+        ge=1,
+        le=365,
+        description="Requests newer than this many days use hot-tier DuckDB.",
+    )
+    cold_tier_max_window_days: int = Field(
+        default=30,
+        ge=1,
+        le=180,
+        description="Maximum allowed cold-tier date window in days.",
+    )
+    cold_tier_monthly_query_limit: int = Field(
+        default=3,
+        ge=1,
+        le=100,
+        description="Maximum cold-tier queries allowed per user per month.",
     )
 
     # --- AI / LLM ---

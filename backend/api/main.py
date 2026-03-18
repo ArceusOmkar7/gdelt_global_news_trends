@@ -23,6 +23,7 @@ from backend.api.routers.events import _get_use_case, _get_analyze_use_case
 from backend.api.routers.health import _get_bq_client, _get_settings, set_app_start_time
 from backend.api.routers.analytics import _get_cluster_use_case, _get_forecast_use_case
 from backend.api.routers.map import _get_use_case as _get_map_use_case
+from backend.api.request_context import set_request_user_id
 from backend.application.use_cases.get_events import GetEventsUseCase
 from backend.application.use_cases.cluster_events import ClusterEventsUseCase
 from backend.application.use_cases.forecast_events import ForecastEventsUseCase
@@ -31,7 +32,12 @@ from backend.domain.services.clustering_service import ClusteringService
 from backend.domain.services.forecasting_service import ForecastingService
 from backend.infrastructure.config.settings import Settings, settings
 from backend.infrastructure.data_access.bigquery_client import BigQueryClient, BigQueryClientError
+from backend.infrastructure.data_access.duckdb_repository import DuckDbRepository
 from backend.infrastructure.data_access.gdelt_repository import GdeltRepository
+from backend.infrastructure.data_access.routed_repository import (
+    ColdTierPolicyError,
+    RoutedRepository,
+)
 from backend.infrastructure.services.scraper_service import ScraperService
 from backend.infrastructure.services.llm_analysis_service import LLMAnalysisService
 
@@ -46,7 +52,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # --- Build the dependency graph ---
     bq_client = BigQueryClient(settings)
-    repository = GdeltRepository(bq_client, settings)
+    cold_repository = GdeltRepository(bq_client, settings)
+    hot_repository = DuckDbRepository(settings)
+    repository = RoutedRepository(hot_repository, cold_repository, settings)
     
     # Phase 1
     events_use_case = GetEventsUseCase(repository)
@@ -117,6 +125,19 @@ def create_app() -> FastAPI:
     )
 
     # --- Structured exception handlers ---
+    @app.middleware("http")
+    async def request_context_middleware(request: Request, call_next):
+        user_id = request.headers.get("x-user-id")
+        if not user_id:
+            xff = request.headers.get("x-forwarded-for")
+            if xff:
+                user_id = xff.split(",")[0].strip()
+        if not user_id:
+            user_id = request.client.host if request.client else "anonymous"
+
+        set_request_user_id(user_id)
+        return await call_next(request)
+
     @app.exception_handler(BigQueryClientError)
     async def bigquery_error_handler(
         request: Request,
@@ -129,6 +150,21 @@ def create_app() -> FastAPI:
                 "error": "data_source_error",
                 "message": "Failed to retrieve data from the upstream data source.",
                 "detail": str(exc) if settings.environment == "development" else None,
+            },
+        )
+
+    @app.exception_handler(ColdTierPolicyError)
+    async def cold_tier_policy_error_handler(
+        request: Request,
+        exc: ColdTierPolicyError,
+    ) -> JSONResponse:
+        status_code = 429 if "monthly user limit" in str(exc).lower() else 400
+        logger.warning("cold_tier_policy_error", error=str(exc), path=request.url.path)
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "error": "cold_tier_policy_error",
+                "message": str(exc),
             },
         )
 

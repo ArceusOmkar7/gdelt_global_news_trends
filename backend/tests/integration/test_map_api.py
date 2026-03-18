@@ -1,13 +1,46 @@
 """Integration tests for the Map API — mocks the repository to test the full HTTP stack.
 """
 
+import os
+import tempfile
 from datetime import date
 from unittest.mock import MagicMock
 
+import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
+# Ensure settings have required values before importing app/settings singleton.
+os.environ.setdefault("GCP_PROJECT_ID", "test-project")
+_HOT_TIER_DIR = tempfile.mkdtemp(prefix="gniem-hot-tier-")
+_HOT_TIER_FILE = os.path.join(_HOT_TIER_DIR, "events_test.parquet")
+if not os.path.exists(_HOT_TIER_FILE):
+    pd.DataFrame(
+        [
+            {
+                "GLOBALEVENTID": 1,
+                "SQLDATE": 20240101,
+                "Actor1CountryCode": "US",
+                "Actor2CountryCode": "CA",
+                "EventRootCode": "19",
+                "EventCode": "190",
+                "GoldsteinScale": -3.0,
+                "NumMentions": 10,
+                "NumSources": 2,
+                "AvgTone": -1.0,
+                "ActionGeo_CountryCode": "US",
+                "ActionGeo_Lat": 10.0,
+                "ActionGeo_Long": 20.0,
+                "SOURCEURL": "https://example.com",
+                "Actor1Type1Code": "GOV",
+                "Actor2Type1Code": "MIL",
+            }
+        ]
+    ).to_parquet(_HOT_TIER_FILE, index=False)
+os.environ.setdefault("HOT_TIER_PATH", _HOT_TIER_DIR)
+
 from backend.api.main import app
+import backend.api.main as main_module
 from backend.api.routers.events import _get_use_case as _get_events_use_case
 from backend.api.routers.map import _get_use_case as _get_map_use_case
 from backend.application.use_cases.get_events import GetEventsUseCase
@@ -24,6 +57,9 @@ def mock_repository():
 def client(mock_repository):
     # Use the same repository for both use cases in main.py
     use_case = GetEventsUseCase(mock_repository)
+    main_module.settings.hot_tier_path = _HOT_TIER_DIR
+    main_module.settings.cache_path = os.path.join(_HOT_TIER_DIR, "cache")
+    main_module.settings.gcp_project_id = "test-project"
     with TestClient(app) as c:
         # Override AFTER lifespan has run to ensure we win
         app.dependency_overrides[_get_events_use_case] = lambda: use_case
@@ -83,14 +119,14 @@ def test_get_map_data_detailed(client, mock_repository):
             "bbox_s": 5.0,
             "bbox_e": 25.0,
             "bbox_w": 15.0,
-            "zoom": 6,
+            "zoom": 10,
         }
     )
     
     # Verify
     assert response.status_code == 200
     payload = response.json()
-    assert payload["zoom"] == 6
+    assert payload["zoom"] == 10
     assert payload["is_aggregated"] is False
     assert payload["count"] == 1
     assert payload["data"][0]["global_event_id"] == 123

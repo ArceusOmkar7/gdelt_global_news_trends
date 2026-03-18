@@ -186,6 +186,15 @@ class BigQueryHealthDetail(BaseModel):
     error: str | None = None
 
 
+class HotTierHealthDetail(BaseModel):
+    """Nested detail for local hot-tier readiness in health check."""
+
+    path: str
+    available: bool
+    parquet_files: int
+    cutoff_days: int
+
+
 class HealthResponse(BaseModel):
     """Health-check response with comprehensive service diagnostics."""
 
@@ -193,4 +202,5 @@ class HealthResponse(BaseModel):
     environment: str = Field(description="Runtime environment (development, staging, production).")
     version: str = Field(description="Application version string.")
     bigquery: BigQueryHealthDetail = Field(description="BigQuery connection details.")
+    hot_tier: HotTierHealthDetail = Field(description="DuckDB hot-tier readiness details.")
     uptime_seconds: float = Field(description="Seconds since the application started.")
