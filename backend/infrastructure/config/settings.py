@@ -37,6 +37,18 @@ class Settings(BaseSettings):
         default="events",
         description="Table name within the GDELT dataset.",
     )
+    hot_tier_path: str = Field(
+        default="/data/hot_tier",
+        description="Local directory path containing hot-tier Parquet files.",
+    )
+    bq_max_scan_bytes: int = Field(
+        default=2_000_000_000,
+        ge=1,
+        description=(
+            "Maximum allowed BigQuery bytes scanned for a single query. "
+            "Queries above this threshold are aborted after dry run."
+        ),
+    )
 
     # --- AI / LLM ---
     llm_model_name: str = Field(
@@ -98,6 +110,7 @@ class Settings(BaseSettings):
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
         "populate_by_name": True,
+        "extra": "ignore",
     }
 
 

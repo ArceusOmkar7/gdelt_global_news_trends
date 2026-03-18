@@ -101,9 +101,43 @@ class BigQueryClient:
                 query=sql,
             )
 
-        job_config = bigquery.QueryJobConfig()
-        if params:
-            job_config.query_parameters = list(params.values())
+        query_parameters = list(params.values()) if params else []
+
+        dry_run_config = bigquery.QueryJobConfig(
+            dry_run=True,
+            use_query_cache=False,
+            query_parameters=query_parameters,
+        )
+
+        try:
+            dry_run_job = self._client.query(sql, job_config=dry_run_config)
+            estimated_bytes = int(dry_run_job.total_bytes_processed or 0)
+        except GoogleCloudError as exc:
+            logger.error(
+                "bigquery_dry_run_failed",
+                error=str(exc),
+                sql=sql[:500],
+            )
+            raise BigQueryClientError(
+                f"BigQuery dry run failed: {exc}",
+                query=sql,
+            ) from exc
+
+        max_scan_bytes = int(self._settings.bq_max_scan_bytes)
+        if estimated_bytes > max_scan_bytes:
+            logger.warning(
+                "bigquery_query_rejected_scan_limit",
+                estimated_bytes=estimated_bytes,
+                max_scan_bytes=max_scan_bytes,
+                sql_preview=sql[:200],
+            )
+            raise BigQueryClientError(
+                "Query aborted: estimated scan bytes exceed configured limit "
+                f"({estimated_bytes} > {max_scan_bytes}).",
+                query=sql,
+            )
+
+        job_config = bigquery.QueryJobConfig(query_parameters=query_parameters)
 
         start = time.monotonic()
         try:
@@ -136,6 +170,7 @@ class BigQueryClient:
             "bigquery_query_success",
             rows_returned=len(rows),
             elapsed_ms=elapsed_ms,
+            estimated_bytes=estimated_bytes,
             sql_preview=sql[:200],
         )
         return rows

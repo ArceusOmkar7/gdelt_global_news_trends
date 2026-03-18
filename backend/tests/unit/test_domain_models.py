@@ -20,7 +20,6 @@ class TestEvent:
             event_code="142",
             goldstein_scale=-6.5,
             num_mentions=25,
-            num_articles=10,
             num_sources=5,
             avg_tone=-3.2,
             action_geo_country_code="IRQ",
@@ -101,7 +100,6 @@ class TestEventCountByDate:
             count=1500,
             avg_goldstein_scale=-2.1,
             total_mentions=50000,
-            total_articles=20000,
             avg_tone=-1.5,
         )
         assert count.count == 1500

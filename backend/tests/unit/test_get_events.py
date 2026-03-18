@@ -24,7 +24,6 @@ def _make_event(**overrides) -> Event:
         "actor1_country_code": "US",
         "goldstein_scale": -3.0,
         "num_mentions": 10,
-        "num_articles": 5,
     }
     defaults.update(overrides)
     return Event(**defaults)

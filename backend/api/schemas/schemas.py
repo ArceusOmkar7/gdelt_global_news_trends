@@ -63,7 +63,6 @@ class EventResponse(BaseModel):
     event_code: str | None = None
     goldstein_scale: float | None = None
     num_mentions: int = 0
-    num_articles: int = 0
     num_sources: int = 0
     avg_tone: float | None = None
     action_geo_country_code: str | None = None
@@ -86,7 +85,6 @@ class EventCountResponse(BaseModel):
     count: int
     avg_goldstein_scale: float | None = None
     total_mentions: int = 0
-    total_articles: int = 0
     avg_tone: float | None = None
 
 

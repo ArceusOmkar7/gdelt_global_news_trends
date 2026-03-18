@@ -47,15 +47,8 @@ class GdeltRepository(IEventRepository):
         start_date, end_date = self._resolve_dates(filters)
         limit = filters.limit or self._settings.default_query_limit
 
-        where_clauses = ["SQLDATE >= @start_date", "SQLDATE <= @end_date"]
-        params: dict[str, Any] = {
-            "start_date": bigquery.ScalarQueryParameter(
-                "start_date", "INT64", int(start_date.strftime("%Y%m%d"))
-            ),
-            "end_date": bigquery.ScalarQueryParameter(
-                "end_date", "INT64", int(end_date.strftime("%Y%m%d"))
-            ),
-        }
+        where_clauses = ["SQLDATE >= @start_date", "SQLDATE < @end_date_exclusive"]
+        params = self._build_sql_date_params(start_date, end_date)
 
         if filters.country_code:
             where_clauses.append(
@@ -82,7 +75,6 @@ class GdeltRepository(IEventRepository):
                 EventCode,
                 GoldsteinScale,
                 NumMentions,
-                NumArticles,
                 NumSources,
                 AvgTone,
                 ActionGeo_CountryCode,
@@ -119,15 +111,8 @@ class GdeltRepository(IEventRepository):
         """Get daily-aggregated event counts."""
         start_date, end_date = self._resolve_dates(filters)
 
-        where_clauses = ["SQLDATE >= @start_date", "SQLDATE <= @end_date"]
-        params: dict[str, Any] = {
-            "start_date": bigquery.ScalarQueryParameter(
-                "start_date", "INT64", int(start_date.strftime("%Y%m%d"))
-            ),
-            "end_date": bigquery.ScalarQueryParameter(
-                "end_date", "INT64", int(end_date.strftime("%Y%m%d"))
-            ),
-        }
+        where_clauses = ["SQLDATE >= @start_date", "SQLDATE < @end_date_exclusive"]
+        params = self._build_sql_date_params(start_date, end_date)
 
         if country_code:
             where_clauses.append(
@@ -144,7 +129,6 @@ class GdeltRepository(IEventRepository):
                 COUNT(*) AS event_count,
                 AVG(GoldsteinScale) AS avg_goldstein,
                 SUM(NumMentions) AS total_mentions,
-                SUM(NumArticles) AS total_articles,
                 AVG(AvgTone) AS avg_tone
             FROM {self._table}
             WHERE {' AND '.join(where_clauses)}
@@ -170,19 +154,13 @@ class GdeltRepository(IEventRepository):
 
         where_clauses = [
             "SQLDATE >= @start_date",
-            "SQLDATE <= @end_date",
+            "SQLDATE < @end_date_exclusive",
             "ActionGeo_Lat <= @bbox_n",
             "ActionGeo_Lat >= @bbox_s",
             "ActionGeo_Long <= @bbox_e",
             "ActionGeo_Long >= @bbox_w",
         ]
         params: dict[str, Any] = {
-            "start_date": bigquery.ScalarQueryParameter(
-                "start_date", "INT64", int(start_date.strftime("%Y%m%d"))
-            ),
-            "end_date": bigquery.ScalarQueryParameter(
-                "end_date", "INT64", int(end_date.strftime("%Y%m%d"))
-            ),
             "bbox_n": bigquery.ScalarQueryParameter("bbox_n", "FLOAT64", bbox_n),
             "bbox_s": bigquery.ScalarQueryParameter("bbox_s", "FLOAT64", bbox_s),
             "bbox_e": bigquery.ScalarQueryParameter("bbox_e", "FLOAT64", bbox_e),
@@ -190,6 +168,7 @@ class GdeltRepository(IEventRepository):
             "grid_precision": bigquery.ScalarQueryParameter("grid_precision", "INT64", grid_precision),
             "limit": bigquery.ScalarQueryParameter("limit", "INT64", limit),
         }
+        params.update(self._build_sql_date_params(start_date, end_date))
 
         if filters.event_root_code:
             where_clauses.append("EventRootCode = @event_root_code")
@@ -232,25 +211,20 @@ class GdeltRepository(IEventRepository):
 
         where_clauses = [
             "SQLDATE >= @start_date",
-            "SQLDATE <= @end_date",
+            "SQLDATE < @end_date_exclusive",
             "ActionGeo_Lat <= @bbox_n",
             "ActionGeo_Lat >= @bbox_s",
             "ActionGeo_Long <= @bbox_e",
             "ActionGeo_Long >= @bbox_w",
         ]
         params: dict[str, Any] = {
-            "start_date": bigquery.ScalarQueryParameter(
-                "start_date", "INT64", int(start_date.strftime("%Y%m%d"))
-            ),
-            "end_date": bigquery.ScalarQueryParameter(
-                "end_date", "INT64", int(end_date.strftime("%Y%m%d"))
-            ),
             "bbox_n": bigquery.ScalarQueryParameter("bbox_n", "FLOAT64", bbox_n),
             "bbox_s": bigquery.ScalarQueryParameter("bbox_s", "FLOAT64", bbox_s),
             "bbox_e": bigquery.ScalarQueryParameter("bbox_e", "FLOAT64", bbox_e),
             "bbox_w": bigquery.ScalarQueryParameter("bbox_w", "FLOAT64", bbox_w),
             "limit": bigquery.ScalarQueryParameter("limit", "INT64", limit),
         }
+        params.update(self._build_sql_date_params(start_date, end_date))
 
         if filters.event_root_code:
             where_clauses.append("EventRootCode = @event_root_code")
@@ -286,6 +260,10 @@ class GdeltRepository(IEventRepository):
 
     def get_event_by_id(self, event_id: int) -> Event | None:
         """Retrieve a single event by its unique GLOBALEVENTID."""
+        # Keep this lookup partition-pruned by constraining to the configured default window.
+        end_date = date.today()
+        start_date = end_date - timedelta(days=self._settings.default_lookback_days)
+
         sql = f"""
             SELECT
                 GLOBALEVENTID,
@@ -296,7 +274,6 @@ class GdeltRepository(IEventRepository):
                 EventCode,
                 GoldsteinScale,
                 NumMentions,
-                NumArticles,
                 NumSources,
                 AvgTone,
                 ActionGeo_CountryCode,
@@ -304,12 +281,15 @@ class GdeltRepository(IEventRepository):
                 ActionGeo_Long,
                 SOURCEURL
             FROM {self._table}
-            WHERE GLOBALEVENTID = @event_id
+            WHERE SQLDATE >= @start_date
+              AND SQLDATE < @end_date_exclusive
+              AND GLOBALEVENTID = @event_id
             LIMIT 1
         """
-        params = {
+        params: dict[str, Any] = {
             "event_id": bigquery.ScalarQueryParameter("event_id", "INT64", event_id)
         }
+        params.update(self._build_sql_date_params(start_date, end_date))
 
         rows = self._bq.execute_query(sql, params)
         if not rows:
@@ -360,6 +340,19 @@ class GdeltRepository(IEventRepository):
         return start, end
 
     @staticmethod
+    def _build_sql_date_params(start_date: date, end_date: date) -> dict[str, bigquery.ScalarQueryParameter]:
+        """Build SQLDATE partition parameters with an exclusive upper bound."""
+        end_date_exclusive = end_date + timedelta(days=1)
+        return {
+            "start_date": bigquery.ScalarQueryParameter(
+                "start_date", "INT64", int(start_date.strftime("%Y%m%d"))
+            ),
+            "end_date_exclusive": bigquery.ScalarQueryParameter(
+                "end_date_exclusive", "INT64", int(end_date_exclusive.strftime("%Y%m%d"))
+            ),
+        }
+
+    @staticmethod
     def _row_to_event(row: dict[str, Any]) -> Event:
         """Map a BigQuery row dict to a domain Event model."""
         sql_date_raw = row.get("SQLDATE")
@@ -382,7 +375,6 @@ class GdeltRepository(IEventRepository):
             event_code=row.get("EventCode"),
             goldstein_scale=row.get("GoldsteinScale"),
             num_mentions=row.get("NumMentions", 0),
-            num_articles=row.get("NumArticles", 0),
             num_sources=row.get("NumSources", 0),
             avg_tone=row.get("AvgTone"),
             action_geo_country_code=row.get("ActionGeo_CountryCode"),
@@ -410,6 +402,5 @@ class GdeltRepository(IEventRepository):
             count=row.get("event_count", 0),
             avg_goldstein_scale=row.get("avg_goldstein"),
             total_mentions=row.get("total_mentions", 0),
-            total_articles=row.get("total_articles", 0),
             avg_tone=row.get("avg_tone"),
         )

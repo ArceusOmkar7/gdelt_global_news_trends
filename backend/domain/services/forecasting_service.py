@@ -9,9 +9,6 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-import pandas as pd
-from prophet import Prophet
-
 from backend.domain.models.event import EventCountByDate, ForecastPoint, ForecastResult
 from backend.domain.ports.ports import IForecastingService
 
@@ -48,6 +45,10 @@ class ForecastingService(IForecastingService):
 
         # 3. Convert domain models into a Pandas DataFrame for Prophet
         # Prophet expects columns 'ds' (datestamp) and 'y' (numeric value)
+        # Import heavy ML deps lazily to keep API startup fast.
+        import pandas as pd
+        from prophet import Prophet
+
         data = [
             {"ds": count.date, "y": count.count}
             for count in historical_counts

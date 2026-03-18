@@ -112,10 +112,6 @@ class Event(BaseModel):
         default=0,
         description="Number of mentions of this event across all source documents.",
     )
-    num_articles: int = Field(
-        default=0,
-        description="Number of distinct source articles mentioning this event.",
-    )
     num_sources: int = Field(
         default=0,
         description="Number of distinct source URLs mentioning this event.",
@@ -192,10 +188,6 @@ class EventCountByDate(BaseModel):
     total_mentions: int = Field(
         default=0,
         description="Sum of NumMentions across all events on this date.",
-    )
-    total_articles: int = Field(
-        default=0,
-        description="Sum of NumArticles across all events on this date.",
     )
     avg_tone: float | None = Field(
         default=None,
