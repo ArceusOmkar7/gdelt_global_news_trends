@@ -2,6 +2,24 @@
 
 > **For AI assistants:** This file is the single source of truth for the GNIEM project. Read it fully before generating any code, queries, configs, or documentation. Do not assume anything not stated here.
 
+## Change Log (March 2026)
+
+- **BigQuery safety hardening completed**
+    - `backend/infrastructure/data_access/gdelt_repository.py` now uses SQLDATE partition filters with `>=` and `<`.
+    - Repository queries now use explicit column projection (no `SELECT *`).
+    - Events/counted article metrics not in approved projection were removed from response/domain models (`num_articles`, `total_articles`).
+- **Scan budget enforcement implemented**
+    - `backend/infrastructure/data_access/bigquery_client.py` now runs `dry_run=True` before execution and rejects queries over `BQ_MAX_SCAN_BYTES`.
+- **Hot-tier repository added**
+    - `backend/infrastructure/data_access/duckdb_repository.py` created and implements `IEventRepository` against local Parquet.
+    - Hard-failure behavior enforced when `HOT_TIER_PATH` is missing or contains no parquet files.
+- **Settings and startup robustness improved**
+    - `backend/infrastructure/config/settings.py` now includes `HOT_TIER_PATH` and `BQ_MAX_SCAN_BYTES`.
+    - Backend settings now ignore unrelated `.env` variables (for shared frontend/backend env files).
+    - Forecasting service lazy-loads Prophet/Pandas during forecast execution to reduce API startup latency.
+- **Environment migration**
+    - Active project has been copied to WSL-native path for faster dev workflows: `/home/sasuke/projects/gdelt_global_news_trends`.
+
 ---
 
 ## 1. Project Identity
@@ -251,22 +269,31 @@ backend/
 │   ├── routers/
 │   │   ├── events.py         # GET /events, /events/region/{cc}, /events/counts
 │   │   ├── analytics.py      # GET /analytics/clusters, /analytics/forecast
-│   │   └── intelligence.py   # GET /intelligence/briefing/{cc}
-│   └── schemas.py            # Pydantic response models
+│   │   ├── map.py            # GET /map/data (zoom-aware aggregations/details)
+│   │   └── health.py         # GET /health diagnostics
+│   └── schemas/
+│       └── schemas.py        # Pydantic response models
 ├── application/
 │   └── use_cases/
 │       ├── get_events.py
 │       ├── cluster_events.py
 │       ├── forecast_events.py
-│       └── get_briefing.py
+│       └── analyze_event.py
 ├── domain/
-│   ├── models.py             # Event, EventFilter, ForecastResult, Briefing
-│   └── ports.py              # IEventRepository, IAIService interfaces
+│   ├── models/
+│   │   └── event.py          # Event, EventFilter, EventCount, ForecastResult
+│   └── ports/
+│       └── ports.py          # IEventRepository and service interfaces
 └── infrastructure/
-    ├── duckdb_repository.py  # Hot tier queries via DuckDB
-    ├── bigquery_repository.py# Cold tier queries via google-cloud-bigquery
-    ├── groq_service.py       # Groq API calls
-    └── settings.py           # Pydantic settings (env vars)
+    ├── config/
+    │   └── settings.py       # Pydantic settings (env vars)
+    ├── data_access/
+    │   ├── bigquery_client.py# BigQuery wrapper with mandatory dry_run guard
+    │   ├── gdelt_repository.py# Cold tier Events queries (partition-pruned)
+    │   └── duckdb_repository.py # Hot tier Parquet queries via DuckDB
+    └── services/
+        ├── llm_analysis_service.py
+        └── scraper_service.py
 ```
 
 ### Key dependencies
@@ -291,6 +318,15 @@ MAPBOX_TOKEN=
 ENVIRONMENT=production
 BQ_MAX_SCAN_BYTES=2000000000
 ```
+
+### Implemented backend guardrails (March 2026 update)
+- BigQuery query execution now enforces `dry_run=True` before every query and aborts when estimated bytes exceed `BQ_MAX_SCAN_BYTES`.
+- `gdelt_repository.py` now uses explicit Events column lists and SQLDATE partition filters with `>=` and `<` bounds.
+- `duckdb_repository.py` has been added under `infrastructure/data_access/` and implements `IEventRepository` against local Parquet hot-tier files.
+- Hot-tier repository initialization is a hard failure when `HOT_TIER_PATH` is missing or contains no `.parquet` files.
+- `num_articles` and `total_articles` were removed from domain/API response models to align with the column-pruned Events schema.
+- Backend settings now ignore unrelated `.env` keys (for example frontend `VITE_*` keys), preventing startup failure when frontend and backend share one `.env`.
+- Prophet/Pandas imports in forecasting are lazy-loaded inside `forecast()` to improve API startup latency.
 
 ---
 
@@ -425,11 +461,12 @@ Current state (as of March 2026):
 - Phase 1 (backend foundation): complete — FastAPI, BigQuery integration, event retrieval
 - Phase 2 (AI analytics): complete — KMeans/TF-IDF clustering, Prophet forecasting
 - Phase 3 (frontend): Mapbox React frontend exists but partially built
-- **Known issue:** BigQuery queries were doing full table scans (no partition filter, SELECT *) — causing high billing. This is the primary thing to fix before resuming development.
+- **Known issue (resolved in codebase):** BigQuery full-scan risk in repository layer has been mitigated with partition filters, column pruning, and dry-run byte guard.
+- **Current top pending item:** Wire FastAPI hot/cold routing so recent windows go to DuckDB and older windows go to guarded BigQuery.
 
 The architecture described in this CONTEXT.md may require significant refactoring of the existing code, particularly:
-- `backend/infrastructure/gdelt_repository.py` — must add partition filters and column pruning
-- Add `duckdb_repository.py` — new hot tier query layer
+- `backend/api/main.py` and router/use-case wiring — switch repository based on date window (hot vs cold tier)
+- Cold-tier policy enforcement in API layer — max 30-day window, per-user monthly limits, cold result caching
 - Add `scripts/` directory for cron jobs and systemd timers
 - Frontend needs environment variable wiring for deployed API endpoint
 
@@ -437,10 +474,10 @@ The architecture described in this CONTEXT.md may require significant refactorin
 
 ## 13. Quick reference — common tasks
 
-**Fix BigQuery query (most urgent):**
-Add `WHERE SQLDATE >= {int(yesterday.strftime('%Y%m%d'))}` and explicit column SELECT to all queries in `gdelt_repository.py`. Add `dry_run=True` cost check before executing.
+**Fix BigQuery query (implemented):**
+`gdelt_repository.py` now uses SQLDATE partition filters (`>=` and `<`) and explicit column selection. BigQuery calls are guarded by mandatory `dry_run=True` and `BQ_MAX_SCAN_BYTES` budget check in `bigquery_client.py`.
 
-**Set up DuckDB hot tier:**
+**Set up DuckDB hot tier (implemented repository):**
 ```python
 import duckdb
 conn = duckdb.connect()
@@ -480,11 +517,53 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 
 | File | Status | Notes |
 |---|---|---|
-| `backend/infrastructure/gdelt_repository.py` | 🔴 BROKEN | SELECT *, no partition filter — fix first |
-| `backend/infrastructure/duckdb_repository.py` | 🔴 MISSING | Build from scratch |
+| `backend/infrastructure/data_access/gdelt_repository.py` | 🟢 FIXED | Explicit column list + SQLDATE partition filters (`>=` / `<`) |
+| `backend/infrastructure/data_access/bigquery_client.py` | 🟢 FIXED | Mandatory dry_run guard + scan budget (`BQ_MAX_SCAN_BYTES`) |
+| `backend/infrastructure/data_access/duckdb_repository.py` | 🟢 ADDED | Hot-tier repository implemented; hard-fails when HOT_TIER_PATH has no parquet |
+| `backend/infrastructure/config/settings.py` | 🟢 UPDATED | Added `HOT_TIER_PATH`, `BQ_MAX_SCAN_BYTES`; ignores unrelated extra env keys |
 | `backend/api/routers/events.py` | 🟡 PARTIAL | Routing logic needs hot/cold tier split |
 | `backend/api/routers/analytics.py` | 🟡 PARTIAL | Clustering works, forecasting wired |
 | `scripts/daily_bq_pull.py` | 🔴 MISSING | Create with partition filter + dry_run |
 | `scripts/realtime_fetcher.py` | 🔴 MISSING | Create from pattern in §13 |
 | `scripts/nightly_ai.py` | 🔴 MISSING | Prophet + Groq batch |
 | `frontend/src/` | 🟡 PARTIAL | Mapbox map exists, env var wiring missing |
+
+---
+
+## 15. What Next (Execution Order)
+
+### Priority 1 — Wire hot/cold routing in FastAPI
+1. Add routing decision logic in API/use-case layer:
+    - Last 90 days -> `DuckDbRepository`
+    - Older than 90 days -> guarded BigQuery cold tier (`GdeltRepository`)
+2. Keep a strict boundary rule in one shared helper so all endpoints apply the same cutoff.
+3. Ensure map endpoints (`/map/data`) follow the same hot/cold behavior.
+
+### Priority 2 — Enforce cold-tier policy limits
+1. Reject cold requests with date windows > 30 days.
+2. Enforce max 3 cold queries per user per month (simple in-memory/file counter).
+3. Cache cold query results as Parquet by key `{country_code}_{start_date}_{end_date}`.
+4. Serve cache hits without re-querying BigQuery.
+
+### Priority 3 — Complete ingestion scripts
+1. Create `scripts/daily_bq_pull.py`:
+    - yesterday partition pull (`SQLDATE` int)
+    - explicit Events columns
+    - dry-run estimate + bytes threshold guard
+2. Create `scripts/realtime_fetcher.py`:
+    - poll `lastupdate.txt`
+    - append Events CSV to hot-tier buffer
+    - dedupe by `GLOBALEVENTID`
+3. Create `scripts/nightly_ai.py`:
+    - precompute forecasts
+    - precompute LLM briefings cache
+
+### Priority 4 — Ops and deployment hygiene
+1. Add systemd unit + timer files for 15-minute fetcher.
+2. Add cron examples for daily and nightly jobs.
+3. Add startup readiness checks (health endpoint includes repository mode and hot-tier availability).
+
+### Priority 5 — Frontend wiring and validation
+1. Confirm frontend uses `VITE_API_URL` and `VITE_MAPBOX_ACCESS_TOKEN`.
+2. Validate API response shape changes (article-count fields removed) in UI types/components.
+3. Add smoke tests for: events list, map layer load, forecast chart, analyze-event flow.
