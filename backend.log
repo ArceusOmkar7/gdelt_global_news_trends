@@ -1,0 +1,71 @@
+INFO:     Started server process [137193]
+INFO:     Waiting for application startup.
+2026-03-19 20:57:06 [info     ] app_startup                    environment=development
+2026-03-19 20:57:06 [info     ] bigquery_using_service_account path=/home/omkarmahindrakar24/gdelt-intelligence-project-15ba553ac57e.json
+2026-03-19 20:57:06 [info     ] bigquery_client_initialized    dataset=gdelt-bq.gdeltv2 project=gdelt-intelligence-project
+2026-03-19 20:57:06 [info     ] llm_analysis_using_service_account path=/home/omkarmahindrakar24/gdelt-intelligence-project-15ba553ac57e.json
+/home/omkarmahindrakar24/gdelt_global_news_trends/.venv/lib/python3.12/site-packages/vertexai/generative_models/_generative_models.py:433: UserWarning: This feature is deprecated as of June 24, 2025 and will be removed on June 24, 2026. For details, see https://cloud.google.com/vertex-ai/generative-ai/docs/deprecations/genai-vertexai-sdk.
+  warning_logs.show_deprecation_warning()
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+Dry run successful: estimated scan 0.00 MB
+Starting actual query execution (this may take a minute for complex joins)...
+2026-03-19 20:57:14 [info     ] bigquery_query_success         elapsed_ms=1363 estimated_bytes=0 rows_returned=1 sql_preview='SELECT 1 AS healthcheck'
+INFO:     127.0.0.1:38598 - "GET /api/v1/health HTTP/1.1" 200 OK
+2026-03-19 20:57:18 [info     ] get_map_event_details          bbox_e=20.00209212303298 bbox_n=20.021965196656936 bbox_s=20.01976261370214 bbox_w=19.997907876969066 end_date=2026-03-19 start_date=2026-03-12
+2026-03-19 20:57:18 [debug    ] duckdb_query                   params_count=7 sql_preview='\n            SELECT\n                GLOBALEVENTID,\n                SQLDATE,\n                ActionGeo_Lat AS lat,\n                ActionGeo_Long AS lon,\n                Actor1CountryCode,\n            '
+INFO:     127.0.0.1:38598 - "GET /api/v1/events/map?bbox_n=20.021965196656936&bbox_s=20.01976261370214&bbox_e=20.00209212303298&bbox_w=19.997907876969066&zoom=17&start_date=2026-03-12&end_date=2026-03-19 HTTP/1.1" 200 OK
+Dry run successful: estimated scan 0.00 MB
+Starting actual query execution (this may take a minute for complex joins)...
+2026-03-19 20:57:36 [info     ] bigquery_query_success         elapsed_ms=1313 estimated_bytes=0 rows_returned=1 sql_preview='SELECT 1 AS healthcheck'
+INFO:     127.0.0.1:60196 - "GET /api/v1/health HTTP/1.1" 200 OK
+2026-03-19 20:57:48 [info     ] get_map_event_details          bbox_e=20.00209212303298 bbox_n=20.021965196656936 bbox_s=20.01976261370214 bbox_w=19.997907876969066 end_date=2026-03-19 start_date=2026-03-12
+2026-03-19 20:57:48 [debug    ] duckdb_query                   params_count=7 sql_preview='\n            SELECT\n                GLOBALEVENTID,\n                SQLDATE,\n                ActionGeo_Lat AS lat,\n                ActionGeo_Long AS lon,\n                Actor1CountryCode,\n            '
+INFO:     127.0.0.1:57958 - "GET /api/v1/events/map?bbox_n=20.021965196656936&bbox_s=20.01976261370214&bbox_e=20.00209212303298&bbox_w=19.997907876969066&zoom=17&start_date=2026-03-12&end_date=2026-03-19 HTTP/1.1" 200 OK
+Dry run successful: estimated scan 0.00 MB
+Starting actual query execution (this may take a minute for complex joins)...
+2026-03-19 20:57:58 [info     ] bigquery_query_success         elapsed_ms=1540 estimated_bytes=0 rows_returned=1 sql_preview='SELECT 1 AS healthcheck'
+INFO:     127.0.0.1:58956 - "GET /api/v1/health HTTP/1.1" 200 OK
+2026-03-19 20:58:18 [info     ] get_map_event_details          bbox_e=20.00209212303298 bbox_n=20.021965196656936 bbox_s=20.01976261370214 bbox_w=19.997907876969066 end_date=2026-03-19 start_date=2026-03-12
+2026-03-19 20:58:18 [debug    ] duckdb_query                   params_count=7 sql_preview='\n            SELECT\n                GLOBALEVENTID,\n                SQLDATE,\n                ActionGeo_Lat AS lat,\n                ActionGeo_Long AS lon,\n                Actor1CountryCode,\n            '
+INFO:     127.0.0.1:59686 - "GET /api/v1/events/map?bbox_n=20.021965196656936&bbox_s=20.01976261370214&bbox_e=20.00209212303298&bbox_w=19.997907876969066&zoom=17&start_date=2026-03-12&end_date=2026-03-19 HTTP/1.1" 200 OK
+Dry run successful: estimated scan 0.00 MB
+Starting actual query execution (this may take a minute for complex joins)...
+2026-03-19 20:58:20 [info     ] bigquery_query_success         elapsed_ms=1969 estimated_bytes=0 rows_returned=1 sql_preview='SELECT 1 AS healthcheck'
+INFO:     127.0.0.1:59680 - "GET /api/v1/health HTTP/1.1" 200 OK
+Dry run successful: estimated scan 0.00 MB
+Starting actual query execution (this may take a minute for complex joins)...
+2026-03-19 20:58:42 [info     ] bigquery_query_success         elapsed_ms=1359 estimated_bytes=0 rows_returned=1 sql_preview='SELECT 1 AS healthcheck'
+INFO:     127.0.0.1:46820 - "GET /api/v1/health HTTP/1.1" 200 OK
+2026-03-19 20:58:48 [info     ] get_map_event_details          bbox_e=20.00209212303298 bbox_n=20.021965196656936 bbox_s=20.01976261370214 bbox_w=19.997907876969066 end_date=2026-03-19 start_date=2026-03-12
+2026-03-19 20:58:48 [debug    ] duckdb_query                   params_count=7 sql_preview='\n            SELECT\n                GLOBALEVENTID,\n                SQLDATE,\n                ActionGeo_Lat AS lat,\n                ActionGeo_Long AS lon,\n                Actor1CountryCode,\n            '
+INFO:     127.0.0.1:46830 - "GET /api/v1/events/map?bbox_n=20.021965196656936&bbox_s=20.01976261370214&bbox_e=20.00209212303298&bbox_w=19.997907876969066&zoom=17&start_date=2026-03-12&end_date=2026-03-19 HTTP/1.1" 200 OK
+Dry run successful: estimated scan 0.00 MB
+Starting actual query execution (this may take a minute for complex joins)...
+2026-03-19 20:59:04 [info     ] bigquery_query_success         elapsed_ms=1408 estimated_bytes=0 rows_returned=1 sql_preview='SELECT 1 AS healthcheck'
+INFO:     127.0.0.1:56692 - "GET /api/v1/health HTTP/1.1" 200 OK
+2026-03-19 20:59:18 [info     ] get_map_event_details          bbox_e=20.00209212303298 bbox_n=20.021965196656936 bbox_s=20.01976261370214 bbox_w=19.997907876969066 end_date=2026-03-19 start_date=2026-03-12
+2026-03-19 20:59:18 [debug    ] duckdb_query                   params_count=7 sql_preview='\n            SELECT\n                GLOBALEVENTID,\n                SQLDATE,\n                ActionGeo_Lat AS lat,\n                ActionGeo_Long AS lon,\n                Actor1CountryCode,\n            '
+INFO:     127.0.0.1:34284 - "GET /api/v1/events/map?bbox_n=20.021965196656936&bbox_s=20.01976261370214&bbox_e=20.00209212303298&bbox_w=19.997907876969066&zoom=17&start_date=2026-03-12&end_date=2026-03-19 HTTP/1.1" 200 OK
+Dry run successful: estimated scan 0.00 MB
+Starting actual query execution (this may take a minute for complex joins)...
+2026-03-19 20:59:26 [info     ] bigquery_query_success         elapsed_ms=1345 estimated_bytes=0 rows_returned=1 sql_preview='SELECT 1 AS healthcheck'
+INFO:     127.0.0.1:35524 - "GET /api/v1/health HTTP/1.1" 200 OK
+Dry run successful: estimated scan 0.00 MB
+Starting actual query execution (this may take a minute for complex joins)...
+2026-03-19 20:59:48 [info     ] bigquery_query_success         elapsed_ms=1297 estimated_bytes=0 rows_returned=1 sql_preview='SELECT 1 AS healthcheck'
+INFO:     127.0.0.1:56776 - "GET /api/v1/health HTTP/1.1" 200 OK
+2026-03-19 20:59:48 [info     ] get_map_event_details          bbox_e=20.00209212303298 bbox_n=20.021965196656936 bbox_s=20.01976261370214 bbox_w=19.997907876969066 end_date=2026-03-19 start_date=2026-03-12
+2026-03-19 20:59:48 [debug    ] duckdb_query                   params_count=7 sql_preview='\n            SELECT\n                GLOBALEVENTID,\n                SQLDATE,\n                ActionGeo_Lat AS lat,\n                ActionGeo_Long AS lon,\n                Actor1CountryCode,\n            '
+INFO:     127.0.0.1:56776 - "GET /api/v1/events/map?bbox_n=20.021965196656936&bbox_s=20.01976261370214&bbox_e=20.00209212303298&bbox_w=19.997907876969066&zoom=17&start_date=2026-03-12&end_date=2026-03-19 HTTP/1.1" 200 OK
+Dry run successful: estimated scan 0.00 MB
+Starting actual query execution (this may take a minute for complex joins)...
+2026-03-19 21:00:09 [info     ] bigquery_query_success         elapsed_ms=1377 estimated_bytes=0 rows_returned=1 sql_preview='SELECT 1 AS healthcheck'
+INFO:     127.0.0.1:57964 - "GET /api/v1/health HTTP/1.1" 200 OK
+2026-03-19 21:00:18 [info     ] get_map_event_details          bbox_e=20.00209212303298 bbox_n=20.021965196656936 bbox_s=20.01976261370214 bbox_w=19.997907876969066 end_date=2026-03-19 start_date=2026-03-12
+2026-03-19 21:00:18 [debug    ] duckdb_query                   params_count=7 sql_preview='\n            SELECT\n                GLOBALEVENTID,\n                SQLDATE,\n                ActionGeo_Lat AS lat,\n                ActionGeo_Long AS lon,\n                Actor1CountryCode,\n            '
+INFO:     127.0.0.1:46304 - "GET /api/v1/events/map?bbox_n=20.021965196656936&bbox_s=20.01976261370214&bbox_e=20.00209212303298&bbox_w=19.997907876969066&zoom=17&start_date=2026-03-12&end_date=2026-03-19 HTTP/1.1" 200 OK
+Dry run successful: estimated scan 0.00 MB
+Starting actual query execution (this may take a minute for complex joins)...
+2026-03-19 21:00:31 [info     ] bigquery_query_success         elapsed_ms=1431 estimated_bytes=0 rows_returned=1 sql_preview='SELECT 1 AS healthcheck'
+INFO:     127.0.0.1:55744 - "GET /api/v1/health HTTP/1.1" 200 OK

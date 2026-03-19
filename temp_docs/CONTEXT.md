@@ -2,6 +2,22 @@
 
 > **For AI assistants:** This file is the single source of truth for the GNIEM project. Read it fully before generating any code, queries, configs, or documentation. Do not assume anything not stated here.
 
+## Session Findings & Roadmap (March 19, 2026)
+
+### Status Update
+- **Data Enrichment**: Hot-tier Parquet schema updated. Now includes `themes`, `persons`, `organizations`, `mentions_count`, and `avg_confidence`.
+- **Map Visualization**: 
+    - Fixed "artificial grid" by increasing `grid_precision` dynamically.
+    - Fixed "missing points" at high zoom by delaying detailed transition to level 12 and using high-precision bins (~1m) for aggregated centroids.
+- **System Stability**: Frontend build restored; backend multi-query ingestion implemented to prevent BigQuery timeouts.
+
+### Pending Tasks for Next Session
+1. **Health Panel Fix**: Debug `HOT_TIER_PATH` resolution in `uvicorn` context (currently reports MISSING despite data existing).
+2. **Regional Narratives**: Add UI components to show "Top Themes" and "Active Entities" for the currently selected country (aggregated from hot tier).
+3. **Ingestion Stats**: Add visibility into total rows and last-updated timestamps in the control panel.
+
+---
+
 ## Change Log (March 2026)
 
 - **BigQuery safety hardening completed**
