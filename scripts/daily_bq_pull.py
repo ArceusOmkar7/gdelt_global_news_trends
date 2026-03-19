@@ -57,8 +57,9 @@ def build_events_partition_query(table_fqn: str) -> str:
         SELECT
                 {projected}
         FROM `{table_fqn}`
-        WHERE SQLDATE >= @start_date
-          AND SQLDATE < @end_date_exclusive
+                WHERE _PARTITIONDATE = @partition_date
+                    AND SQLDATE >= @start_date
+                    AND SQLDATE < @end_date_exclusive
     """
 
 
@@ -67,12 +68,16 @@ def fetch_partition_dataframe(
     table_fqn: str,
     start_sql_date: int,
     end_sql_date_exclusive: int,
+    partition_day: date,
 ) -> pd.DataFrame:
     """Execute the guarded query and return a dataframe."""
     from google.cloud import bigquery
 
     sql = build_events_partition_query(table_fqn)
     params = {
+        "partition_date": bigquery.ScalarQueryParameter(
+            "partition_date", "DATE", partition_day.isoformat()
+        ),
         "start_date": bigquery.ScalarQueryParameter("start_date", "INT64", start_sql_date),
         "end_date_exclusive": bigquery.ScalarQueryParameter(
             "end_date_exclusive", "INT64", end_sql_date_exclusive
@@ -117,13 +122,17 @@ def run_daily_pull() -> Path | None:
     bq_client = BigQueryClient(settings)
 
     start_sql_date, end_sql_date_exclusive, partition_day = sql_date_bounds_for_yesterday()
-    table_fqn = f"{settings.gdelt_dataset}.{settings.gdelt_table}"
+    table_name = settings.gdelt_table
+    if not table_name.endswith("_partitioned"):
+        table_name = f"{table_name}_partitioned"
+    table_fqn = f"{settings.gdelt_dataset}.{table_name}"
 
     df = fetch_partition_dataframe(
         bq_client=bq_client,
         table_fqn=table_fqn,
         start_sql_date=start_sql_date,
         end_sql_date_exclusive=end_sql_date_exclusive,
+        partition_day=partition_day,
     )
 
     if df.empty:

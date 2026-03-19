@@ -28,6 +28,9 @@ env/
 .env
 *.env.local
 
+# Local runtime data
+data/
+
 # GCP keys — NEVER commit
 *.json
 !package.json

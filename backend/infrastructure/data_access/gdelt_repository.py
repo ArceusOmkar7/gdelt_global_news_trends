@@ -36,7 +36,11 @@ class GdeltRepository(IEventRepository):
     def __init__(self, bq_client: BigQueryClient, settings: Settings) -> None:
         self._bq = bq_client
         self._settings = settings
-        self._table = f"`{settings.gdelt_dataset}.{settings.gdelt_table}`"
+        table_name = settings.gdelt_table
+        if not table_name.endswith("_partitioned"):
+            table_name = f"{table_name}_partitioned"
+        self._is_partitioned = table_name.endswith("_partitioned")
+        self._table = f"`{settings.gdelt_dataset}.{table_name}`"
 
     # ------------------------------------------------------------------
     # IEventRepository implementation
@@ -47,8 +51,8 @@ class GdeltRepository(IEventRepository):
         start_date, end_date = self._resolve_dates(filters)
         limit = filters.limit or self._settings.default_query_limit
 
-        where_clauses = ["SQLDATE >= @start_date", "SQLDATE < @end_date_exclusive"]
-        params = self._build_sql_date_params(start_date, end_date)
+        where_clauses = self._date_where_clauses()
+        params = self._build_date_params(start_date, end_date)
 
         if filters.country_code:
             where_clauses.append(
@@ -111,8 +115,8 @@ class GdeltRepository(IEventRepository):
         """Get daily-aggregated event counts."""
         start_date, end_date = self._resolve_dates(filters)
 
-        where_clauses = ["SQLDATE >= @start_date", "SQLDATE < @end_date_exclusive"]
-        params = self._build_sql_date_params(start_date, end_date)
+        where_clauses = self._date_where_clauses()
+        params = self._build_date_params(start_date, end_date)
 
         if country_code:
             where_clauses.append(
@@ -153,8 +157,7 @@ class GdeltRepository(IEventRepository):
         limit = filters.limit or self._settings.default_query_limit
 
         where_clauses = [
-            "SQLDATE >= @start_date",
-            "SQLDATE < @end_date_exclusive",
+            *self._date_where_clauses(),
             "ActionGeo_Lat <= @bbox_n",
             "ActionGeo_Lat >= @bbox_s",
             "ActionGeo_Long <= @bbox_e",
@@ -168,7 +171,7 @@ class GdeltRepository(IEventRepository):
             "grid_precision": bigquery.ScalarQueryParameter("grid_precision", "INT64", grid_precision),
             "limit": bigquery.ScalarQueryParameter("limit", "INT64", limit),
         }
-        params.update(self._build_sql_date_params(start_date, end_date))
+        params.update(self._build_date_params(start_date, end_date))
 
         if filters.event_root_code:
             where_clauses.append("EventRootCode = @event_root_code")
@@ -210,8 +213,7 @@ class GdeltRepository(IEventRepository):
         limit = filters.limit or self._settings.default_query_limit
 
         where_clauses = [
-            "SQLDATE >= @start_date",
-            "SQLDATE < @end_date_exclusive",
+            *self._date_where_clauses(),
             "ActionGeo_Lat <= @bbox_n",
             "ActionGeo_Lat >= @bbox_s",
             "ActionGeo_Long <= @bbox_e",
@@ -224,7 +226,7 @@ class GdeltRepository(IEventRepository):
             "bbox_w": bigquery.ScalarQueryParameter("bbox_w", "FLOAT64", bbox_w),
             "limit": bigquery.ScalarQueryParameter("limit", "INT64", limit),
         }
-        params.update(self._build_sql_date_params(start_date, end_date))
+        params.update(self._build_date_params(start_date, end_date))
 
         if filters.event_root_code:
             where_clauses.append("EventRootCode = @event_root_code")
@@ -264,6 +266,9 @@ class GdeltRepository(IEventRepository):
         end_date = date.today()
         start_date = end_date - timedelta(days=self._settings.default_lookback_days)
 
+        where_clauses = self._date_where_clauses()
+        where_clauses.append("GLOBALEVENTID = @event_id")
+
         sql = f"""
             SELECT
                 GLOBALEVENTID,
@@ -281,15 +286,13 @@ class GdeltRepository(IEventRepository):
                 ActionGeo_Long,
                 SOURCEURL
             FROM {self._table}
-            WHERE SQLDATE >= @start_date
-              AND SQLDATE < @end_date_exclusive
-              AND GLOBALEVENTID = @event_id
+            WHERE {' AND '.join(where_clauses)}
             LIMIT 1
         """
         params: dict[str, Any] = {
             "event_id": bigquery.ScalarQueryParameter("event_id", "INT64", event_id)
         }
-        params.update(self._build_sql_date_params(start_date, end_date))
+        params.update(self._build_date_params(start_date, end_date))
 
         rows = self._bq.execute_query(sql, params)
         if not rows:
@@ -338,6 +341,33 @@ class GdeltRepository(IEventRepository):
             end - timedelta(days=self._settings.default_lookback_days)
         )
         return start, end
+
+    def _date_where_clauses(self) -> list[str]:
+        clauses = ["SQLDATE >= @start_date", "SQLDATE < @end_date_exclusive"]
+        if self._is_partitioned:
+            clauses.extend(
+                [
+                    "_PARTITIONDATE >= @start_partition_date",
+                    "_PARTITIONDATE < @end_partition_date_exclusive",
+                ]
+            )
+        return clauses
+
+    def _build_date_params(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> dict[str, bigquery.ScalarQueryParameter]:
+        params = self._build_sql_date_params(start_date, end_date)
+        if self._is_partitioned:
+            end_date_exclusive = end_date + timedelta(days=1)
+            params["start_partition_date"] = bigquery.ScalarQueryParameter(
+                "start_partition_date", "DATE", start_date.isoformat()
+            )
+            params["end_partition_date_exclusive"] = bigquery.ScalarQueryParameter(
+                "end_partition_date_exclusive", "DATE", end_date_exclusive.isoformat()
+            )
+        return params
 
     @staticmethod
     def _build_sql_date_params(start_date: date, end_date: date) -> dict[str, bigquery.ScalarQueryParameter]:

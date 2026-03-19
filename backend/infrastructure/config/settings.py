@@ -5,9 +5,11 @@ Uses Pydantic BaseSettings for automatic env-var parsing and validation.
 """
 
 import json as _json
+import warnings
+from pathlib import Path
 
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, model_validator
 
 
 class Settings(BaseSettings):
@@ -130,6 +132,38 @@ class Settings(BaseSettings):
                 inner = raw.strip("[]")
                 return [s.strip().strip("\"'") for s in inner.split(",") if s.strip()]
         return [s.strip() for s in raw.split(",") if s.strip()]
+
+    @model_validator(mode="after")
+    def ensure_required_dirs(self) -> "Settings":
+        """Create required local directories for runtime artifacts.
+
+        This keeps startup deterministic for writable paths: missing
+        directories are created automatically. If a path is not writable
+        (for example `/data` on local dev machines), startup is not blocked
+        here; downstream repositories still enforce their own preconditions.
+        """
+        for path_str in (self.hot_tier_path, self.cache_path):
+            try:
+                Path(path_str).mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                warnings.warn(
+                    f"Could not auto-create directory '{path_str}': {exc}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+
+        # Routed repository writes cold-tier parquet cache under this subdir.
+        cold_queries_dir = Path(self.cache_path) / "cold_queries"
+        try:
+            cold_queries_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            warnings.warn(
+                f"Could not auto-create directory '{cold_queries_dir}': {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+        return self
 
     model_config = {
         "env_file": ".env",

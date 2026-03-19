@@ -33,14 +33,20 @@ Create a `.env` file in the project root (a template `.env.example` is provided)
 ```ini
 GCP_PROJECT_ID=your-gcp-project-id
 GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/service-account.json
-# Optional Overrides:
+# Required runtime paths (auto-created when writable):
+HOT_TIER_PATH=./data/hot_tier
+CACHE_PATH=./data/cache
+# Strongly recommended defaults:
 GDELT_DATASET=gdelt-bq.gdeltv2
-GDELT_TABLE=events
+GDELT_TABLE=events_partitioned
+BQ_MAX_SCAN_BYTES=2000000000
 ENVIRONMENT=development
 LOG_LEVEL=INFO
 ```
 
 > **Note:** A valid GCP service account with BigQuery read access is required for local execution.
+> **Note:** Backend startup requires at least one parquet file under `HOT_TIER_PATH`.
+> Run `python scripts/daily_bq_pull.py` once to bootstrap real hot-tier data.
 
 ### 2. Local Development (Virtual Environment)
 
