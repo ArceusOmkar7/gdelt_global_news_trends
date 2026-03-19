@@ -54,6 +54,11 @@
 - **LLM model defaults updated**
     - Backend LLM default model changed to `gemini-2.5-flash` in settings and `.env.example`.
     - Nightly Groq briefing model changed to `llama-3.1-8b-instant` for faster low-cost summarization.
+- **Map rendering and interaction stability fixes**
+    - Fixed DuckDB repository BBOX filtering to handle International Date Line (antimeridian) crossing and full-world views (>= 360 degrees).
+    - Improved map responsiveness by reducing BBOX update debounce to 100ms.
+    - Enhanced visual clarity by extending heatmap visibility to zoom level 7 and increasing point radius/opacity.
+    - Hardened map interaction by allowing concurrent clicks on both aggregate and detailed layers during data transitions.
 
 ---
 

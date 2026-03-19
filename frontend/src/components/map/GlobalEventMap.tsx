@@ -54,7 +54,7 @@ export const GlobalEventMap: React.FC = () => {
       }
     };
 
-    const timer = setTimeout(updateBBox, 300);
+    const timer = setTimeout(updateBBox, 100);
     return () => clearTimeout(timer);
   }, [viewState]);
 
@@ -113,14 +113,9 @@ export const GlobalEventMap: React.FC = () => {
   }, [mapResponse]);
 
   const onMapClick = (evt: MapMouseEvent) => {
-    if (mapResponse?.is_aggregated) {
-      const featureFromEvent = evt.features?.find((f) => f.layer?.id === 'agg-circle-layer');
-      const featureFromQuery = mapRef.current
-        ?.queryRenderedFeatures(evt.point, { layers: ['agg-circle-layer'] })
-        ?.[0];
-      const aggregateFeature = featureFromEvent ?? featureFromQuery;
-      if (!aggregateFeature) return;
-
+    // Check for aggregate bins first
+    const aggregateFeature = evt.features?.find((f) => f.layer?.id === 'agg-circle-layer');
+    if (aggregateFeature) {
       const aggregatePoint = aggregateFeature.geometry as Point;
       const [longitude, latitude] = aggregatePoint.coordinates;
       const nextZoom = 9.2;
@@ -136,19 +131,21 @@ export const GlobalEventMap: React.FC = () => {
       return;
     }
 
-    const feature = evt.features?.[0];
-    const props = feature?.properties as Event | undefined;
-    if (!props || !props.global_event_id) return;
-    setSelectedEvent({
-      ...props,
-      global_event_id: Number(props.global_event_id),
-      lat: Number(props.lat),
-      lon: Number(props.lon),
-      num_mentions: Number(props.num_mentions ?? 0),
-      num_sources: props.num_sources == null ? undefined : Number(props.num_sources),
-      goldstein_scale: props.goldstein_scale == null ? undefined : Number(props.goldstein_scale),
-      avg_tone: props.avg_tone == null ? undefined : Number(props.avg_tone),
-    });
+    // Check for individual events
+    const eventFeature = evt.features?.find((f) => f.layer?.id === 'events-layer');
+    const props = eventFeature?.properties as Event | undefined;
+    if (props && props.global_event_id) {
+      setSelectedEvent({
+        ...props,
+        global_event_id: Number(props.global_event_id),
+        lat: Number(props.lat),
+        lon: Number(props.lon),
+        num_mentions: Number(props.num_mentions ?? 0),
+        num_sources: props.num_sources == null ? undefined : Number(props.num_sources),
+        goldstein_scale: props.goldstein_scale == null ? undefined : Number(props.goldstein_scale),
+        avg_tone: props.avg_tone == null ? undefined : Number(props.avg_tone),
+      });
+    }
   };
 
   if (!HAS_MAPBOX_TOKEN) {
@@ -180,7 +177,7 @@ export const GlobalEventMap: React.FC = () => {
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
         onClick={onMapClick}
-        interactiveLayerIds={mapResponse?.is_aggregated ? ['agg-circle-layer'] : ['events-layer']}
+        interactiveLayerIds={['agg-circle-layer', 'events-layer']}
         mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
         mapStyle="mapbox://styles/mapbox/dark-v11"
         style={{ width: '100%', height: '100%' }}
@@ -190,7 +187,7 @@ export const GlobalEventMap: React.FC = () => {
             <Layer
               id="agg-heatmap-layer"
               type="heatmap"
-              maxzoom={3.6}
+              maxzoom={7}
               paint={{
                 'heatmap-weight': [
                   'interpolate',
@@ -245,12 +242,10 @@ export const GlobalEventMap: React.FC = () => {
                   ['linear'],
                   ['zoom'],
                   1,
-                  0.58,
-                  2.5,
-                  0.48,
-                  3.2,
-                  0.2,
-                  3.6,
+                  0.6,
+                  4,
+                  0.4,
+                  7,
                   0,
                 ],
               }}
@@ -280,13 +275,13 @@ export const GlobalEventMap: React.FC = () => {
                   ['linear'],
                   ['zoom'],
                   0,
-                  8,
-                  2.4,
-                  6,
-                  4,
-                  4,
-                  8.9,
+                  10,
                   3,
+                  8,
+                  6,
+                  6,
+                  8.9,
+                  4,
                 ],
                 'circle-opacity': [
                   'interpolate',
@@ -328,9 +323,9 @@ export const GlobalEventMap: React.FC = () => {
                   ['linear'],
                   ['ln', ['+', ['coalesce', ['get', 'num_mentions'], 0], 1]],
                   0,
-                  4,
+                  6,
                   8,
-                  14,
+                  18,
                 ],
                 'circle-stroke-width': [
                   'case',
@@ -344,9 +339,9 @@ export const GlobalEventMap: React.FC = () => {
                   ['linear'],
                   ['ln', ['+', ['coalesce', ['get', 'num_mentions'], 0], 1]],
                   0,
-                  0.22,
+                  0.5,
                   8,
-                  0.58,
+                  0.9,
                 ],
               }}
             />

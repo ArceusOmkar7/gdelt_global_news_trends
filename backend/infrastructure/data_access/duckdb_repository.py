@@ -154,6 +154,17 @@ class DuckDbRepository(IEventRepository):
         limit = filters.limit or self._settings.default_query_limit
         start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
 
+        # Normalize longitudes to [-180, 180] for DuckDB
+        # If view is wider than 360 degrees, skip longitude filtering
+        if abs(bbox_e - bbox_w) >= 360:
+            norm_w = -180.0
+            norm_e = 180.0
+            is_full_world = True
+        else:
+            norm_w = ((bbox_w + 180) % 360) - 180
+            norm_e = ((bbox_e + 180) % 360) - 180
+            is_full_world = False
+
         where_clauses = [
             "SQLDATE >= ?",
             "SQLDATE < ?",
@@ -161,17 +172,23 @@ class DuckDbRepository(IEventRepository):
             "ActionGeo_Long IS NOT NULL",
             "ActionGeo_Lat <= ?",
             "ActionGeo_Lat >= ?",
-            "ActionGeo_Long <= ?",
-            "ActionGeo_Long >= ?",
         ]
         params: list[Any] = [
             start_int,
             end_exclusive_int,
             bbox_n,
             bbox_s,
-            bbox_e,
-            bbox_w,
         ]
+
+        if not is_full_world:
+            if norm_w <= norm_e:
+                where_clauses.append("ActionGeo_Long <= ?")
+                where_clauses.append("ActionGeo_Long >= ?")
+                params.extend([norm_e, norm_w])
+            else:
+                # Crosses International Date Line
+                where_clauses.append("(ActionGeo_Long <= ? OR ActionGeo_Long >= ?)")
+                params.extend([norm_e, norm_w])
 
         if filters.event_root_code:
             where_clauses.append("EventRootCode = ?")
@@ -187,10 +204,9 @@ class DuckDbRepository(IEventRepository):
             GROUP BY lat, lon
             LIMIT ?
         """
-        # Parameter order must match SQL placeholder order.
-        params = [grid_precision, grid_precision, *params, limit]
+        all_params = [grid_precision, grid_precision, *params, limit]
 
-        rows = self._query(sql, params)
+        rows = self._query(sql, all_params)
         return [
             MapAggregation(
                 lat=row["lat"],
@@ -212,6 +228,17 @@ class DuckDbRepository(IEventRepository):
         limit = filters.limit or self._settings.default_query_limit
         start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
 
+        # Normalize longitudes to [-180, 180] for DuckDB
+        # If view is wider than 360 degrees, skip longitude filtering
+        if abs(bbox_e - bbox_w) >= 360:
+            norm_w = -180.0
+            norm_e = 180.0
+            is_full_world = True
+        else:
+            norm_w = ((bbox_w + 180) % 360) - 180
+            norm_e = ((bbox_e + 180) % 360) - 180
+            is_full_world = False
+
         where_clauses = [
             "SQLDATE >= ?",
             "SQLDATE < ?",
@@ -219,17 +246,23 @@ class DuckDbRepository(IEventRepository):
             "ActionGeo_Long IS NOT NULL",
             "ActionGeo_Lat <= ?",
             "ActionGeo_Lat >= ?",
-            "ActionGeo_Long <= ?",
-            "ActionGeo_Long >= ?",
         ]
         params: list[Any] = [
             start_int,
             end_exclusive_int,
             bbox_n,
             bbox_s,
-            bbox_e,
-            bbox_w,
         ]
+
+        if not is_full_world:
+            if norm_w <= norm_e:
+                where_clauses.append("ActionGeo_Long <= ?")
+                where_clauses.append("ActionGeo_Long >= ?")
+                params.extend([norm_e, norm_w])
+            else:
+                # Crosses International Date Line
+                where_clauses.append("(ActionGeo_Long <= ? OR ActionGeo_Long >= ?)")
+                params.extend([norm_e, norm_w])
 
         if filters.event_root_code:
             where_clauses.append("EventRootCode = ?")
