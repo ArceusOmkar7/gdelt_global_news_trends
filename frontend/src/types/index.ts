@@ -13,6 +13,11 @@ export interface Event {
   source_url?: string;
   actor1_type?: string;
   actor2_type?: string;
+  themes?: string[];
+  persons?: string[];
+  organizations?: string[];
+  mentions_count?: number;
+  avg_confidence?: number;
 }
 
 export interface MapAggregation {

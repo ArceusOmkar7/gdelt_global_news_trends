@@ -65,6 +65,11 @@ class EventResponse(BaseModel):
     num_mentions: int = 0
     num_sources: int = 0
     avg_tone: float | None = None
+    themes: list[str] = []
+    persons: list[str] = []
+    organizations: list[str] = []
+    mentions_count: int = 0
+    avg_confidence: float | None = None
     action_geo_country_code: str | None = None
     action_geo_lat: float | None = None
     action_geo_long: float | None = None
@@ -156,6 +161,9 @@ class MapEventDetailResponse(BaseModel):
     source_url: str | None = None
     actor1_type: str | None = None
     actor2_type: str | None = None
+    themes: list[str] = []
+    persons: list[str] = []
+    organizations: list[str] = []
     gkg_record_id: str | None = None
 
 

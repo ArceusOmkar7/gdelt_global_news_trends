@@ -85,6 +85,11 @@ class DuckDbRepository(IEventRepository):
                 NumMentions,
                 NumSources,
                 AvgTone,
+                themes,
+                persons,
+                organizations,
+                mentions_count,
+                avg_confidence,
                 ActionGeo_CountryCode,
                 ActionGeo_Lat,
                 ActionGeo_Long,
@@ -283,7 +288,10 @@ class DuckDbRepository(IEventRepository):
                 AvgTone,
                 SOURCEURL,
                 Actor1Type1Code AS Actor1Type,
-                Actor2Type1Code AS Actor2Type
+                Actor2Type1Code AS Actor2Type,
+                themes,
+                persons,
+                organizations
             FROM read_parquet('{self._parquet_glob}')
             WHERE {' AND '.join(where_clauses)}
             LIMIT ?
@@ -311,6 +319,11 @@ class DuckDbRepository(IEventRepository):
                 NumMentions,
                 NumSources,
                 AvgTone,
+                themes,
+                persons,
+                organizations,
+                mentions_count,
+                avg_confidence,
                 ActionGeo_CountryCode,
                 ActionGeo_Lat,
                 ActionGeo_Long,
@@ -373,6 +386,11 @@ class DuckDbRepository(IEventRepository):
             num_mentions=row.get("NumMentions", 0),
             num_sources=row.get("NumSources", 0),
             avg_tone=row.get("AvgTone"),
+            themes=row.get("themes", []),
+            persons=row.get("persons", []),
+            organizations=row.get("organizations", []),
+            mentions_count=row.get("mentions_count", 0),
+            avg_confidence=row.get("avg_confidence"),
             action_geo_country_code=row.get("ActionGeo_CountryCode"),
             action_geo_lat=row.get("ActionGeo_Lat"),
             action_geo_long=row.get("ActionGeo_Long"),
@@ -428,4 +446,7 @@ class DuckDbRepository(IEventRepository):
             source_url=row.get("SOURCEURL"),
             actor1_type=row.get("Actor1Type"),
             actor2_type=row.get("Actor2Type"),
+            themes=row.get("themes", []),
+            persons=row.get("persons", []),
+            organizations=row.get("organizations", []),
         )

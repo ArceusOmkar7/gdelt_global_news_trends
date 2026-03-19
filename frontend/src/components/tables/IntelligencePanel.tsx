@@ -11,7 +11,9 @@ import {
   Activity,
   User,
   MapPin,
-  RefreshCcw
+  RefreshCcw,
+  Globe,
+  Users
 } from 'lucide-react';
 
 export const IntelligencePanel: React.FC = () => {
@@ -162,6 +164,82 @@ export const IntelligencePanel: React.FC = () => {
             )}
           </div>
         </section>
+
+        {/* Knowledge Graph Insights */}
+        {(selectedEvent.themes?.length || selectedEvent.persons?.length || selectedEvent.organizations?.length) && (
+          <section className="space-y-4 pt-4 border-t border-white/5">
+            <div className="flex items-center gap-2">
+              <Globe size={16} className="text-terminal-green" />
+              <span className="data-ink text-terminal-green">Knowledge Graph Insights</span>
+            </div>
+            
+            <div className="space-y-4">
+              {selectedEvent.themes && selectedEvent.themes.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[10px] text-white/40 uppercase font-mono">Top Themes</span>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedEvent.themes.slice(0, 12).map((theme, i) => (
+                      <span key={i} className="px-2 py-0.5 bg-surface-900/40 rounded text-[10px] font-mono text-white/80 border border-white/5">
+                        {theme}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                {selectedEvent.persons && selectedEvent.persons.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-[10px] text-white/40 uppercase font-mono">People</span>
+                    <div className="flex flex-col gap-1">
+                      {selectedEvent.persons.slice(0, 5).map((person, i) => (
+                        <span key={i} className="text-[11px] font-mono text-cyber-blue truncate">
+                          {person}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {selectedEvent.organizations && selectedEvent.organizations.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-[10px] text-white/40 uppercase font-mono">Organizations</span>
+                    <div className="flex flex-col gap-1">
+                      {selectedEvent.organizations.slice(0, 5).map((org, i) => (
+                        <span key={i} className="text-[11px] font-mono text-amber-500 truncate">
+                          {org}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Source Reach / Mentions */}
+        {(selectedEvent.mentions_count || 0) > 0 && (
+          <section className="bg-cyber-blue/5 p-4 rounded panel-border space-y-3">
+            <div className="flex items-center gap-2">
+              <Users size={16} className="text-cyber-blue" />
+              <span className="data-ink text-cyber-blue">Media Reach Analysis</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <span className="text-[10px] text-white/40 uppercase font-mono">Verified Mentions</span>
+                <div className="text-lg font-bold font-mono text-white">
+                  {selectedEvent.mentions_count}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] text-white/40 uppercase font-mono">Avg Confidence</span>
+                <div className="text-lg font-bold font-mono text-terminal-green">
+                  {(selectedEvent.avg_confidence || 0).toFixed(1)}%
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* LLM Analysis Section */}
         <section className="pt-4">

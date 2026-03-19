@@ -63,6 +63,12 @@
     - Created missing `tsconfig.app.json` and `tsconfig.node.json` required by Vite.
     - Added `src/vite-env.d.ts` to resolve `ImportMeta` type errors for `import.meta.env`.
     - Cleaned up unused store variables in `IntelligencePanel.tsx` to satisfy strict type checking.
+- **Geopolitical intelligence enriched with GKG and Mentions**
+    - Updated domain and API models to include thematic categories, named entities (persons/orgs), and media reach metrics.
+    - Enhanced `daily_bq_pull.py` with partition-pruned JOINs between Events, Mentions, and GKG tables.
+    - Rewrote `realtime_fetcher.py` to ingest and join all three GDELT CSV streams (Events, Mentions, GKG) every 15 minutes.
+    - Updated DuckDB repository to serve enriched fields from the hot-tier Parquet files.
+    - Expanded frontend `IntelligencePanel` with dedicated "Knowledge Graph Insights" and "Media Reach Analysis" sections.
 
 ---
 

@@ -120,6 +120,26 @@ class Event(BaseModel):
         default=None,
         description="Average tone of all documents mentioning this event.",
     )
+    themes: list[str] = Field(
+        default_factory=list,
+        description="Thematic categories from GKG (e.g., TERRORISM, PROTEST).",
+    )
+    persons: list[str] = Field(
+        default_factory=list,
+        description="Names of people mentioned in the news articles.",
+    )
+    organizations: list[str] = Field(
+        default_factory=list,
+        description="Names of organizations mentioned in the news articles.",
+    )
+    mentions_count: int = Field(
+        default=0,
+        description="Verified count from Mentions table.",
+    )
+    avg_confidence: float | None = Field(
+        default=None,
+        description="Average extraction confidence from Mentions table.",
+    )
     action_geo_country_code: str | None = Field(
         default=None,
         description="Country code where the event action took place.",
@@ -224,6 +244,9 @@ class MapEventDetail(BaseModel):
     source_url: str | None = None
     actor1_type: str | None = None
     actor2_type: str | None = None
+    themes: list[str] = []
+    persons: list[str] = []
+    organizations: list[str] = []
     gkg_record_id: str | None = Field(default=None, description="Global Knowledge Graph ID if joined.")
 
     model_config = {"frozen": True}
