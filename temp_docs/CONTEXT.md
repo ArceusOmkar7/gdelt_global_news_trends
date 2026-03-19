@@ -46,6 +46,14 @@
     - Fixed DuckDB map aggregation placeholder ordering bug that caused empty map results despite available data.
     - Added `backend/tests/unit/test_duckdb_repository.py` regression coverage for map aggregation.
     - Replaced frontend Deck.GL map-layer rendering path with native Mapbox GeoJSON layers to avoid luma.gl shader compile/link failures on affected GPU/driver stacks.
+- **Frontend map readability and drill-down interaction improved**
+    - Aggregated map view now uses a zoom-adaptive hybrid of heatmap + intensity circles for better readability across global-to-regional scales.
+    - Detailed event circles now use lower opacity scaling to preserve basemap context.
+    - Added aggregate-circle click drill-down in `frontend/src/components/map/GlobalEventMap.tsx` to recenter and jump directly to detailed mode (`zoom >= 9`) for per-event inspection.
+    - Restored reliable aggregate interaction at low zoom by keeping aggregate circles interactive and visible while heatmap fades by zoom.
+- **LLM model defaults updated**
+    - Backend LLM default model changed to `gemini-2.5-flash` in settings and `.env.example`.
+    - Nightly Groq briefing model changed to `llama-3.1-8b-instant` for faster low-cost summarization.
 
 ---
 
@@ -559,7 +567,7 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 | `backend/infrastructure/data_access/duckdb_repository.py` | 🟢 UPDATED | Hot-tier repository implemented; map aggregation parameter ordering bug fixed |
 | `backend/infrastructure/data_access/routed_repository.py` | 🟢 ADDED | Shared hot/cold router with policy enforcement and cold parquet caching |
 | `backend/api/request_context.py` | 🟢 ADDED | Request-scoped user identity for cold-tier monthly quota accounting |
-| `backend/infrastructure/config/settings.py` | 🟢 UPDATED | Added `CACHE_PATH`, `HOT_TIER_CUTOFF_DAYS`, `COLD_TIER_MAX_WINDOW_DAYS`, `COLD_TIER_MONTHLY_QUERY_LIMIT` |
+| `backend/infrastructure/config/settings.py` | 🟢 UPDATED | Added runtime tier settings and updated default LLM model to `gemini-2.5-flash` |
 | `backend/api/main.py` | 🟢 UPDATED | Wired routed repository + request identity middleware + cold policy exception handler |
 | `backend/api/routers/events.py` | 🟢 ROUTED | Uses use case backed by routed repository; no direct BigQuery dependency |
 | `backend/api/routers/map.py` | 🟢 ROUTED | Uses routed repository via use case; zoom behavior unchanged (`<9` aggregate, `>=9` detail) |
@@ -567,8 +575,8 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 | `backend/api/routers/health.py` | 🟢 UPDATED | Adds hot-tier diagnostics (availability + parquet count + cutoff days) |
 | `scripts/daily_bq_pull.py` | 🟢 ADDED | Yesterday partition pull with explicit Events columns and dry-run budget guard |
 | `scripts/realtime_fetcher.py` | 🟢 ADDED | Polls `lastupdate.txt`, ingests Events CSV zip, dedupes on `GLOBALEVENTID` |
-| `scripts/nightly_ai.py` | 🟢 ADDED | Precomputes `forecasts.parquet` and `briefings.json` into `CACHE_PATH` |
-| `frontend/src/` | 🟡 PARTIAL | Runtime controls added; map rendering moved to native Mapbox layers for shader stability; still needs smoke tests and deployment validation |
+| `scripts/nightly_ai.py` | 🟢 UPDATED | Precomputes `forecasts.parquet` and `briefings.json`; briefing model default updated to `llama-3.1-8b-instant` |
+| `frontend/src/` | 🟡 PARTIAL | Runtime controls added; map now uses zoom-adaptive heatmap + aggregate intensity circles with click drill-down to detailed per-event mode; still needs smoke tests and deployment validation |
 
 ## 15. Known Edge Cases (Post-Routing)
 

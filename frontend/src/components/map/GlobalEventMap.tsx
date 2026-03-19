@@ -113,7 +113,29 @@ export const GlobalEventMap: React.FC = () => {
   }, [mapResponse]);
 
   const onMapClick = (evt: MapMouseEvent) => {
-    if (mapResponse?.is_aggregated) return;
+    if (mapResponse?.is_aggregated) {
+      const featureFromEvent = evt.features?.find((f) => f.layer?.id === 'agg-circle-layer');
+      const featureFromQuery = mapRef.current
+        ?.queryRenderedFeatures(evt.point, { layers: ['agg-circle-layer'] })
+        ?.[0];
+      const aggregateFeature = featureFromEvent ?? featureFromQuery;
+      if (!aggregateFeature) return;
+
+      const aggregatePoint = aggregateFeature.geometry as Point;
+      const [longitude, latitude] = aggregatePoint.coordinates;
+      const nextZoom = 9.2;
+
+      // Clear selected event while drilling from aggregate bins to event-level detail.
+      setSelectedEvent(null);
+      setViewState({
+        ...viewState,
+        longitude,
+        latitude,
+        zoom: nextZoom,
+      });
+      return;
+    }
+
     const feature = evt.features?.[0];
     const props = feature?.properties as Event | undefined;
     if (!props || !props.global_event_id) return;
@@ -158,7 +180,7 @@ export const GlobalEventMap: React.FC = () => {
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
         onClick={onMapClick}
-        interactiveLayerIds={mapResponse?.is_aggregated ? [] : ['events-layer']}
+        interactiveLayerIds={mapResponse?.is_aggregated ? ['agg-circle-layer'] : ['events-layer']}
         mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
         mapStyle="mapbox://styles/mapbox/dark-v11"
         style={{ width: '100%', height: '100%' }}
@@ -166,29 +188,122 @@ export const GlobalEventMap: React.FC = () => {
         {aggregatedGeoJson && (
           <Source id="agg-source" type="geojson" data={aggregatedGeoJson}>
             <Layer
-              id="agg-layer"
-              type="circle"
+              id="agg-heatmap-layer"
+              type="heatmap"
+              maxzoom={3.6}
               paint={{
-                'circle-color': '#00f3ff',
-                'circle-opacity': [
+                'heatmap-weight': [
                   'interpolate',
                   ['linear'],
                   ['ln', ['+', ['get', 'intensity'], 1]],
                   0,
-                  0.2,
+                  0,
                   6,
+                  1,
+                ],
+                'heatmap-intensity': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  1,
                   0.9,
+                  5,
+                  1.4,
+                  8.9,
+                  1.8,
+                ],
+                'heatmap-radius': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  1,
+                  18,
+                  2.5,
+                  26,
+                  3.6,
+                  20,
+                ],
+                'heatmap-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['heatmap-density'],
+                  0,
+                  'rgba(0, 0, 0, 0)',
+                  0.2,
+                  'rgba(0, 220, 255, 0.25)',
+                  0.4,
+                  'rgba(0, 255, 190, 0.45)',
+                  0.6,
+                  'rgba(255, 220, 0, 0.62)',
+                  0.8,
+                  'rgba(255, 120, 0, 0.75)',
+                  1,
+                  'rgba(255, 45, 45, 0.88)',
+                ],
+                'heatmap-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  1,
+                  0.58,
+                  2.5,
+                  0.48,
+                  3.2,
+                  0.2,
+                  3.6,
+                  0,
+                ],
+              }}
+            />
+            <Layer
+              id="agg-circle-layer"
+              type="circle"
+              minzoom={0}
+              paint={{
+                'circle-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['ln', ['+', ['get', 'intensity'], 1]],
+                  0,
+                  'rgba(0, 220, 255, 0.45)',
+                  2,
+                  'rgba(0, 255, 190, 0.5)',
+                  4,
+                  'rgba(255, 220, 0, 0.56)',
+                  6,
+                  'rgba(255, 120, 0, 0.62)',
+                  8,
+                  'rgba(255, 45, 45, 0.72)',
                 ],
                 'circle-radius': [
                   'interpolate',
                   ['linear'],
-                  ['ln', ['+', ['get', 'intensity'], 1]],
+                  ['zoom'],
                   0,
+                  8,
+                  2.4,
+                  6,
+                  4,
+                  4,
+                  8.9,
                   3,
-                  7,
-                  18,
                 ],
-                'circle-blur': 0.35,
+                'circle-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  0,
+                  0.1,
+                  2.4,
+                  0.14,
+                  3,
+                  0.2,
+                  5,
+                  0.34,
+                  8.9,
+                  0.3,
+                ],
+                'circle-blur': 0.1,
               }}
             />
           </Source>
@@ -224,7 +339,15 @@ export const GlobalEventMap: React.FC = () => {
                   0,
                 ],
                 'circle-stroke-color': '#ffffff',
-                'circle-opacity': 0.9,
+                'circle-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['ln', ['+', ['coalesce', ['get', 'num_mentions'], 0], 1]],
+                  0,
+                  0.22,
+                  8,
+                  0.58,
+                ],
               }}
             />
           </Source>

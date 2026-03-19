@@ -76,8 +76,8 @@ class Settings(BaseSettings):
 
     # --- AI / LLM ---
     llm_model_name: str = Field(
-        default="gemini-1.5-flash",
-        description="Gemini model to use for analysis (e.g., gemini-1.5-flash, gemini-1.5-pro).",
+        default="gemini-2.5-flash",
+        description="Gemini model to use for analysis (e.g., gemini-2.5-flash, gemini-1.5-pro).",
     )
     groq_api_key: str | None = Field(
         default=None,

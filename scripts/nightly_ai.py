@@ -174,7 +174,7 @@ class GroqBriefingClient:
     """Small async client for Groq Chat Completions API."""
 
     api_key: str
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
 
     async def generate_briefing(self, country_code: str, summary: str) -> str | None:
         prompt = (
