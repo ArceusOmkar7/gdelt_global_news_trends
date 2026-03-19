@@ -35,6 +35,7 @@ data/
 *.json
 !package.json
 !tsconfig.json
+!tsconfig.*.json
 
 # Docker
 docker-compose.override.yml

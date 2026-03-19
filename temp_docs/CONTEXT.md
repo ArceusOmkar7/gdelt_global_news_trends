@@ -59,6 +59,10 @@
     - Improved map responsiveness by reducing BBOX update debounce to 100ms.
     - Enhanced visual clarity by extending heatmap visibility to zoom level 7 and increasing point radius/opacity.
     - Hardened map interaction by allowing concurrent clicks on both aggregate and detailed layers during data transitions.
+- **Frontend build and TypeScript configuration restored**
+    - Created missing `tsconfig.app.json` and `tsconfig.node.json` required by Vite.
+    - Added `src/vite-env.d.ts` to resolve `ImportMeta` type errors for `import.meta.env`.
+    - Cleaned up unused store variables in `IntelligencePanel.tsx` to satisfy strict type checking.
 
 ---
 
@@ -581,7 +585,10 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 | `scripts/daily_bq_pull.py` | 🟢 ADDED | Yesterday partition pull with explicit Events columns and dry-run budget guard |
 | `scripts/realtime_fetcher.py` | 🟢 ADDED | Polls `lastupdate.txt`, ingests Events CSV zip, dedupes on `GLOBALEVENTID` |
 | `scripts/nightly_ai.py` | 🟢 UPDATED | Precomputes `forecasts.parquet` and `briefings.json`; briefing model default updated to `llama-3.1-8b-instant` |
-| `frontend/src/` | 🟡 PARTIAL | Runtime controls added; map now uses zoom-adaptive heatmap + aggregate intensity circles with click drill-down to detailed per-event mode; still needs smoke tests and deployment validation |
+| `frontend/tsconfig.app.json` | 🟢 ADDED | Vite application TypeScript configuration |
+| `frontend/tsconfig.node.json` | 🟢 ADDED | Vite node/config TypeScript configuration |
+| `frontend/src/vite-env.d.ts` | 🟢 ADDED | Vite client type definitions |
+| `frontend/src/` | 🟢 BUILDS | Build and TypeScript configuration restored; smoke tests pending |
 
 ## 15. Known Edge Cases (Post-Routing)
 

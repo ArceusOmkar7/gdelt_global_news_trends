@@ -19,9 +19,7 @@ export const IntelligencePanel: React.FC = () => {
     selectedEvent, 
     setSelectedEvent, 
     currentAnalysis, 
-    setCurrentAnalysis,
-    isAnalyzing,
-    setIsAnalyzing
+    setCurrentAnalysis
   } = useStore();
 
   const analyzeMutation = useMutation({
