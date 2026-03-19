@@ -3,8 +3,7 @@ import Map, { useControl } from 'react-map-gl/mapbox';
 import type { MapRef } from 'react-map-gl/mapbox';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { MapboxOverlayProps } from '@deck.gl/mapbox';
-import { HeatmapLayer } from '@deck.gl/aggregation-layers';
-import { ScatterplotLayer } from '@deck.gl/layers';
+import { HeatmapLayer, ScatterplotLayer } from 'deck.gl';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from '../../store/useStore';
 import { apiService } from '../../services/api';
@@ -26,7 +25,9 @@ export const GlobalEventMap: React.FC = () => {
     dateRange, 
     eventRootCode,
     setSelectedEvent,
-    selectedEventId
+    selectedEventId,
+    autoRefreshEnabled,
+    fetchIntervalSeconds,
   } = useStore();
 
   const mapRef = useRef<MapRef>(null);
@@ -85,6 +86,7 @@ export const GlobalEventMap: React.FC = () => {
     },
     placeholderData: (previousData) => previousData,
     staleTime: 1000 * 30,
+    refetchInterval: autoRefreshEnabled ? fetchIntervalSeconds * 1000 : false,
   });
 
   const layers = useMemo(() => {
@@ -136,8 +138,8 @@ export const GlobalEventMap: React.FC = () => {
           radiusMinPixels: 4,
           radiusMaxPixels: 30,
           pickable: true,
-          onClick: ({ object }) => {
-            if (object) setSelectedEvent(object);
+          onClick: (info: { object?: Event }) => {
+            if (info.object) setSelectedEvent(info.object);
           },
           stroked: true,
           lineWidthMinPixels: 1,

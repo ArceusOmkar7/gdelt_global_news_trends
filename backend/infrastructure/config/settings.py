@@ -77,6 +77,10 @@ class Settings(BaseSettings):
         default="gemini-1.5-flash",
         description="Gemini model to use for analysis (e.g., gemini-1.5-flash, gemini-1.5-pro).",
     )
+    groq_api_key: str | None = Field(
+        default=None,
+        description="Optional Groq API key used by nightly briefing precompute jobs.",
+    )
 
     # --- Query Defaults ---
     default_lookback_days: int = Field(

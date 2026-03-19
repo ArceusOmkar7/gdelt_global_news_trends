@@ -28,7 +28,16 @@
 - **Backend verification expanded**
     - Added `backend/tests/unit/test_routed_repository.py` covering hot/cold/hybrid routing, cold window limit, monthly quota, and cache reuse.
     - Updated map integration test threshold to align with router behavior (`zoom >= 9` => detailed view).
-    - Backend unit + integration suite currently passes: **45 passed**.
+    - Backend unit + integration suite currently passes: **55 passed**.
+- **Priority 1 ingestion scripts completed**
+    - Added `scripts/daily_bq_pull.py` with SQLDATE partition pull (`>=` / `<`), explicit Events projection, and dry-run guarded BigQuery execution.
+    - Added `scripts/realtime_fetcher.py` for 15-minute Events CSV ingestion with approved column projection and `GLOBALEVENTID` deduplication.
+    - Added `scripts/nightly_ai.py` to precompute `forecasts.parquet` and `briefings.json` under `CACHE_PATH`.
+    - Added script-focused unit tests for query guardrails and ingestion edge cases.
+- **Frontend runtime controls added**
+    - Added UI controls to change map fetch interval and health polling interval at runtime.
+    - Added live health status card in frontend using `/health` endpoint (BigQuery + hot-tier diagnostics).
+    - Added backend runtime settings endpoint `/health/settings` and frontend panel bindings for operational visibility (cutoffs, cold-tier limits, scan cap, and ingestion cadences).
 
 ---
 
@@ -545,10 +554,10 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 | `backend/api/routers/map.py` | 🟢 ROUTED | Uses routed repository via use case; zoom behavior unchanged (`<9` aggregate, `>=9` detail) |
 | `backend/api/routers/analytics.py` | 🟢 ROUTED | Clustering/forecasting now query via routed repository abstraction |
 | `backend/api/routers/health.py` | 🟢 UPDATED | Adds hot-tier diagnostics (availability + parquet count + cutoff days) |
-| `scripts/daily_bq_pull.py` | 🔴 MISSING | Create with partition filter + dry_run |
-| `scripts/realtime_fetcher.py` | 🔴 MISSING | Create from pattern in §13 |
-| `scripts/nightly_ai.py` | 🔴 MISSING | Prophet + Groq batch |
-| `frontend/src/` | 🟡 PARTIAL | Mapbox map and env vars exist; needs smoke tests and production deployment validation |
+| `scripts/daily_bq_pull.py` | 🟢 ADDED | Yesterday partition pull with explicit Events columns and dry-run budget guard |
+| `scripts/realtime_fetcher.py` | 🟢 ADDED | Polls `lastupdate.txt`, ingests Events CSV zip, dedupes on `GLOBALEVENTID` |
+| `scripts/nightly_ai.py` | 🟢 ADDED | Precomputes `forecasts.parquet` and `briefings.json` into `CACHE_PATH` |
+| `frontend/src/` | 🟡 PARTIAL | Runtime controls added (fetch intervals + health visibility); still needs smoke tests and deployment validation |
 
 ## 15. Known Edge Cases (Post-Routing)
 
@@ -566,19 +575,11 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 ## 16. What Next (Execution Order)
 
 ### Priority 1 — Complete ingestion scripts
-1. Create `scripts/daily_bq_pull.py`:
-    - yesterday partition pull (`SQLDATE` int)
-    - explicit Events columns
-    - dry-run estimate + bytes threshold guard
-2. Create `scripts/realtime_fetcher.py`:
-    - poll `lastupdate.txt`
-    - append Events CSV to hot-tier buffer
-    - dedupe by `GLOBALEVENTID`
-3. Create `scripts/nightly_ai.py`:
-    - precompute forecasts
-    - precompute LLM briefings cache
+1. ✅ `scripts/daily_bq_pull.py` implemented.
+2. ✅ `scripts/realtime_fetcher.py` implemented.
+3. ✅ `scripts/nightly_ai.py` implemented.
 
-### Priority 2 — Ops and deployment hygiene
+### Priority 2 — Ops and deployment hygiene (current top priority)
 1. Add systemd unit + timer files for 15-minute fetcher.
 2. Add cron examples for daily and nightly jobs.
 3. Add startup readiness checks in deployment docs (health now includes hot-tier availability).

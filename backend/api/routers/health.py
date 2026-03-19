@@ -16,6 +16,7 @@ from backend.api.schemas.schemas import (
     BigQueryHealthDetail,
     HealthResponse,
     HotTierHealthDetail,
+    RuntimeSettingsResponse,
 )
 from backend.infrastructure.config.settings import Settings
 from backend.infrastructure.data_access.bigquery_client import BigQueryClient
@@ -85,4 +86,26 @@ def health_check(
         bigquery=bq_detail,
         hot_tier=hot_tier_detail,
         uptime_seconds=uptime,
+    )
+
+
+@router.get(
+    "/health/settings",
+    response_model=RuntimeSettingsResponse,
+    summary="Runtime settings",
+    description="Returns read-only backend runtime settings and ingestion cadences.",
+)
+def runtime_settings(
+    settings: Annotated[Settings, Depends(_get_settings)],
+) -> RuntimeSettingsResponse:
+    return RuntimeSettingsResponse(
+        hot_tier_cutoff_days=settings.hot_tier_cutoff_days,
+        cold_tier_max_window_days=settings.cold_tier_max_window_days,
+        cold_tier_monthly_query_limit=settings.cold_tier_monthly_query_limit,
+        bq_max_scan_bytes=settings.bq_max_scan_bytes,
+        default_lookback_days=settings.default_lookback_days,
+        default_query_limit=settings.default_query_limit,
+        realtime_fetch_interval_minutes=15,
+        daily_batch_cron_utc="0 2 * * *",
+        nightly_ai_cron_utc="0 3 * * *",
     )

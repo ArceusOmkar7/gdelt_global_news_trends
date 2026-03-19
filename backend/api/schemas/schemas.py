@@ -204,3 +204,17 @@ class HealthResponse(BaseModel):
     bigquery: BigQueryHealthDetail = Field(description="BigQuery connection details.")
     hot_tier: HotTierHealthDetail = Field(description="DuckDB hot-tier readiness details.")
     uptime_seconds: float = Field(description="Seconds since the application started.")
+
+
+class RuntimeSettingsResponse(BaseModel):
+    """Read-only runtime settings exposed for frontend diagnostics/control panels."""
+
+    hot_tier_cutoff_days: int
+    cold_tier_max_window_days: int
+    cold_tier_monthly_query_limit: int
+    bq_max_scan_bytes: int
+    default_lookback_days: int
+    default_query_limit: int
+    realtime_fetch_interval_minutes: int
+    daily_batch_cron_utc: str
+    nightly_ai_cron_utc: str

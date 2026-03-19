@@ -14,12 +14,22 @@ interface DashboardState {
   // Analysis State
   currentAnalysis: EventAnalysis | null;
   setCurrentAnalysis: (analysis: EventAnalysis | null) => void;
+  isAnalyzing: boolean;
+  setIsAnalyzing: (isAnalyzing: boolean) => void;
   
   // Filter State
   dateRange: [string, string];
   setDateRange: (range: [string, string]) => void;
   eventRootCode: string | null;
   setEventRootCode: (code: string | null) => void;
+
+  // Runtime UI Settings
+  autoRefreshEnabled: boolean;
+  setAutoRefreshEnabled: (enabled: boolean) => void;
+  fetchIntervalSeconds: number;
+  setFetchIntervalSeconds: (seconds: number) => void;
+  healthPollIntervalSeconds: number;
+  setHealthPollIntervalSeconds: (seconds: number) => void;
 }
 
 const getSevenDaysAgo = () => {
@@ -53,9 +63,20 @@ export const useStore = create<DashboardState>((set) => ({
   
   currentAnalysis: null,
   setCurrentAnalysis: (currentAnalysis) => set({ currentAnalysis }),
+  isAnalyzing: false,
+  setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
   
   dateRange: [getSevenDaysAgo(), getToday()],
   setDateRange: (dateRange) => set({ dateRange }),
   eventRootCode: null,
   setEventRootCode: (eventRootCode) => set({ eventRootCode }),
+
+  autoRefreshEnabled: true,
+  setAutoRefreshEnabled: (autoRefreshEnabled) => set({ autoRefreshEnabled }),
+  fetchIntervalSeconds: 30,
+  setFetchIntervalSeconds: (fetchIntervalSeconds) =>
+    set({ fetchIntervalSeconds: Math.max(5, Math.min(fetchIntervalSeconds, 300)) }),
+  healthPollIntervalSeconds: 20,
+  setHealthPollIntervalSeconds: (healthPollIntervalSeconds) =>
+    set({ healthPollIntervalSeconds: Math.max(10, Math.min(healthPollIntervalSeconds, 300)) }),
 }));

@@ -43,3 +43,39 @@ export interface ViewState {
   pitch: number;
   bearing: number;
 }
+
+export interface BigQueryHealthDetail {
+  connected: boolean;
+  project: string;
+  dataset: string;
+  latency_ms?: number | null;
+  error?: string | null;
+}
+
+export interface HotTierHealthDetail {
+  path: string;
+  available: boolean;
+  parquet_files: number;
+  cutoff_days: number;
+}
+
+export interface HealthResponse {
+  status: 'healthy' | 'degraded' | 'unhealthy' | string;
+  environment: string;
+  version: string;
+  bigquery: BigQueryHealthDetail;
+  hot_tier: HotTierHealthDetail;
+  uptime_seconds: number;
+}
+
+export interface RuntimeSettingsResponse {
+  hot_tier_cutoff_days: number;
+  cold_tier_max_window_days: number;
+  cold_tier_monthly_query_limit: number;
+  bq_max_scan_bytes: number;
+  default_lookback_days: number;
+  default_query_limit: number;
+  realtime_fetch_interval_minutes: number;
+  daily_batch_cron_utc: string;
+  nightly_ai_cron_utc: string;
+}

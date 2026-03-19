@@ -1,4 +1,9 @@
-import type { MapDataResponse, EventAnalysis } from '../types';
+import type {
+  HealthResponse,
+  MapDataResponse,
+  EventAnalysis,
+  RuntimeSettingsResponse,
+} from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
@@ -35,6 +40,22 @@ export const apiService = {
     const response = await fetch(`${API_BASE_URL}/events/${eventId}/analyze`);
     if (!response.ok) {
       throw new Error(`Failed to analyze event: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getHealth: async (): Promise<HealthResponse> => {
+    const response = await fetch(`${API_BASE_URL}/health`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch health status: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getRuntimeSettings: async (): Promise<RuntimeSettingsResponse> => {
+    const response = await fetch(`${API_BASE_URL}/health/settings`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch runtime settings: ${response.statusText}`);
     }
     return response.json();
   },

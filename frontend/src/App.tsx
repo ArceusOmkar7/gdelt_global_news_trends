@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GlobalEventMap } from './components/map/GlobalEventMap';
 import { IntelligencePanel } from './components/tables/IntelligencePanel';
+import { SystemControlPanel } from './components/tables/SystemControlPanel';
 import { useStore } from './store/useStore';
 import { Globe, Calendar, Terminal } from 'lucide-react';
 
@@ -71,6 +72,7 @@ function App() {
                     </div>
                  </div>
               </div>
+                  <SystemControlPanel />
            </div>
         </main>
       </div>
