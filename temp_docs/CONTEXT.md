@@ -38,6 +38,14 @@
     - Added UI controls to change map fetch interval and health polling interval at runtime.
     - Added live health status card in frontend using `/health` endpoint (BigQuery + hot-tier diagnostics).
     - Added backend runtime settings endpoint `/health/settings` and frontend panel bindings for operational visibility (cutoffs, cold-tier limits, scan cap, and ingestion cadences).
+- **BigQuery partition pruning correction completed**
+    - Confirmed `gdelt-bq.gdeltv2.events` is not partitioned and would trigger high dry-run estimates.
+    - Updated backend/query paths to target partitioned table variants (for example `events_partitioned`) and enforce `_PARTITIONDATE` pruning with SQLDATE bounds.
+    - Daily ingestion now scans within budget again and successfully writes real hot-tier parquet.
+- **Map data rendering and aggregation stability fixes completed**
+    - Fixed DuckDB map aggregation placeholder ordering bug that caused empty map results despite available data.
+    - Added `backend/tests/unit/test_duckdb_repository.py` regression coverage for map aggregation.
+    - Replaced frontend Deck.GL map-layer rendering path with native Mapbox GeoJSON layers to avoid luma.gl shader compile/link failures on affected GPU/driver stacks.
 
 ---
 
@@ -65,9 +73,12 @@ GDELT (Global Database of Events, Language, and Tone) is a free, open dataset th
 
 ### BigQuery identifiers (CRITICAL — these are the correct table refs)
 ```
-gdelt-bq.gdeltv2.events          -- partitioned by SQLDATE (YYYYMMDD integer, NOT a date type)
-gdelt-bq.gdeltv2.gkg             -- partitioned by DATE (YYYYMMDD integer)
-gdelt-bq.gdeltv2.eventmentions   -- partitioned by SQLDATE
+gdelt-bq.gdeltv2.events                     -- legacy non-partitioned table
+gdelt-bq.gdeltv2.events_partitioned         -- DAY-partitioned (recommended)
+gdelt-bq.gdeltv2.gkg                        -- legacy non-partitioned table
+gdelt-bq.gdeltv2.gkg_partitioned            -- DAY-partitioned
+gdelt-bq.gdeltv2.eventmentions              -- legacy non-partitioned table
+gdelt-bq.gdeltv2.eventmentions_partitioned  -- DAY-partitioned
 ```
 
 ### GDELT Events — key columns to SELECT (never SELECT *)
@@ -545,7 +556,7 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 |---|---|---|
 | `backend/infrastructure/data_access/gdelt_repository.py` | 🟢 FIXED | Explicit column list + SQLDATE partition filters (`>=` / `<`) |
 | `backend/infrastructure/data_access/bigquery_client.py` | 🟢 FIXED | Mandatory dry_run guard + scan budget (`BQ_MAX_SCAN_BYTES`) |
-| `backend/infrastructure/data_access/duckdb_repository.py` | 🟢 ADDED | Hot-tier repository implemented; hard-fails when HOT_TIER_PATH has no parquet |
+| `backend/infrastructure/data_access/duckdb_repository.py` | 🟢 UPDATED | Hot-tier repository implemented; map aggregation parameter ordering bug fixed |
 | `backend/infrastructure/data_access/routed_repository.py` | 🟢 ADDED | Shared hot/cold router with policy enforcement and cold parquet caching |
 | `backend/api/request_context.py` | 🟢 ADDED | Request-scoped user identity for cold-tier monthly quota accounting |
 | `backend/infrastructure/config/settings.py` | 🟢 UPDATED | Added `CACHE_PATH`, `HOT_TIER_CUTOFF_DAYS`, `COLD_TIER_MAX_WINDOW_DAYS`, `COLD_TIER_MONTHLY_QUERY_LIMIT` |
@@ -557,7 +568,7 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 | `scripts/daily_bq_pull.py` | 🟢 ADDED | Yesterday partition pull with explicit Events columns and dry-run budget guard |
 | `scripts/realtime_fetcher.py` | 🟢 ADDED | Polls `lastupdate.txt`, ingests Events CSV zip, dedupes on `GLOBALEVENTID` |
 | `scripts/nightly_ai.py` | 🟢 ADDED | Precomputes `forecasts.parquet` and `briefings.json` into `CACHE_PATH` |
-| `frontend/src/` | 🟡 PARTIAL | Runtime controls added (fetch intervals + health visibility); still needs smoke tests and deployment validation |
+| `frontend/src/` | 🟡 PARTIAL | Runtime controls added; map rendering moved to native Mapbox layers for shader stability; still needs smoke tests and deployment validation |
 
 ## 15. Known Edge Cases (Post-Routing)
 

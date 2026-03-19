@@ -187,7 +187,8 @@ class DuckDbRepository(IEventRepository):
             GROUP BY lat, lon
             LIMIT ?
         """
-        params.extend([grid_precision, grid_precision, limit])
+        # Parameter order must match SQL placeholder order.
+        params = [grid_precision, grid_precision, *params, limit]
 
         rows = self._query(sql, params)
         return [

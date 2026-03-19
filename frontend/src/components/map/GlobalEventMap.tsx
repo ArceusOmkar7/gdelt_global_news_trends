@@ -1,22 +1,15 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import Map, { useControl } from 'react-map-gl/mapbox';
-import type { MapRef } from 'react-map-gl/mapbox';
-import { MapboxOverlay } from '@deck.gl/mapbox';
-import type { MapboxOverlayProps } from '@deck.gl/mapbox';
-import { HeatmapLayer, ScatterplotLayer } from 'deck.gl';
+import Map, { Layer, Source } from 'react-map-gl/mapbox';
+import type { MapRef, MapMouseEvent } from 'react-map-gl/mapbox';
+import type { Feature, FeatureCollection, Point } from 'geojson';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from '../../store/useStore';
 import { apiService } from '../../services/api';
 import type { MapAggregation, Event } from '../../types';
 
 const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
-
-function DeckGLOverlay(props: MapboxOverlayProps) {
-  const overlay = useMemo(() => new MapboxOverlay(props), []);
-  useControl(() => overlay);
-  overlay.setProps(props);
-  return null;
-}
+const HAS_MAPBOX_TOKEN =
+  typeof MAPBOX_ACCESS_TOKEN === 'string' && MAPBOX_ACCESS_TOKEN.trim().length > 0;
 
 export const GlobalEventMap: React.FC = () => {
   const { 
@@ -89,68 +82,66 @@ export const GlobalEventMap: React.FC = () => {
     refetchInterval: autoRefreshEnabled ? fetchIntervalSeconds * 1000 : false,
   });
 
-  const layers = useMemo(() => {
-    if (!mapResponse || mapResponse.count === 0) return [];
-
-    if (mapResponse.is_aggregated) {
-      const aggData = mapResponse.data as MapAggregation[];
-      return [
-        new HeatmapLayer({
-          id: 'heatmap',
-          data: aggData,
-          getPosition: (d: MapAggregation) => [d.lon, d.lat],
-          getWeight: (d: MapAggregation) => d.intensity,
-          radiusPixels: 60,
-          intensity: 5,
-          threshold: 0.005,
-          colorRange: [
-            [0, 243, 255, 0],
-            [0, 243, 255, 100],
-            [0, 243, 255, 150],
-            [0, 255, 65, 200],
-            [255, 255, 255, 255],
-          ],
-        }),
-        new ScatterplotLayer({
-          id: 'agg-points',
-          data: aggData,
-          getPosition: (d: MapAggregation) => [d.lon, d.lat],
-          getFillColor: [0, 243, 255, 80],
-          getRadius: 15,
-          radiusMinPixels: 1,
-          radiusMaxPixels: 3,
-          pickable: false,
+  const aggregatedGeoJson = useMemo<FeatureCollection<Point, { intensity: number }> | null>(() => {
+    if (!mapResponse?.is_aggregated || mapResponse.count === 0) return null;
+    const aggData = mapResponse.data as MapAggregation[];
+    return {
+      type: 'FeatureCollection',
+      features: aggData.map(
+        (d): Feature<Point, { intensity: number }> => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
+          properties: { intensity: d.intensity },
         })
-      ];
-    } else {
-      return [
-        new ScatterplotLayer({
-          id: 'events',
-          data: mapResponse.data as Event[],
-          getPosition: (d: Event) => [d.lon, d.lat],
-          getFillColor: (d: Event) => {
-            const goldstein = d.goldstein_scale || 0;
-            if (goldstein < -2) return [255, 0, 60];
-            if (goldstein > 2) return [0, 255, 65];
-            return [0, 243, 255];
-          },
-          getRadius: (d: Event) => Math.max(10, d.num_mentions),
-          radiusMinPixels: 4,
-          radiusMaxPixels: 30,
-          pickable: true,
-          onClick: (info: { object?: Event }) => {
-            if (info.object) setSelectedEvent(info.object);
-          },
-          stroked: true,
-          lineWidthMinPixels: 1,
-          getLineColor: (d: Event) => d.global_event_id === selectedEventId ? [255, 255, 255] : [0, 0, 0, 0],
-          updateTriggers: {
-            getLineColor: [selectedEventId]
-          }
-        }),
-      ];
-    }
-  }, [mapResponse, selectedEventId, setSelectedEvent]);
+      ),
+    };
+  }, [mapResponse]);
+
+  const detailedGeoJson = useMemo<FeatureCollection<Point, Event> | null>(() => {
+    if (!mapResponse || mapResponse.is_aggregated || mapResponse.count === 0) return null;
+    const eventData = mapResponse.data as Event[];
+    return {
+      type: 'FeatureCollection',
+      features: eventData.map(
+        (d): Feature<Point, Event> => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
+          properties: d,
+        })
+      ),
+    };
+  }, [mapResponse]);
+
+  const onMapClick = (evt: MapMouseEvent) => {
+    if (mapResponse?.is_aggregated) return;
+    const feature = evt.features?.[0];
+    const props = feature?.properties as Event | undefined;
+    if (!props || !props.global_event_id) return;
+    setSelectedEvent({
+      ...props,
+      global_event_id: Number(props.global_event_id),
+      lat: Number(props.lat),
+      lon: Number(props.lon),
+      num_mentions: Number(props.num_mentions ?? 0),
+      num_sources: props.num_sources == null ? undefined : Number(props.num_sources),
+      goldstein_scale: props.goldstein_scale == null ? undefined : Number(props.goldstein_scale),
+      avg_tone: props.avg_tone == null ? undefined : Number(props.avg_tone),
+    });
+  };
+
+  if (!HAS_MAPBOX_TOKEN) {
+    return (
+      <div className="relative w-full h-full">
+        <div className="absolute inset-0 bg-surface-900" />
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-cyber-red/20 border border-cyber-red p-4 rounded backdrop-blur-md max-w-xl text-center">
+          <p className="text-cyber-red font-bold font-mono text-sm">CRITICAL SYSTEM ALERT: MAPBOX TOKEN MISSING</p>
+          <p className="text-white/70 text-[10px] mt-2 font-mono uppercase">
+            Set VITE_MAPBOX_ACCESS_TOKEN in frontend/.env.local or in workspace root .env and restart vite.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-full">
@@ -166,19 +157,79 @@ export const GlobalEventMap: React.FC = () => {
         ref={mapRef}
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
+        onClick={onMapClick}
+        interactiveLayerIds={mapResponse?.is_aggregated ? [] : ['events-layer']}
         mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
         mapStyle="mapbox://styles/mapbox/dark-v11"
         style={{ width: '100%', height: '100%' }}
       >
-        <DeckGLOverlay layers={layers} />
-      </Map>
+        {aggregatedGeoJson && (
+          <Source id="agg-source" type="geojson" data={aggregatedGeoJson}>
+            <Layer
+              id="agg-layer"
+              type="circle"
+              paint={{
+                'circle-color': '#00f3ff',
+                'circle-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['ln', ['+', ['get', 'intensity'], 1]],
+                  0,
+                  0.2,
+                  6,
+                  0.9,
+                ],
+                'circle-radius': [
+                  'interpolate',
+                  ['linear'],
+                  ['ln', ['+', ['get', 'intensity'], 1]],
+                  0,
+                  3,
+                  7,
+                  18,
+                ],
+                'circle-blur': 0.35,
+              }}
+            />
+          </Source>
+        )}
 
-      {(!MAPBOX_ACCESS_TOKEN || MAPBOX_ACCESS_TOKEN.includes('pk.eyJ1IjoiamF2aWVyc2VndXJh')) && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-cyber-red/20 border border-cyber-red p-4 rounded backdrop-blur-md max-w-md text-center">
-          <p className="text-cyber-red font-bold font-mono text-sm">CRITICAL SYSTEM ALERT: INVALID MAPBOX TOKEN</p>
-          <p className="text-white/70 text-[10px] mt-2 font-mono uppercase">Please provide a valid VITE_MAPBOX_ACCESS_TOKEN in frontend/.env.local to activate global mapping.</p>
-        </div>
-      )}
+        {detailedGeoJson && (
+          <Source id="events-source" type="geojson" data={detailedGeoJson}>
+            <Layer
+              id="events-layer"
+              type="circle"
+              paint={{
+                'circle-color': [
+                  'case',
+                  ['<', ['coalesce', ['get', 'goldstein_scale'], 0], -2],
+                  '#ff003c',
+                  ['>', ['coalesce', ['get', 'goldstein_scale'], 0], 2],
+                  '#00ff41',
+                  '#00f3ff',
+                ],
+                'circle-radius': [
+                  'interpolate',
+                  ['linear'],
+                  ['ln', ['+', ['coalesce', ['get', 'num_mentions'], 0], 1]],
+                  0,
+                  4,
+                  8,
+                  14,
+                ],
+                'circle-stroke-width': [
+                  'case',
+                  ['==', ['to-number', ['get', 'global_event_id']], selectedEventId ?? -1],
+                  2,
+                  0,
+                ],
+                'circle-stroke-color': '#ffffff',
+                'circle-opacity': 0.9,
+              }}
+            />
+          </Source>
+        )}
+      </Map>
 
       {isLoading && (
         <div className="absolute top-4 right-4 z-10 px-3 py-1 bg-surface-800/80 border border-cyber-blue/30 rounded flex items-center gap-2">
