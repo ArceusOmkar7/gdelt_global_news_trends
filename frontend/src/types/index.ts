@@ -96,3 +96,27 @@ export interface RuntimeSettingsResponse {
   daily_batch_cron_utc: string;
   nightly_ai_cron_utc: string;
 }
+
+export interface RiskScoreResponse {
+  score: number;
+  trend: string;
+  conflict_ratio: number;
+  avg_goldstein: number | null;
+  avg_tone: number | null;
+  total_events: number;
+}
+
+export interface ForecastPoint {
+  date: string;
+  predicted_count: number;
+  lower_bound: number | null;
+  upper_bound: number | null;
+}
+
+export interface ForecastResponse {
+  country_code: string | null;
+  horizon_days: number;
+  model_type: string;
+  historical_summary: Record<string, unknown>;
+  predictions: ForecastPoint[];
+}

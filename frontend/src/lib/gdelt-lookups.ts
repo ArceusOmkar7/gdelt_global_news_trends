@@ -59,13 +59,27 @@ export const ACTOR_TYPE_LABELS: Record<string, string> = {
 };
 
 export function cleanGkgTheme(raw: string): string {
-  // Remove known prefixes
-  const prefixes = ['WB_\\d+_', 'EPU_', 'SOC_', 'ENV_', 'ECON_', 'MED_', 'TAX_'];
+  // Remove known prefixes (order matters — longer/more specific first)
+  const prefixes = [
+    'WB_\\d+_',
+    'CRISISLEX_C\\d+_',
+    'CRISISLEX_',
+    'FNCACT_',
+    'EPU_POLICY_',
+    'EPU_',
+    'SOC_',
+    'ENV_',
+    'ECON_',
+    'MED_',
+    'TAX_FNCACT_',
+    'TAX_',
+    'USPEC_',
+    'UNGP_',
+  ];
   let clean = raw;
   for (const prefix of prefixes) {
-    clean = clean.replace(new RegExp(`^${prefix}`), '');
+    clean = clean.replace(new RegExp(`^${prefix}`, 'i'), '');
   }
-  // Convert underscores to spaces, title case
   return clean
     .replace(/_/g, ' ')
     .toLowerCase()

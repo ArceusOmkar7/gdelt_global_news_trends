@@ -447,12 +447,20 @@ class DuckDbRepository(IEventRepository):
     def _query(self, sql: str, params: list[Any]) -> list[dict[str, Any]]:
         """Execute a DuckDB query and return rows as dictionaries."""
         logger.debug("duckdb_query", sql_preview=sql[:200], params_count=len(params))
-        # DuckDB connections are not safe for concurrent execute/fetch cycles.
-        # FastAPI can process sync route handlers in parallel threads.
-        with self._conn_lock:
-            result = self._conn.execute(sql, params)
+        # # DuckDB connections are not safe for concurrent execute/fetch cycles.
+        # # FastAPI can process sync route handlers in parallel threads.
+        # with self._conn_lock:
+        #     result = self._conn.execute(sql, params)
+        #     columns = [col[0] for col in (result.description or [])]
+        #     values = result.fetchall()
+        # return [dict(zip(columns, row)) for row in values]
+        conn = duckdb.connect(database=":memory:", read_only=False)
+        try:
+            result = conn.execute(sql, params)
             columns = [col[0] for col in (result.description or [])]
             values = result.fetchall()
+        finally:
+            conn.close()
         return [dict(zip(columns, row)) for row in values]
 
     def _resolve_dates(self, filters: EventFilter) -> tuple[date, date]:
@@ -492,7 +500,7 @@ class DuckDbRepository(IEventRepository):
             themes=row.get("themes", []),
             persons=row.get("persons", []),
             organizations=row.get("organizations", []),
-            mentions_count=row.get("mentions_count", 0),
+            mentions_count=int(row.get("mentions_count") or 0),
             avg_confidence=row.get("avg_confidence"),
             action_geo_country_code=row.get("ActionGeo_CountryCode"),
             action_geo_lat=row.get("ActionGeo_Lat"),

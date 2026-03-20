@@ -15,6 +15,9 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  Area,
+  AreaChart,
+  ReferenceLine,
 } from 'recharts';
 import { 
   X, 
@@ -27,7 +30,8 @@ import {
   MapPin,
   RefreshCcw,
   Globe,
-  Users
+  Users,
+  TrendingUp,
 } from 'lucide-react';
 
 export const IntelligencePanel: React.FC = () => {
@@ -55,18 +59,7 @@ export const IntelligencePanel: React.FC = () => {
 
   const regionalRiskScoreQuery = useQuery({
     queryKey: ['regional-risk-score', selectedCountry, dateRange],
-    queryFn: async () => {
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-      const params = new URLSearchParams({
-        start_date: dateRange[0],
-        end_date: dateRange[1],
-      });
-      const response = await fetch(`${baseUrl}/events/region/${selectedCountry}/risk-score?${params}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch risk score: ${response.statusText}`);
-      }
-      return response.json();
-    },
+    queryFn: () => apiService.getRiskScore(selectedCountry!, dateRange[0], dateRange[1]),
     enabled: !!selectedCountry && !selectedEvent,
   });
 
@@ -85,6 +78,13 @@ export const IntelligencePanel: React.FC = () => {
       return response.json();
     },
     enabled: !!selectedCountry && !selectedEvent,
+  });
+
+  const regionalForecastQuery = useQuery({
+    queryKey: ['regional-forecast', selectedCountry],
+    queryFn: () => apiService.getForecast(selectedCountry!),
+    enabled: !!selectedCountry && !selectedEvent,
+    staleTime: 1000 * 60 * 30, // forecasts are pre-computed nightly, stable for 30 min
   });
 
   const analyzeMutation = useMutation({
@@ -295,7 +295,7 @@ export const IntelligencePanel: React.FC = () => {
                     <div className="space-y-2">
                       <span className="text-[10px] text-white/40 uppercase font-mono">Top Themes</span>
                       <div className="flex flex-wrap gap-1">
-                        {selectedEvent.themes.slice(0, 6).map((theme, i) => (
+                        {[...new Set(selectedEvent.themes)].slice(0, 6).map((theme, i) => (
                           <span key={i} className="px-2 py-0.5 bg-surface-900/40 rounded text-[10px] font-mono text-white/80 border border-white/5">
                             {cleanGkgTheme(theme)}
                           </span>
@@ -432,6 +432,7 @@ export const IntelligencePanel: React.FC = () => {
               </div>
             ) : regionalStatsQuery.data ? (
               <>
+                {/* Threat Level / Risk Score */}
                 <section className="space-y-3">
                   <div className="data-ink text-cyber-blue uppercase tracking-wider text-xs">Threat Level</div>
                   <div className="bg-surface-900/40 p-4 rounded panel-border">
@@ -445,10 +446,32 @@ export const IntelligencePanel: React.FC = () => {
                           : score <= 60
                             ? 'text-amber-400'
                             : 'text-cyber-red';
+                        const conflictPct = Math.round((regionalRiskScoreQuery.data.conflict_ratio || 0) * 100);
                         return (
-                          <div className="flex items-end justify-between">
-                            <div className={`text-5xl font-bold font-mono ${scoreColor}`}>{score}</div>
-                            <div className="text-[10px] font-mono text-white/40 uppercase">0-100 Scale</div>
+                          <div className="space-y-2">
+                            <div className="flex items-end justify-between">
+                              <div className={`text-5xl font-bold font-mono ${scoreColor}`}>{score}</div>
+                              <div className="text-right space-y-1">
+                                <div className="text-[10px] font-mono text-white/40 uppercase">0-100 Scale</div>
+                                <div className="text-[11px] font-mono text-white/60">
+                                  {conflictPct}% conflict events
+                                </div>
+                              </div>
+                            </div>
+                            {/* Mini score bar */}
+                            <div className="relative h-1.5 rounded-full bg-white/10 overflow-hidden">
+                              <div
+                                className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
+                                style={{
+                                  width: `${score}%`,
+                                  background: score < 30
+                                    ? '#00ff41'
+                                    : score <= 60
+                                      ? '#fbbf24'
+                                      : '#ff003c',
+                                }}
+                              />
+                            </div>
                           </div>
                         );
                       })()
@@ -458,6 +481,7 @@ export const IntelligencePanel: React.FC = () => {
                   </div>
                 </section>
 
+                {/* Event Frequency Timeline */}
                 <section className="space-y-3">
                   <div className="data-ink text-cyber-blue uppercase tracking-wider text-xs">Event Frequency</div>
                   <div className="bg-surface-900/40 p-3 rounded panel-border h-[180px]">
@@ -515,13 +539,129 @@ export const IntelligencePanel: React.FC = () => {
                   </div>
                 </section>
 
+                {/* Conflict Forecast — 30 Day */}
+                <section className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp size={14} className="text-cyber-red" />
+                    <div className="data-ink text-cyber-red uppercase tracking-wider text-xs">Conflict Forecast — 30 Day</div>
+                  </div>
+                  <div className="bg-surface-900/40 p-3 rounded panel-border h-[200px]">
+                    {regionalForecastQuery.isLoading ? (
+                      <div className="h-full flex items-center justify-center text-[11px] font-mono text-white/40 uppercase animate-pulse">
+                        Computing Projection...
+                      </div>
+                    ) : regionalForecastQuery.isError ? (
+                      <div className="h-full flex items-center justify-center text-[11px] font-mono text-white/30 uppercase">
+                        Forecast Unavailable
+                      </div>
+                    ) : regionalForecastQuery.data?.predictions && regionalForecastQuery.data.predictions.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={regionalForecastQuery.data.predictions.map((p) => ({
+                            shortDate: String(p.date).slice(5),
+                            predicted: Math.max(0, p.predicted_count),
+                            lower: Math.max(0, p.lower_bound ?? p.predicted_count),
+                            upper: Math.max(0, p.upper_bound ?? p.predicted_count),
+                            // recharts Area needs [lower, upper] as a range — we encode as band
+                            band: [
+                              Math.max(0, p.lower_bound ?? p.predicted_count),
+                              Math.max(0, p.upper_bound ?? p.predicted_count),
+                            ],
+                          }))}
+                          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                        >
+                          <defs>
+                            <linearGradient id="forecastBand" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#ff003c" stopOpacity={0.25} />
+                              <stop offset="95%" stopColor="#ff003c" stopOpacity={0.04} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis
+                            dataKey="shortDate"
+                            stroke="rgba(255,255,255,0.35)"
+                            tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 9, fontFamily: 'monospace' }}
+                            tickLine={false}
+                            axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                            interval={6}
+                          />
+                          <YAxis
+                            stroke="rgba(255,255,255,0.35)"
+                            tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 9, fontFamily: 'monospace' }}
+                            tickLine={false}
+                            width={28}
+                            axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              background: 'rgba(10, 10, 10, 0.95)',
+                              border: '1px solid rgba(255, 0, 60, 0.35)',
+                              borderRadius: 6,
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              color: '#e5e7eb',
+                            }}
+                            labelStyle={{ color: '#ff003c' }}
+                          />
+                          {/* Uncertainty band: upper filled area */}
+                          <Area
+                            type="monotone"
+                            dataKey="upper"
+                            stroke="none"
+                            fill="url(#forecastBand)"
+                            fillOpacity={1}
+                            legendType="none"
+                          />
+                          {/* Lower boundary line (clips the band) */}
+                          <Area
+                            type="monotone"
+                            dataKey="lower"
+                            stroke="none"
+                            fill="rgba(10,10,10,0.8)"
+                            fillOpacity={1}
+                            legendType="none"
+                          />
+                          {/* Predicted count line */}
+                          <Line
+                            type="monotone"
+                            dataKey="predicted"
+                            stroke="#ff003c"
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 3, fill: '#ff003c' }}
+                          />
+                          <ReferenceLine
+                            x={String(new Date().toISOString().slice(5, 10))}
+                            stroke="rgba(255,255,255,0.2)"
+                            strokeDasharray="4 4"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center gap-2">
+                        <div className="text-[11px] font-mono text-white/30 uppercase">No Forecast Data</div>
+                        <div className="text-[10px] font-mono text-white/20">Run nightly_ai.py to pre-compute</div>
+                      </div>
+                    )}
+                  </div>
+                  {regionalForecastQuery.data && (
+                    <div className="text-[9px] font-mono text-white/25 uppercase tracking-wider">
+                      Model: {regionalForecastQuery.data.model_type} · {regionalForecastQuery.data.horizon_days}d horizon
+                    </div>
+                  )}
+                </section>
+
+                {/* Top Regional Themes */}
                 <section className="space-y-4">
                   <div className="flex items-center gap-2">
                     <Globe size={16} className="text-terminal-green" />
                     <span className="data-ink text-terminal-green uppercase tracking-wider text-xs">Top Regional Themes</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {regionalStatsQuery.data.top_themes.map((t: any, i: number) => (
+                    {regionalStatsQuery.data.top_themes
+                      .filter((t: {name: string; count: number}, i: number, arr: {name: string; count: number}[]) => 
+                        arr.findIndex(x => x.name === t.name) === i
+                      )
+                      .map((t: {name: string; count: number}, i: number) => (
                       <div key={i} className="px-2 py-1 bg-surface-800/60 rounded border border-white/5 flex items-center gap-2">
                         <span className="text-[10px] font-mono text-white/90">{cleanGkgTheme(t.name)}</span>
                         <span className="text-[9px] font-mono text-terminal-green bg-terminal-green/10 px-1 rounded">{t.count}</span>
@@ -530,13 +670,14 @@ export const IntelligencePanel: React.FC = () => {
                   </div>
                 </section>
 
+                {/* Key Entities — People */}
                 <section className="space-y-4 pt-4 border-t border-white/5">
                   <div className="flex items-center gap-2">
                     <User size={16} className="text-cyber-blue" />
                     <span className="data-ink text-cyber-blue uppercase tracking-wider text-xs">Key Entities (People)</span>
                   </div>
                   <div className="grid grid-cols-1 gap-1.5">
-                    {regionalStatsQuery.data.top_persons.map((p: any, i: number) => (
+                    {regionalStatsQuery.data.top_persons.map((p: { name: string; count: number }, i: number) => (
                       <div key={i} className="flex justify-between items-center p-2 bg-surface-800/40 rounded border border-white/5">
                         <span className="text-[11px] font-mono text-cyber-blue truncate max-w-[200px]">{p.name}</span>
                         <span className="text-[10px] font-mono text-white/40">{p.count} refs</span>
@@ -545,13 +686,14 @@ export const IntelligencePanel: React.FC = () => {
                   </div>
                 </section>
 
+                {/* Active Organizations */}
                 <section className="space-y-4 pt-4 border-t border-white/5">
                   <div className="flex items-center gap-2">
                     <Users size={16} className="text-terminal-green" />
                     <span className="data-ink text-terminal-green uppercase tracking-wider text-xs">Active Organizations</span>
                   </div>
                   <div className="grid grid-cols-1 gap-1.5">
-                    {regionalStatsQuery.data.top_organizations.map((o: any, i: number) => (
+                    {regionalStatsQuery.data.top_organizations.map((o: { name: string; count: number }, i: number) => (
                       <div key={i} className="flex justify-between items-center p-2 bg-surface-800/40 rounded border border-white/5">
                         <span className="text-[11px] font-mono text-terminal-green truncate max-w-[200px]">{o.name}</span>
                         <span className="text-[10px] font-mono text-white/40">{o.count} refs</span>
@@ -560,6 +702,7 @@ export const IntelligencePanel: React.FC = () => {
                   </div>
                 </section>
 
+                {/* Top Events in Sector */}
                 <section className="space-y-4 pt-4 border-t border-white/5">
                   <div className="flex items-center gap-2">
                     <Activity size={16} className="text-cyber-blue" />
@@ -569,10 +712,10 @@ export const IntelligencePanel: React.FC = () => {
                     {regionalEventsQuery.isLoading ? (
                       <div className="text-[10px] font-mono text-white/30 animate-pulse uppercase">Scanning for local signals...</div>
                     ) : regionalEventsQuery.data?.data && regionalEventsQuery.data.data.length > 0 ? (
-                      regionalEventsQuery.data.data.map((event: any, i: number) => (
+                      regionalEventsQuery.data.data.map((event: { global_event_id: number; goldstein_scale?: number; event_root_code?: string; source_url?: string }, i: number) => (
                         <button
                           key={i}
-                          onClick={() => setSelectedEvent(event)}
+                          onClick={() => setSelectedEvent(event as Parameters<typeof setSelectedEvent>[0])}
                           className="w-full text-left p-3 bg-surface-800/40 hover:bg-cyber-blue/5 border border-white/5 hover:border-cyber-blue/30 rounded transition-all group"
                         >
                           <div className="flex justify-between items-start mb-1">
@@ -584,7 +727,7 @@ export const IntelligencePanel: React.FC = () => {
                             </span>
                           </div>
                           <div className="text-[11px] font-mono text-white/70 line-clamp-1 group-hover:text-white/90">
-                            {event.event_root_code || 'EVENT'} — {event.source_url ? new URL(event.source_url).hostname : 'Unknown Source'}
+                            {event.event_root_code || 'EVENT'} — {event.source_url ? (() => { try { return new URL(event.source_url!).hostname; } catch { return 'Unknown Source'; } })() : 'Unknown Source'}
                           </div>
                         </button>
                       ))

@@ -3,6 +3,8 @@ import type {
   MapDataResponse,
   EventAnalysis,
   RuntimeSettingsResponse,
+  RiskScoreResponse,
+  ForecastResponse,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
@@ -69,6 +71,31 @@ export const apiService = {
     const response = await fetch(`${API_BASE_URL}/events/region/${countryCode}/stats?${params}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch regional stats: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getRiskScore: async (
+    countryCode: string,
+    startDate: string,
+    endDate: string
+  ): Promise<RiskScoreResponse> => {
+    const params = new URLSearchParams({
+      start_date: startDate,
+      end_date: endDate,
+    });
+
+    const response = await fetch(`${API_BASE_URL}/events/region/${countryCode}/risk-score?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch risk score: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getForecast: async (countryCode: string): Promise<ForecastResponse> => {
+    const response = await fetch(`${API_BASE_URL}/analytics/forecast/${countryCode}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch forecast: ${response.statusText}`);
     }
     return response.json();
   },

@@ -180,13 +180,15 @@ export const GlobalEventMap: React.FC = () => {
     const aggregateFeature = evt.features?.find((f) => f.layer?.id === 'agg-circle-layer');
     if (aggregateFeature && aggregateFeature.properties) {
       const props = aggregateFeature.properties;
+      console.log('AGG CLICK props:', props);
       const aggregatePoint = aggregateFeature.geometry as Point;
       const [longitude, latitude] = aggregatePoint.coordinates;
       
+      setSelectedEvent(null); // clear first
       if (props.country_code) {
-        setSelectedCountry(props.country_code);
+        setSelectedCountry(props.country_code); // then set country
+        console.log('setSelectedCountry called with:', props.country_code);
       }
-      setSelectedEvent(null);
 
       const nextZoom = Math.max(viewState.zoom + 2, DETAIL_ZOOM_THRESHOLD + 0.2);
       setViewState({
