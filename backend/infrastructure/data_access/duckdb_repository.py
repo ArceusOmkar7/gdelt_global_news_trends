@@ -262,6 +262,7 @@ class DuckDbRepository(IEventRepository):
         bbox_e: float,
         bbox_w: float,
         filters: EventFilter,
+        min_mentions: int = 1,
     ) -> list[MapEventDetail]:
         start_date, end_date = self._resolve_dates(filters)
         limit = filters.limit or self._settings.default_query_limit
@@ -285,12 +286,14 @@ class DuckDbRepository(IEventRepository):
             "ActionGeo_Long IS NOT NULL",
             "ActionGeo_Lat <= ?",
             "ActionGeo_Lat >= ?",
+            "NumMentions >= ?",
         ]
         params: list[Any] = [
             start_int,
             end_exclusive_int,
             bbox_n,
             bbox_s,
+            min_mentions,
         ]
 
         if not is_full_world:

@@ -152,6 +152,7 @@ class GetEventsUseCase:
         end_date: date | None = None,
         event_root_code: str | None = None,
         limit: int = 5000,
+        min_mentions: int = 1,
     ) -> list[MapEventDetail]:
         """Get detailed events for a geographic region."""
         filters = EventFilter(
@@ -165,7 +166,8 @@ class GetEventsUseCase:
             bbox_n=bbox_n, bbox_s=bbox_s, bbox_e=bbox_e, bbox_w=bbox_w,
             start_date=str(start_date),
             end_date=str(end_date),
+            min_mentions=min_mentions,
         )
         return self._repository.get_event_details(
-            bbox_n, bbox_s, bbox_e, bbox_w, filters
+            bbox_n, bbox_s, bbox_e, bbox_w, filters, min_mentions
         )

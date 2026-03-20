@@ -30,7 +30,7 @@ function snapBBox(
   bbox: { n: number; s: number; e: number; w: number },
   zoom: number
 ): { n: number; s: number; e: number; w: number } {
-  const step = zoom < 4 ? 5 : zoom < 8 ? 1 : 0.1;
+  const step = zoom < 4 ? 5 : zoom < 8 ? 1 : zoom < 11 ? 0.2 : 0.05;
   return {
     n: Math.ceil(bbox.n / step) * step,
     s: Math.floor(bbox.s / step) * step,

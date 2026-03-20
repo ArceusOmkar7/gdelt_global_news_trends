@@ -145,10 +145,12 @@ class TestGetEventsUseCase:
 
         result = self.use_case.get_map_event_details(
             bbox_n=10.0, bbox_s=-10.0, bbox_e=10.0, bbox_w=-10.0,
-            limit=100
+            limit=100,
+            min_mentions=3,
         )
 
         self.mock_repo.get_event_details.assert_called_once()
         args, _ = self.mock_repo.get_event_details.call_args
         assert args[0] == 10.0
+        assert args[5] == 3
         assert result == expected

@@ -216,12 +216,13 @@ class RoutedRepository(IEventRepository):
         bbox_e: float,
         bbox_w: float,
         filters: EventFilter,
+        min_mentions: int = 1,
     ) -> list[MapEventDetail]:
         start_date, end_date = self._resolve_dates(filters)
         route = self._route_for_window(start_date, end_date)
 
         if route == "hot":
-            return self._hot.get_event_details(bbox_n, bbox_s, bbox_e, bbox_w, filters)
+            return self._hot.get_event_details(bbox_n, bbox_s, bbox_e, bbox_w, filters, min_mentions)
 
         if route == "cold":
             return self._execute_cold_with_cache(
@@ -233,9 +234,10 @@ class RoutedRepository(IEventRepository):
                     "event_root_code": filters.event_root_code,
                     "bbox": [bbox_n, bbox_s, bbox_e, bbox_w],
                     "limit": filters.limit,
+                    "min_mentions": min_mentions,
                 },
                 fetch=lambda: self._cold.get_event_details(
-                    bbox_n, bbox_s, bbox_e, bbox_w, filters
+                    bbox_n, bbox_s, bbox_e, bbox_w, filters, min_mentions
                 ),
                 parse=lambda payload: MapEventDetail.model_validate(payload),
             )
@@ -253,14 +255,15 @@ class RoutedRepository(IEventRepository):
                 "event_root_code": filters.event_root_code,
                 "bbox": [bbox_n, bbox_s, bbox_e, bbox_w],
                 "limit": filters.limit,
+                "min_mentions": min_mentions,
                 "span": True,
             },
             fetch=lambda: self._cold.get_event_details(
-                bbox_n, bbox_s, bbox_e, bbox_w, cold_filters
+                bbox_n, bbox_s, bbox_e, bbox_w, cold_filters, min_mentions
             ),
             parse=lambda payload: MapEventDetail.model_validate(payload),
         )
-        hot_rows = self._hot.get_event_details(bbox_n, bbox_s, bbox_e, bbox_w, hot_filters)
+        hot_rows = self._hot.get_event_details(bbox_n, bbox_s, bbox_e, bbox_w, hot_filters, min_mentions)
 
         merged = hot_rows + cold_rows
         merged.sort(key=lambda row: (row.sql_date, row.global_event_id), reverse=True)

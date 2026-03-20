@@ -99,6 +99,7 @@ class IEventRepository(ABC):
         bbox_e: float,
         bbox_w: float,
         filters: EventFilter,
+        min_mentions: int = 1,
     ) -> list[MapEventDetail]:
         """Get detailed events for a geographic region."""
 

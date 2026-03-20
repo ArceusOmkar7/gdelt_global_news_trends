@@ -29,7 +29,7 @@ router = APIRouter(prefix="/events/map", tags=["map"])
 
 _map_cache: dict[str, tuple[float, MapDataResponse]] = {}
 _AGG_TTL   = 60.0   # seconds — aggregated world/region view
-_DETAIL_TTL = 30.0  # seconds — detailed event view
+_DETAIL_TTL = 120.0  # seconds — detailed event view
 
 
 def _cache_key(
@@ -95,13 +95,32 @@ def get_map_data(
         data = [MapAggregationResponse.model_validate(agg.model_dump()) for agg in aggregations]
         response = MapDataResponse(zoom=zoom, is_aggregated=True, count=len(data), data=data)
     else:
+        # Scale limit by zoom — city-level doesn't need 10k points
+        detail_limit = min(limit, max(500, int(3000 / (1 + (zoom - 9) * 0.4))))
+        # Higher zoom = smaller area = show finer events
+        min_mentions = max(1, int(8 - zoom))
+
         details = use_case.get_map_event_details(
-            bbox_n=bbox_n, bbox_s=bbox_s, bbox_e=bbox_e, bbox_w=bbox_w,
-            start_date=start_date, end_date=end_date,
-            event_root_code=event_root_code, limit=limit,
+            bbox_n=bbox_n,
+            bbox_s=bbox_s,
+            bbox_e=bbox_e,
+            bbox_w=bbox_w,
+            start_date=start_date,
+            end_date=end_date,
+            event_root_code=event_root_code,
+            limit=detail_limit,
+            min_mentions=min_mentions,
         )
-        data = [MapEventDetailResponse.model_validate(det.model_dump()) for det in details]
-        response = MapDataResponse(zoom=zoom, is_aggregated=False, count=len(data), data=data)
+        data = [
+            MapEventDetailResponse.model_validate(det.model_dump())
+            for det in details
+        ]
+        response = MapDataResponse(
+            zoom=zoom,
+            is_aggregated=False,
+            count=len(data),
+            data=data,
+        )
 
     _map_cache[key] = (time.monotonic(), response)
 

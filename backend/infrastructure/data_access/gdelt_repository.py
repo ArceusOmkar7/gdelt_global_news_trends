@@ -207,6 +207,7 @@ class GdeltRepository(IEventRepository):
         bbox_e: float,
         bbox_w: float,
         filters: EventFilter,
+        min_mentions: int = 1,
     ) -> list[MapEventDetail]:
         """Get detailed events for a geographic region."""
         start_date, end_date = self._resolve_dates(filters)
@@ -218,12 +219,14 @@ class GdeltRepository(IEventRepository):
             "ActionGeo_Lat >= @bbox_s",
             "ActionGeo_Long <= @bbox_e",
             "ActionGeo_Long >= @bbox_w",
+            "NumMentions >= @min_mentions",
         ]
         params: dict[str, Any] = {
             "bbox_n": bigquery.ScalarQueryParameter("bbox_n", "FLOAT64", bbox_n),
             "bbox_s": bigquery.ScalarQueryParameter("bbox_s", "FLOAT64", bbox_s),
             "bbox_e": bigquery.ScalarQueryParameter("bbox_e", "FLOAT64", bbox_e),
             "bbox_w": bigquery.ScalarQueryParameter("bbox_w", "FLOAT64", bbox_w),
+            "min_mentions": bigquery.ScalarQueryParameter("min_mentions", "INT64", min_mentions),
             "limit": bigquery.ScalarQueryParameter("limit", "INT64", limit),
         }
         params.update(self._build_date_params(start_date, end_date))
