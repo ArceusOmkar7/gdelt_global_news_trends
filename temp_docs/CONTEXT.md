@@ -456,9 +456,9 @@ For the Dataset Documentation and AI Requirements reports, you need screenshots 
 ---
 
 ## 12. GitHub Repository
-
+ 
 **URL:** https://github.com/ArceusOmkar7/gdelt_global_news_trends
-
+ 
 Current state (as of March 2026):
 - Phase 1 (backend foundation): complete
 - Phase 2 (AI analytics): complete — KMeans/TF-IDF clustering, Prophet forecasting
@@ -466,11 +466,16 @@ Current state (as of March 2026):
   - GlobalEventMap with zoom-adaptive rendering, BBOX snapping, heatmap + event layers
   - IntelligencePanel — Event Intelligence view (QuadClass badge, Goldstein bar, CAMEO labels, actors, GKG insights, LLM analysis)
   - IntelligencePanel — Regional Dossier view (risk score, event frequency chart, conflict forecast chart, themes, entities, orgs, top events)
-  - SystemControlPanel with health monitoring and runtime settings
-  **UI Phase 4 — Dashboard ambient intelligence (planned, not yet built)**
-   See Section 15 for full spec.
-- **Known remaining work:** Spark/HDFS academic evidence (WSL, not blocking), GCP deployment, Nginx config
-
+  - SystemControlPanel — collapsed by default, health badge always visible in header, full panel expands on click
+- **UI Phase 4 — Ambient Intelligence (partially complete):**
+  - ✅ 15.1 GlobalStatsTicker — fixed bottom bar, 60s refetch, collapsible
+  - ✅ 15.2 TopThreatCard — sidebar card, top 5 countries by risk score, 2min refetch, collapsible
+  - ⬜ 15.3 Country Choropleth Layer — not yet built
+  - ⬜ 15.4 Activity Spike Alerts — not yet built
+  - ⬜ 15.5 Settings Modal refactor — not yet built
+- **Sidebar layout:** scrollable w-[22rem] column, pointer-events-none wrapper, header toggle to slide sidebar in/out
+- **Known remaining work:** Spark/HDFS academic evidence (WSL, not blocking), GCP deployment, Nginx config, written reports
+ 
 ---
 
 ## 13. Quick reference — common tasks
@@ -545,129 +550,98 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 4. **Written reports** — Cloud Cost Estimation, AI Requirements, Dataset Documentation
 
 
-## 15. UI Phase 4 — Dashboard Ambient Intelligence (Planned)
-
-These features make the default map state feel alive without requiring the user
-to click anything. All are collapsible panels. Priority order is fixed.
-
-### 15.1 Global Stats Ticker (Priority 1)
-A thin bar fixed to the bottom of the map. Scrolls or cycles through live
-aggregated numbers computed on page load from a single DuckDB call.
-
-**New backend endpoint needed:**
-GET /api/v1/events/global-pulse
-Returns: { total_events_today: int, most_active_country: str,
-           most_hostile_country: str, avg_global_tone: float,
-           global_conflict_ratio: float, most_active_count: int }
-
-DuckDB query (single pass):
-SELECT
-    COUNT(*) AS total_events,
-    MODE(ActionGeo_CountryCode) AS most_active_country,
-    AVG(AvgTone) AS avg_global_tone,
-    SUM(CASE WHEN QuadClass IN (3,4) THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS conflict_ratio
-FROM read_parquet('/data/hot_tier/*.parquet')
-WHERE SQLDATE >= ? AND SQLDATE < ?
-
-"Most hostile" requires a second grouped query — top country by lowest avg AvgTone.
-Cache this response for 60 seconds in-process (same pattern as map.py TTL cache).
-
-Frontend: fixed bottom bar, font-mono, cyber-blue, items separated by  ·  divider.
-Collapsible — a small chevron toggles it. Persisted in Zustand.
-staleTime: 60s, refetchInterval: 60s.
-
-### 15.2 Top 5 Countries by Threat Level (Priority 2)
-A collapsible card in the left sidebar (below Mission Parameters).
-Shows 5 countries with their risk scores as colored progress bars.
-Clicking a row calls setSelectedCountry() — opens the Regional Dossier.
-
-**New backend endpoint needed:**
-GET /api/v1/events/top-threat-countries?limit=5
-Returns: [{ country_code: str, score: int, conflict_ratio: float, total_events: int }]
-
-DuckDB query:
-SELECT
-    ActionGeo_CountryCode AS country_code,
-    COUNT(*) AS total_events,
-    SUM(CASE WHEN QuadClass IN (3,4) THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS conflict_ratio,
-    AVG(GoldsteinScale) AS avg_goldstein,
-    AVG(AvgTone) AS avg_tone
-FROM read_parquet('/data/hot_tier/*.parquet')
-WHERE SQLDATE >= ? AND SQLDATE < ?
-  AND ActionGeo_CountryCode IS NOT NULL
-  AND ActionGeo_CountryCode != ''
-GROUP BY ActionGeo_CountryCode
-ORDER BY total_events DESC
-LIMIT 50   -- fetch top 50 by volume, compute risk score in Python, then return top 5
-
-Compute risk score for each row in Python using existing compute_risk_score(),
-sort descending, return top 5.
-Cache in-process for 120 seconds.
-
-Frontend: glass-panel card, collapsible. Each row shows:
-  [country_code]  [colored score bar 0-100]  [score number]
-Color: green < 30, amber 30-60, red > 60.
-Clicking a row: setSelectedCountry(country_code).
-staleTime: 2min.
-
-### 15.3 Country Choropleth Layer (Priority 3)
+## 15. UI Phase 4 — Dashboard Ambient Intelligence
+ 
+### 15.1 Global Stats Ticker ✅ COMPLETE
+Fixed bottom bar (`position: fixed, bottom-0, z-50`). Fetches from
+`GET /api/v1/events/global-pulse` every 60s. Shows 5 stats:
+- EVENTS TODAY — total event count in date window
+- MOST ACTIVE — country code + event count
+- MOST HOSTILE — country with lowest avg AvgTone (min 10 events for stability)
+- AVG GLOBAL TONE — mean AvgTone across all events
+- CONFLICT RATIO — % of events with QuadClass 3 or 4 (red when > 35%)
+ 
+Desktop: all items inline separated by `·`. Mobile: cycles every 3s.
+Chevron toggle collapses to a 1-line strip. State in Zustand (`tickerCollapsed`).
+ 
+**Backend endpoint:** `GET /api/v1/events/global-pulse`
+- 3 DuckDB queries (global aggregates, most-active count, most-hostile country)
+- 60s in-process TTL cache keyed by `{start_date}:{end_date}`
+- Schemas: `GlobalPulseResponse` in `schemas.py`
+- Methods: `get_global_pulse()` in `duckdb_repository.py`
+ 
+### 15.2 Top 5 Countries by Threat Level ✅ COMPLETE
+Collapsible glass-panel card in the left sidebar (below Mission Parameters).
+Shows 5 rows: rank badge, country code, colored score bar (0–100), numeric score,
+conflict % and event count sub-row. Clicking a row opens the Regional Dossier
+(calls `setSelectedEvent(null)` then `setSelectedCountry(cc)` — ordering is mandatory).
+Color: green < 30, amber 30–60, red > 60. State in Zustand (`threatCardCollapsed`).
+ 
+**Backend endpoint:** `GET /api/v1/events/top-threat-countries?limit=5`
+- Fetches top 50 countries by event volume from DuckDB
+- Computes `compute_risk_score()` in Python for each, sorts descending, returns top N
+- 120s in-process TTL cache keyed by `{start_date}:{end_date}:{limit}`
+- Schemas: `ThreatCountryEntry`, `TopThreatCountriesResponse` in `schemas.py`
+- Methods: `get_top_threat_countries()` in `duckdb_repository.py`
+ 
+### 15.3 Country Choropleth Layer (Priority 3) ⬜ NOT YET BUILT
 Color countries on the Mapbox map by risk score using a Mapbox fill layer.
 Requires a static countries GeoJSON bundled in the frontend (~500 KB).
 Source: https://github.com/datasets/geo-countries (public domain)
-
-On load: fetch top-threat-countries endpoint (reuses Priority 2 endpoint) with
+ 
+On load: fetch top-threat-countries endpoint (reuses 15.2 endpoint) with
 limit=50 to get scores for the top 50 countries by event volume.
 Build a Mapbox paint expression that maps country ISO codes to colors.
-
+ 
 GDELT uses FIPS country codes, not ISO-2. Need a FIPS→ISO mapping table
 (~250 entries, static JSON in frontend/src/lib/fips-to-iso.ts).
 Countries with no data: transparent / very dark fill.
-
+ 
 Layer sits below the heatmap and circle layers. Opacity ~0.3 so map labels
 remain readable. Toggle button on the map ("CHOROPLETH ON/OFF").
-
-### 15.4 Breaking: High Activity Spike Alerts (Priority 4)
+ 
+### 15.4 Breaking: High Activity Spike Alerts (Priority 4) ⬜ NOT YET BUILT
 Detect countries whose last-24h event count is ≥ 2× their 7-day rolling average.
 Show pulsing alert cards overlaid on the map (absolute positioned, top-left area,
 below Mission Parameters panel).
-
+ 
 **New backend endpoint needed:**
 GET /api/v1/events/activity-spikes
 Returns: [{ country_code: str, today_count: int, baseline_avg: float, ratio: float }]
-
+ 
 DuckDB query (two aggregations):
 -- today
 SELECT ActionGeo_CountryCode, COUNT(*) AS today_count
 FROM read_parquet(...)
 WHERE SQLDATE = {today_int} AND ActionGeo_CountryCode IS NOT NULL
 GROUP BY ActionGeo_CountryCode
-
+ 
 -- 7-day baseline
 SELECT ActionGeo_CountryCode, COUNT(*) * 1.0 / 7 AS daily_avg
 FROM read_parquet(...)
 WHERE SQLDATE >= {seven_days_ago_int} AND SQLDATE < {today_int}
   AND ActionGeo_CountryCode IS NOT NULL
 GROUP BY ActionGeo_CountryCode
-
+ 
 Join in Python, filter where today_count / daily_avg >= 2.0, sort by ratio desc,
 return top 5 spikes. Cache 5 minutes.
-
+ 
 Frontend: each alert is a small pulsing card with cyber-red border.
 Shows: "⚠ {CC} — {ratio:.1f}× normal activity"
 Clicking opens Regional Dossier for that country.
 Entire alert stack is collapsible. refetchInterval: 5min.
-
-### 15.5 UI Refactor — Settings Modal (All Priorities)
+ 
+### 15.5 UI Refactor — Settings Modal (All Priorities) ⬜ NOT YET BUILT
 The SystemControlPanel (Runtime Controls + System Health + Backend Runtime Settings)
 should move into a Settings modal triggered by a gear icon button in the header.
 The left sidebar should only contain: Mission Parameters, Top Threat Countries card,
 and the Spike Alerts stack.
-
+ 
 Settings modal contents (same data, new location):
 - Map Auto-Refresh toggle + fetch interval
-- Health polling interval  
+- Health polling interval
 - System Health status
 - Backend Runtime Settings (all the BQ cap / cron / cutoff numbers)
-
+ 
 The modal uses the same glass-panel / font-mono aesthetic.
 A single ⚙ SETTINGS button in the header (top-right area) opens it.
