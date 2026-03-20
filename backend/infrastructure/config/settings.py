@@ -83,6 +83,45 @@ class Settings(BaseSettings):
         default=None,
         description="Optional Groq API key used by nightly briefing precompute jobs.",
     )
+    action_geo_country_codes_path: str = Field(
+        default="data/LOOKUP-COUNTRIES.txt",
+        description=(
+            "Path to local ActionGeo 2-letter country/region code lookup file "
+            "used by nightly briefings."
+        ),
+    )
+    action_geo_country_codes_url: str = Field(
+        default="http://data.gdeltproject.org/api/v2/guides/LOOKUP-COUNTRIES.TXT",
+        description=(
+            "Source URL used to download ActionGeo country code lookup "
+            "when local file is missing."
+        ),
+    )
+    cameo_country_codes_path: str = Field(
+        default="data/CAMEO.country.txt",
+        description=(
+            "Path to local CAMEO 3-letter country/region code lookup file "
+            "used as fallback context for nightly briefings."
+        ),
+    )
+    cameo_country_codes_url: str = Field(
+        default="https://www.gdeltproject.org/data/lookups/CAMEO.country.txt",
+        description=(
+            "Source URL used to download CAMEO country code lookup "
+            "when local file is missing."
+        ),
+    )
+    gdelt_country_codes_path: str = Field(
+        default="data/gdelt_country_codes.txt",
+        description=(
+            "Path to local GDELT CAMEO country/region code lookup file. "
+            "Can be relative to repository root or absolute."
+        ),
+    )
+    gdelt_country_codes_url: str = Field(
+        default="https://www.gdeltproject.org/data/lookups/CAMEO.country.txt",
+        description="Source URL used to download country code lookup when local file is missing.",
+    )
 
     # --- Query Defaults ---
     default_lookback_days: int = Field(

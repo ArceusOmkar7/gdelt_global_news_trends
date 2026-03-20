@@ -194,8 +194,12 @@ This file lists the 3 latest file URLs (Events, Mentions, GKG). Download, parse,
 ### Nightly AI jobs (`scripts/nightly_ai.py`)
 - **Prophet forecasting:** Runs on hot tier aggregated by country + day, forecasts 30 days ahead for top 50 countries by event volume. Output: `/data/cache/forecasts.parquet`
 - **Groq briefings:** For top 30 countries, sends last 7 days of event summary to Groq Llama 3 70B, stores result in `/data/cache/briefings.json`
+- **Country label mapping (implemented):** Briefings now prefer ActionGeo 2-letter lookup (`LOOKUP-COUNTRIES.txt`) for country/region names, then fall back to CAMEO lookup.
+- **Prompt grounding (implemented):** Groq system prompt now includes an authoritative run-time codebook (`CODE -> LABEL`) and user prompt requires label usage in output.
+- **Quality gate (implemented):** Low-quality/hallucination patterns (e.g., "code is invalid", "could refer to") are rejected and replaced by deterministic fallback text.
 - Runs at 3am UTC (after batch pull completes)
 - **Must be run after backfilling** to get proper 30-day forecast horizon. With only 1-2 days of data Prophet will produce a very short forecast.
+- **Forecast interpretation note:** Forecasts are conflict-only (QuadClass 3/4). Some countries can legitimately produce near-zero or all-zero horizons even when total event volume is high.
 
 ### Cold tier rules (MANDATORY — do not relax these)
 
@@ -273,6 +277,10 @@ GDELT_DATASET=gdelt-bq.gdeltv2
 HOT_TIER_PATH=/data/hot_tier
 CACHE_PATH=/data/cache
 GROQ_API_KEY=
+ACTION_GEO_COUNTRY_CODES_PATH=data/LOOKUP-COUNTRIES.txt
+ACTION_GEO_COUNTRY_CODES_URL=http://data.gdeltproject.org/api/v2/guides/LOOKUP-COUNTRIES.TXT
+CAMEO_COUNTRY_CODES_PATH=data/CAMEO.country.txt
+CAMEO_COUNTRY_CODES_URL=https://www.gdeltproject.org/data/lookups/CAMEO.country.txt
 MAPBOX_TOKEN=
 ENVIRONMENT=production
 BQ_MAX_SCAN_BYTES=2000000000
@@ -309,6 +317,8 @@ def compute_risk_score(conflict_ratio, avg_goldstein, avg_tone) -> int:
 ### Known data quality issues
 - `mentions_count` can be `None` in rows where the Mentions join had no match during `daily_bq_pull.py`. Always coerce: `int(row.get("mentions_count") or 0)` — do NOT use `row.get("mentions_count", 0)` which passes `None` through.
 - GDELT `ActionGeo_CountryCode` uses FIPS codes, not ISO-2. Some values are regional aggregates (e.g. `WE` = Western Europe) rather than real countries. The map cluster click uses this code for `setSelectedCountry` — it works for real country codes but regional codes will return empty dossiers.
+- Lookup mismatch pitfall: `CAMEO.country.txt` is 3-letter code mapping (e.g., `USA`, `IRN`), while `ActionGeo_CountryCode` in hot-tier data is 2-letter FIPS-style (e.g., `US`, `IR`, `UP`). Use `LOOKUP-COUNTRIES.txt` for ActionGeo labels.
+- Forecast display pitfall: seeing rows with `predicted_count = 0` for a country does not imply all forecasts are zero globally. Always inspect per-country and global distribution before diagnosing model failure.
 
 ---
 
@@ -489,6 +499,12 @@ python scripts/daily_bq_pull.py --backfill-days 7
 python scripts/nightly_ai.py   # after backfill to get proper forecasts
 ```
 
+**Quick forecast sanity check (zero vs non-zero):**
+```bash
+duckdb -c "SELECT COUNT(*) total_rows, SUM(CASE WHEN predicted_count=0 THEN 1 ELSE 0 END) zero_rows, SUM(CASE WHEN predicted_count<>0 THEN 1 ELSE 0 END) nonzero_rows FROM 'data/cache/forecasts.parquet';"
+duckdb -c "SELECT country_code, MIN(predicted_count) min_pred, MAX(predicted_count) max_pred FROM 'data/cache/forecasts.parquet' GROUP BY country_code ORDER BY max_pred DESC LIMIT 20;"
+```
+
 **Set up DuckDB hot tier query (per-query connection pattern):**
 ```python
 import duckdb
@@ -542,12 +558,19 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 - Full frontend: map, Event Intelligence panel, Regional Dossier panel, system controls
 - Data pipeline: daily_bq_pull.py, realtime_fetcher.py, nightly_ai.py all written and tested
 - LLM analysis: Groq + scraper working end-to-end
+- Nightly briefing improvements: ActionGeo 2-letter lookup integration, codebook-aware prompts, low-quality response filtering, and config-driven lookup URLs/paths are implemented.
 
 ### What's next
 1. **GCP VM deployment** — copy code to VM, set up systemd services, Nginx reverse proxy, SSL
 2. **Vercel deployment** — set `VITE_API_URL` to VM's public IP, deploy frontend
 3. **Spark/HDFS academic evidence** — WSL only, for Dataset Documentation report screenshots
 4. **Written reports** — Cloud Cost Estimation, AI Requirements, Dataset Documentation
+
+### Suggestions (optional)
+1. Add a forecast post-check in `nightly_ai.py`: if a country's 30-day forecast is all zeros while recent conflict history exists, tag with a warning field (or fallback to a short moving-average baseline).
+2. Store `country_label` alongside `country_code` in `forecasts.parquet` and `briefings.json` to reduce repeated lookup work in API/frontend.
+3. Add a small nightly quality report (`/data/cache/nightly_ai_report.json`) summarizing: Groq success count, fallback count, low-quality rejections, and per-country forecast zero-rate.
+4. Add integration tests that assert top known codes resolve correctly from `LOOKUP-COUNTRIES.txt` (e.g., `US`, `IR`, `UP`, `UK`, `RS`).
 
 
 ## 15. UI Phase 4 — Dashboard Ambient Intelligence

@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import duckdb
@@ -169,18 +170,132 @@ def fallback_briefing(country_code: str, summary: str) -> str:
     )
 
 
+def load_gdelt_country_code_labels(codes_file: Path) -> dict[str, str]:
+    """Load GDELT CAMEO country/region code labels from tab-separated file."""
+    if not codes_file.exists():
+        return {}
+
+    labels: dict[str, str] = {}
+    with codes_file.open("r", encoding="utf-8") as handle:
+        for i, line in enumerate(handle):
+            raw = line.strip()
+            if not raw:
+                continue
+            if i == 0 and raw.upper().startswith("CODE"):
+                continue
+            parts = raw.split("\t", maxsplit=1)
+            if len(parts) != 2:
+                continue
+            code = parts[0].strip().upper()
+            label = parts[1].strip()
+            if code and label:
+                labels[code] = label
+    return labels
+
+
+def resolve_country_codes_file_path(configured_path: str, repo_root: Path) -> Path:
+    """Resolve configured country-code file path to an absolute path."""
+    configured = Path(configured_path)
+    if configured.is_absolute():
+        return configured
+    return repo_root / configured
+
+
+async def ensure_country_codes_file(
+    configured_path: str,
+    configured_url: str,
+    repo_root: Path,
+) -> Path | None:
+    """Ensure country-code lookup file exists; download from configured URL if missing."""
+    codes_file = resolve_country_codes_file_path(configured_path, repo_root)
+    if codes_file.exists():
+        return codes_file
+
+    codes_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(configured_url)
+            response.raise_for_status()
+        codes_file.write_text(response.text, encoding="utf-8")
+        print(f"Downloaded country code lookup to {codes_file}")
+        return codes_file
+    except Exception as exc:
+        print(f"Could not download country code lookup from {configured_url}: {exc}")
+        return None
+
+
+async def load_country_labels_for_actiongeo(
+    settings: Settings,
+    repo_root: Path,
+) -> dict[str, str]:
+    """Load label map for ActionGeo 2-letter codes, fallback to CAMEO map if needed."""
+    action_file = await ensure_country_codes_file(
+        configured_path=settings.action_geo_country_codes_path,
+        configured_url=settings.action_geo_country_codes_url,
+        repo_root=repo_root,
+    )
+    action_labels = load_gdelt_country_code_labels(action_file) if action_file else {}
+    if action_labels:
+        return action_labels
+
+    cameo_file = await ensure_country_codes_file(
+        configured_path=settings.cameo_country_codes_path,
+        configured_url=settings.cameo_country_codes_url,
+        repo_root=repo_root,
+    )
+    cameo_labels = load_gdelt_country_code_labels(cameo_file) if cameo_file else {}
+    if cameo_labels:
+        return cameo_labels
+
+    legacy_file = await ensure_country_codes_file(
+        configured_path=settings.gdelt_country_codes_path,
+        configured_url=settings.gdelt_country_codes_url,
+        repo_root=repo_root,
+    )
+    return load_gdelt_country_code_labels(legacy_file) if legacy_file else {}
+
+
+def is_low_quality_briefing(text: str) -> bool:
+    """Reject generic or code-confusion responses that degrade briefing quality."""
+    patterns = [
+        r"unable to (determine|verify)",
+        r"not a recognized country code",
+        r"could refer to",
+        r"assuming (it )?refers to",
+        r"without more context",
+        r"appears to be (a code|coded|nonsensical|cryptic)",
+    ]
+    normalized = text.lower()
+    return any(re.search(p, normalized) for p in patterns)
+
+
 @dataclass
 class GroqBriefingClient:
     """Small async client for Groq Chat Completions API."""
 
     api_key: str
-    model: str = "llama-3.1-8b-instant"
+    model: str = "llama-3.3-70b-versatile"
+    codebook_context: str = ""
 
-    async def generate_briefing(self, country_code: str, summary: str) -> str | None:
+    async def generate_briefing(
+        self,
+        country_code: str,
+        country_label: str,
+        summary: str,
+    ) -> str | None:
         prompt = (
-            "Summarize the geopolitical situation in "
-            f"{country_code} based on these recent events: {summary}. "
-            "Be concise, factual, and around 150 words."
+            "Use only the provided structured metrics to generate a concise geopolitical "
+            "briefing.\n"
+            f"Code: {country_code}\n"
+            f"Label: {country_label}\n"
+            f"Metrics: {summary}\n"
+            "Rules:"
+            " 1) Treat code+label as authoritative; do not reinterpret the location."
+            " 2) Do not claim the code is invalid or ambiguous."
+            " 3) Do not invent events, actors, or historical facts not present in metrics."
+            " 4) Use the label in the first sentence and include the code in parentheses once."
+            " 5) Keep output 90-130 words in one paragraph."
+            " 6) Focus on trend/risk interpretation from tone, Goldstein, mentions, and event mix."
         )
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -189,7 +304,16 @@ class GroqBriefingClient:
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": "You are a geopolitical analyst."},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a geopolitical analyst for GDELT ActionGeo data. "
+                        "ActionGeo codes can be countries, regions, or city-level entities. "
+                        "Use provided code+label exactly and stay grounded in provided metrics.\n\n"
+                        "Authoritative code mapping for this run:\n"
+                        f"{self.codebook_context or 'No mapping provided.'}"
+                    ),
+                },
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.2,
@@ -206,7 +330,8 @@ class GroqBriefingClient:
                 response.raise_for_status()
                 data = response.json()
             return data["choices"][0]["message"]["content"].strip()
-        except Exception:
+        except Exception as exc:
+            print(f"Groq briefing generation failed for {country_code}: {exc}")
             return None
 
 
@@ -236,7 +361,7 @@ def build_forecasts_dataframe(settings: Settings) -> pd.DataFrame:
 
     forecasting_service = ForecastingService()
     rows: list[dict] = []
-    generated_at = datetime.utcnow().isoformat()
+    generated_at = datetime.now(UTC).isoformat()
 
     for country_code in top_countries:
         historical = fetch_conflict_daily_counts(
@@ -293,15 +418,30 @@ async def build_briefings_payload(settings: Settings) -> dict[str, dict[str, str
         limit=30,
     )
 
+    repo_root = Path(__file__).resolve().parents[1]
+    code_labels = await load_country_labels_for_actiongeo(settings, repo_root)
+
+    codebook_lines: list[str] = []
+    for code in top_countries:
+        normalized = code.upper()
+        label = code_labels.get(normalized, normalized)
+        codebook_lines.append(f"{normalized} -> {label}")
+    codebook_context = "\n".join(codebook_lines)
+
     groq_client = None
     groq_key = getattr(settings, "groq_api_key", None)
     if isinstance(groq_key, str) and groq_key.strip():
-        groq_client = GroqBriefingClient(api_key=groq_key.strip())
+        groq_client = GroqBriefingClient(
+            api_key=groq_key.strip(),
+            codebook_context=codebook_context,
+        )
 
     payload: dict[str, dict[str, str]] = {}
-    generated_at = datetime.utcnow().isoformat()
+    generated_at = datetime.now(UTC).isoformat()
 
     for country_code in top_countries:
+        normalized_code = country_code.upper()
+        country_label = code_labels.get(normalized_code, normalized_code)
         summary = build_country_event_summary(
             conn,
             parquet_glob,
@@ -313,9 +453,17 @@ async def build_briefings_payload(settings: Settings) -> dict[str, dict[str, str
         briefing_text = None
         source = "fallback"
         if groq_client is not None:
-            briefing_text = await groq_client.generate_briefing(country_code, summary)
+            briefing_text = await groq_client.generate_briefing(
+                country_code=normalized_code,
+                country_label=country_label,
+                summary=summary,
+            )
             if briefing_text:
                 source = "groq"
+
+        if briefing_text and is_low_quality_briefing(briefing_text):
+            source = "fallback_invalid_groq"
+            briefing_text = None
 
         if not briefing_text:
             briefing_text = fallback_briefing(country_code, summary)
