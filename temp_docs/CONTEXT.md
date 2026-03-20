@@ -102,6 +102,10 @@
     - DuckDB repository protects all shared connection calls with a lock, including health/ingestion stat reads.
     - Health endpoint now caches BigQuery health probes for 60 seconds to avoid repeated dry-run + execution on every poll.
     - Default frontend health polling cadence increased to 60 seconds.
+- **Daily ingestion script enhancements completed (March 20 update)**
+    - `scripts/daily_bq_pull.py` now enriches Events with Mentions and GKG using partition-pruned queries and local dataframe joins for improved reliability/performance.
+    - Added command-line execution options: `--date YYYY-MM-DD` and `--backfill-days N` (capped at 7 days).
+    - Updated script unit tests to validate current query projection/partition behavior and CLI argument parsing.
 
 ---
 
@@ -282,8 +286,12 @@ This file lists the 3 latest file URLs (Events, Mentions, GKG). Download, parse,
 
 ### Daily BigQuery batch job (`scripts/daily_bq_pull.py`)
 - Runs at 2am UTC via cron
-- Queries previous day's GDELT events (SQLDATE = yesterday integer)
-- Column-pruned to the exact list in Section 2
+- Pulls one day at a time using partition-pruned queries against Events, EventMentions, and GKG
+- Supports CLI modes for operations and backfills:
+    - `python scripts/daily_bq_pull.py` (default: yesterday)
+    - `python scripts/daily_bq_pull.py --date YYYY-MM-DD` (single explicit date)
+    - `python scripts/daily_bq_pull.py --backfill-days N` (up to 7 days)
+- Column-pruned to the approved Events projection and enriched with `themes`, `persons`, `organizations`, `mentions_count`, `avg_confidence`
 - Appends to `/data/hot_tier/events_YYYYMM.parquet` using PyArrow
 - Hard limit: abort if estimated bytes > 2 GB
 - On failure: logs error, sends no alert (check logs manually)
@@ -621,7 +629,7 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 | `backend/api/routers/map.py` | 🟢 ROUTED | Uses routed repository via use case; zoom behavior unchanged (`<9` aggregate, `>=9` detail) |
 | `backend/api/routers/analytics.py` | 🟢 ROUTED | Clustering/forecasting now query via routed repository abstraction |
 | `backend/api/routers/health.py` | 🟢 UPDATED | Adds hot-tier diagnostics (availability + parquet count + cutoff days) |
-| `scripts/daily_bq_pull.py` | 🟢 ADDED | Yesterday partition pull with explicit Events columns and dry-run budget guard |
+| `scripts/daily_bq_pull.py` | 🟢 UPDATED | Partition-pruned Events+Mentions+GKG enrichment, column-safe output schema, and CLI options (`--date`, `--backfill-days`) |
 | `scripts/realtime_fetcher.py` | 🟢 ADDED | Polls `lastupdate.txt`, ingests Events CSV zip, dedupes on `GLOBALEVENTID` |
 | `scripts/nightly_ai.py` | 🟢 UPDATED | Precomputes `forecasts.parquet` and `briefings.json`; briefing model default updated to `llama-3.1-8b-instant` |
 | `frontend/tsconfig.app.json` | 🟢 ADDED | Vite application TypeScript configuration |

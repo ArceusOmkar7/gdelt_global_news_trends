@@ -48,6 +48,19 @@ LOG_LEVEL=INFO
 > **Note:** Backend startup requires at least one parquet file under `HOT_TIER_PATH`.
 > Run `python scripts/daily_bq_pull.py` once to bootstrap real hot-tier data.
 
+Daily pull options:
+
+```bash
+# Default: pull yesterday
+python scripts/daily_bq_pull.py
+
+# Pull a specific day (up to 7 days back)
+python scripts/daily_bq_pull.py --date 2026-03-18
+
+# Backfill last N days (hard-capped at 7)
+python scripts/daily_bq_pull.py --backfill-days 3
+```
+
 ### 2. Local Development (Virtual Environment)
 
 ```bash
