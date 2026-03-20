@@ -71,30 +71,26 @@ class DuckDbRepository(IEventRepository):
         hot_tier_dir = Path(self._settings.hot_tier_path)
         if not hot_tier_dir.exists() or not any(hot_tier_dir.glob("*.parquet")):
             return {"total_rows": 0, "last_updated_at": None}
-
+ 
         try:
-            # Get total row count
-            with self._conn_lock:
-                res = self._conn.execute(
-                    f"SELECT COUNT(*) FROM read_parquet('{self._parquet_glob}')"
-                ).fetchone()
-            total_rows = res[0] if res else 0
-
-            # Get latest modified time of any parquet file in the hot tier
+            rows = self._query(
+                f"SELECT COUNT(*) AS cnt FROM read_parquet('{self._parquet_glob}')",
+                [],
+            )
+            total_rows = int(rows[0]["cnt"]) if rows else 0
+ 
             files = list(hot_tier_dir.glob("*.parquet"))
             if not files:
                 return {"total_rows": total_rows, "last_updated_at": None}
-            
+ 
             latest_mtime = max(f.stat().st_mtime for f in files)
             last_updated = date.fromtimestamp(latest_mtime).isoformat()
-            
-            return {
-                "total_rows": total_rows,
-                "last_updated_at": last_updated
-            }
+ 
+            return {"total_rows": total_rows, "last_updated_at": last_updated}
         except Exception as e:
             logger.error("failed_to_get_ingestion_stats", error=str(e))
             return {"total_rows": 0, "last_updated_at": None}
+ 
 
     # ------------------------------------------------------------------
     # IEventRepository implementation
@@ -567,3 +563,131 @@ class DuckDbRepository(IEventRepository):
             persons=row.get("persons", []),
             organizations=row.get("organizations", []),
         )
+
+    # ------------------------------------------------------------------
+    # 15.1 — Global Pulse
+    # ------------------------------------------------------------------
+ 
+    def get_global_pulse(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> dict[str, Any]:
+        """Return global aggregate stats for the stats ticker.
+ 
+        Two queries are run:
+          1. Single-pass aggregation for totals, most-active country, avg tone,
+             conflict ratio.
+          2. Grouped per-country to find the most hostile country (lowest avg tone).
+ 
+        Both use fresh in-process DuckDB connections (no shared lock).
+        """
+        start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
+ 
+        # Query 1 — global aggregates + most-active country
+        sql_global = f"""
+            SELECT
+                COUNT(*)                                                              AS total_events,
+                MODE(ActionGeo_CountryCode)                                           AS most_active_country,
+                AVG(AvgTone)                                                          AS avg_global_tone,
+                SUM(CASE WHEN QuadClass IN (3, 4) THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS conflict_ratio
+            FROM read_parquet('{self._parquet_glob}')
+            WHERE SQLDATE >= ? AND SQLDATE < ?
+              AND ActionGeo_CountryCode IS NOT NULL
+              AND ActionGeo_CountryCode != ''
+        """
+        global_rows = self._query(sql_global, [start_int, end_exclusive_int])
+        g = global_rows[0] if global_rows else {}
+ 
+        # Query 2 — most-active country event count (for most_active_count field)
+        most_active_cc = g.get("most_active_country")
+        most_active_count = 0
+        if most_active_cc:
+            sql_count = f"""
+                SELECT COUNT(*) AS cnt
+                FROM read_parquet('{self._parquet_glob}')
+                WHERE SQLDATE >= ? AND SQLDATE < ?
+                  AND ActionGeo_CountryCode = ?
+            """
+            count_rows = self._query(sql_count, [start_int, end_exclusive_int, most_active_cc])
+            most_active_count = int(count_rows[0]["cnt"]) if count_rows else 0
+ 
+        # Query 3 — most hostile country (lowest avg AvgTone, min 10 events for stability)
+        sql_hostile = f"""
+            SELECT ActionGeo_CountryCode AS country_code
+            FROM read_parquet('{self._parquet_glob}')
+            WHERE SQLDATE >= ? AND SQLDATE < ?
+              AND ActionGeo_CountryCode IS NOT NULL
+              AND ActionGeo_CountryCode != ''
+              AND AvgTone IS NOT NULL
+            GROUP BY ActionGeo_CountryCode
+            HAVING COUNT(*) >= 10
+            ORDER BY AVG(AvgTone) ASC
+            LIMIT 1
+        """
+        hostile_rows = self._query(sql_hostile, [start_int, end_exclusive_int])
+        most_hostile_cc = hostile_rows[0]["country_code"] if hostile_rows else None
+ 
+        avg_tone = g.get("avg_global_tone")
+        conflict_ratio = float(g.get("conflict_ratio") or 0.0)
+ 
+        return {
+            "total_events_today": int(g.get("total_events") or 0),
+            "most_active_country": most_active_cc,
+            "most_active_count": most_active_count,
+            "most_hostile_country": most_hostile_cc,
+            "avg_global_tone": float(avg_tone) if avg_tone is not None else None,
+            "global_conflict_ratio": conflict_ratio,
+        }
+ 
+    # ------------------------------------------------------------------
+    # 15.2 — Top Threat Countries
+    # ------------------------------------------------------------------
+ 
+    def get_top_threat_countries(
+        self,
+        start_date: date,
+        end_date: date,
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Return the top-N countries ranked by computed risk score.
+ 
+        Fetches the top 50 countries by raw event volume, computes the risk
+        score for each in Python using compute_risk_score(), sorts descending,
+        and returns the top `limit` entries.
+        """
+        start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
+ 
+        sql = f"""
+            SELECT
+                ActionGeo_CountryCode                                                     AS country_code,
+                COUNT(*)                                                                  AS total_events,
+                SUM(CASE WHEN QuadClass IN (3, 4) THEN 1 ELSE 0 END) * 1.0 / COUNT(*)   AS conflict_ratio,
+                AVG(GoldsteinScale)                                                       AS avg_goldstein,
+                AVG(AvgTone)                                                              AS avg_tone
+            FROM read_parquet('{self._parquet_glob}')
+            WHERE SQLDATE >= ? AND SQLDATE < ?
+              AND ActionGeo_CountryCode IS NOT NULL
+              AND ActionGeo_CountryCode != ''
+            GROUP BY ActionGeo_CountryCode
+            ORDER BY total_events DESC
+            LIMIT 50
+        """
+        rows = self._query(sql, [start_int, end_exclusive_int])
+ 
+        scored: list[dict[str, Any]] = []
+        for row in rows:
+            cr = float(row.get("conflict_ratio") or 0.0)
+            gs = row.get("avg_goldstein")
+            at = row.get("avg_tone")
+            score = compute_risk_score(cr, gs, at)
+            scored.append({
+                "country_code": row["country_code"],
+                "score": score,
+                "conflict_ratio": cr,
+                "total_events": int(row.get("total_events") or 0),
+            })
+ 
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored[:limit]
+ 

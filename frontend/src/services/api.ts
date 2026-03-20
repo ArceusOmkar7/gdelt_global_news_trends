@@ -5,6 +5,8 @@ import type {
   RuntimeSettingsResponse,
   RiskScoreResponse,
   ForecastResponse,
+  GlobalPulseResponse,
+  TopThreatCountriesResponse,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
@@ -120,6 +122,32 @@ export const apiService = {
     const response = await fetch(`${API_BASE_URL}/health/settings`);
     if (!response.ok) {
       throw new Error(`Failed to fetch runtime settings: ${response.statusText}`);
+    }
+    return response.json();
+  },
+  getGlobalPulse: async (
+    startDate: string,
+    endDate: string
+  ): Promise<GlobalPulseResponse> => {
+    const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+    const response = await fetch(`${API_BASE_URL}/events/global-pulse?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch global pulse: ${response.statusText}`);
+    }
+    return response.json();
+  },
+ 
+  getTopThreatCountries: async (
+    limit: number = 5,
+    startDate?: string,
+    endDate?: string
+  ): Promise<TopThreatCountriesResponse> => {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    const response = await fetch(`${API_BASE_URL}/events/top-threat-countries?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch top threat countries: ${response.statusText}`);
     }
     return response.json();
   },

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from typing import Annotated
+import threading
+import time as _time
 
 from fastapi import APIRouter, Depends, Query
 
@@ -19,6 +21,9 @@ from backend.api.schemas.schemas import (
     EventListResponse,
     EventResponse,
     RiskScoreResponse,
+    GlobalPulseResponse, 
+    ThreatCountryEntry, 
+    TopThreatCountriesResponse
 )
 from backend.application.use_cases.analyze_event import AnalyzeEventUseCase
 from backend.application.use_cases.get_events import GetEventsUseCase
@@ -222,3 +227,118 @@ async def analyze_event(
 ) -> EventAnalysisResponse:
     analysis = await use_case.execute(event_id)
     return EventAnalysisResponse.model_validate(analysis.model_dump())
+
+# ---------------------------------------------------------------------------
+# In-process TTL caches (process-local, resets on restart — intentional)
+# ---------------------------------------------------------------------------
+_pulse_cache: dict = {}
+_pulse_cache_lock = threading.Lock()
+_PULSE_TTL = 60.0   # 60 s
+ 
+_threat_cache: dict = {}
+_threat_cache_lock = threading.Lock()
+_THREAT_TTL = 120.0  # 2 min
+ 
+ 
+# ---------------------------------------------------------------------------
+# 15.1 — Global Pulse endpoint
+# ---------------------------------------------------------------------------
+ 
+@router.get(
+    "/global-pulse",
+    response_model=GlobalPulseResponse,
+    summary="Global pulse stats",
+    description=(
+        "Returns live aggregate stats across all recent events: "
+        "total count, most-active and most-hostile countries, "
+        "average tone, and global conflict ratio. "
+        "Cached in-process for 60 seconds."
+    ),
+)
+def global_pulse(
+    start_date: date | None = Query(default=None, description="Inclusive start date (defaults to 7 days ago)"),
+    end_date: date | None = Query(default=None, description="Inclusive end date (defaults to today)"),
+) -> GlobalPulseResponse:
+    now = _time.monotonic()
+    end = end_date or date.today()
+    start = start_date or (end - timedelta(days=7))
+ 
+    cache_key = f"{start}:{end}"
+    with _pulse_cache_lock:
+        entry = _pulse_cache.get(cache_key)
+        if entry is not None and (now - entry["ts"]) < _PULSE_TTL:
+            return entry["data"]
+ 
+    repository = DuckDbRepository(settings)
+    metrics = repository.get_global_pulse(start_date=start, end_date=end)
+ 
+    response = GlobalPulseResponse(
+        total_events_today=metrics["total_events_today"],
+        most_active_country=metrics["most_active_country"],
+        most_active_count=metrics["most_active_count"],
+        most_hostile_country=metrics["most_hostile_country"],
+        avg_global_tone=metrics["avg_global_tone"],
+        global_conflict_ratio=metrics["global_conflict_ratio"],
+    )
+ 
+    with _pulse_cache_lock:
+        _pulse_cache[cache_key] = {"ts": now, "data": response}
+        # Evict stale keys
+        stale = [k for k, v in _pulse_cache.items() if (now - v["ts"]) > _PULSE_TTL * 5]
+        for k in stale:
+            _pulse_cache.pop(k, None)
+ 
+    return response
+ 
+ 
+# ---------------------------------------------------------------------------
+# 15.2 — Top Threat Countries endpoint
+# ---------------------------------------------------------------------------
+ 
+@router.get(
+    "/top-threat-countries",
+    response_model=TopThreatCountriesResponse,
+    summary="Top countries by threat level",
+    description=(
+        "Returns the top-N countries ranked by computed risk score "
+        "(conflict ratio 40%, Goldstein scale 35%, AvgTone 25%). "
+        "Draws from hot-tier DuckDB only. Cached for 120 seconds."
+    ),
+)
+def top_threat_countries(
+    limit: int = Query(default=5, ge=1, le=50, description="Number of countries to return"),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+) -> TopThreatCountriesResponse:
+    now = _time.monotonic()
+    end = end_date or date.today()
+    start = start_date or (end - timedelta(days=7))
+ 
+    cache_key = f"{start}:{end}:{limit}"
+    with _threat_cache_lock:
+        entry = _threat_cache.get(cache_key)
+        if entry is not None and (now - entry["ts"]) < _THREAT_TTL:
+            return entry["data"]
+ 
+    repository = DuckDbRepository(settings)
+    rows = repository.get_top_threat_countries(start_date=start, end_date=end, limit=limit)
+ 
+    data = [
+        ThreatCountryEntry(
+            country_code=r["country_code"],
+            score=r["score"],
+            conflict_ratio=r["conflict_ratio"],
+            total_events=r["total_events"],
+        )
+        for r in rows
+    ]
+    response = TopThreatCountriesResponse(count=len(data), data=data)
+ 
+    with _threat_cache_lock:
+        _threat_cache[cache_key] = {"ts": now, "data": response}
+        stale = [k for k, v in _threat_cache.items() if (now - v["ts"]) > _THREAT_TTL * 5]
+        for k in stale:
+            _threat_cache.pop(k, None)
+ 
+    return response
+ 

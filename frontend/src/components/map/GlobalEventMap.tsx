@@ -421,7 +421,7 @@ export const GlobalEventMap: React.FC = () => {
         </div>
       )}
       
-      <div className="absolute bottom-4 left-4 z-10 bg-surface-900/50 backdrop-blur-sm p-2 panel-border rounded">
+      <div className="absolute bottom-4 right-4 z-10 bg-surface-900/50 backdrop-blur-sm p-2 panel-border rounded">
          <span className="data-ink">Zoom: {viewState.zoom.toFixed(1)} | Points: {mapResponse?.count || 0}</span>
       </div>
     </div>

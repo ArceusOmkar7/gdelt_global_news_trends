@@ -246,3 +246,38 @@ class RiskScoreResponse(BaseModel):
     avg_goldstein: float | None = None
     avg_tone: float | None = None
     total_events: int
+
+# ---------------------------------------------------------------------------
+# 15.1 — Global Pulse
+# ---------------------------------------------------------------------------
+ 
+class GlobalPulseResponse(BaseModel):
+    """Live global aggregates for the stats ticker (15.1)."""
+ 
+    total_events_today: int = Field(description="Total events in the current day window.")
+    most_active_country: str | None = Field(description="Country code with the highest event count.")
+    most_active_count: int = Field(description="Event count for the most-active country.")
+    most_hostile_country: str | None = Field(description="Country code with the lowest avg AvgTone.")
+    avg_global_tone: float | None = Field(description="Mean AvgTone across all events in the window.")
+    global_conflict_ratio: float = Field(description="Fraction of events with QuadClass 3 or 4.")
+ 
+ 
+# ---------------------------------------------------------------------------
+# 15.2 — Top Threat Countries
+# ---------------------------------------------------------------------------
+ 
+class ThreatCountryEntry(BaseModel):
+    """One row in the top-threat list (15.2)."""
+ 
+    country_code: str
+    score: int = Field(description="0–100 risk score (higher = more dangerous).")
+    conflict_ratio: float
+    total_events: int
+ 
+ 
+class TopThreatCountriesResponse(BaseModel):
+    """Ranked list of highest-threat countries."""
+ 
+    count: int
+    data: list[ThreatCountryEntry]
+ 

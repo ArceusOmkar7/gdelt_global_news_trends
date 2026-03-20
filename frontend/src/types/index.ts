@@ -120,3 +120,33 @@ export interface ForecastResponse {
   historical_summary: Record<string, unknown>;
   predictions: ForecastPoint[];
 }
+
+// ---------------------------------------------------------------------------
+// 15.1 — Global Pulse
+// ---------------------------------------------------------------------------
+ 
+export interface GlobalPulseResponse {
+  total_events_today: number;
+  most_active_country: string | null;
+  most_active_count: number;
+  most_hostile_country: string | null;
+  avg_global_tone: number | null;
+  global_conflict_ratio: number;
+}
+ 
+// ---------------------------------------------------------------------------
+// 15.2 — Top Threat Countries
+// ---------------------------------------------------------------------------
+ 
+export interface ThreatCountryEntry {
+  country_code: string;
+  score: number;          // 0–100
+  conflict_ratio: number;
+  total_events: number;
+}
+ 
+export interface TopThreatCountriesResponse {
+  count: number;
+  data: ThreatCountryEntry[];
+}
+ 

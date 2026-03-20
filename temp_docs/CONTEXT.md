@@ -4,70 +4,6 @@
 
 ---
 
-## Session Findings & Roadmap (March 20, 2026)
-
-### Status Update
-- **Data Enrichment**: Hot-tier Parquet schema updated. Now includes `themes`, `persons`, `organizations`, `mentions_count`, and `avg_confidence`.
-- **Map Visualization**:
-    - Fixed "artificial grid" by increasing `grid_precision` dynamically.
-    - Fixed "missing points" at high zoom by delaying detailed transition to level 12 and using high-precision bins (~1m) for aggregated centroids.
-- **Map Stability Hardening**:
-    - Frontend map requests now pass abort signals so superseded viewport requests are cancelled.
-    - BBOX refresh now occurs on map move-end to reduce transient viewport churn.
-    - Detail click path now includes fallback event selection from clicked feature properties.
-    - Frontend query cache uses zoom-adaptive BBOX snapping and 2-minute staleTime to reduce backend hits.
-    - Backend `map.py` now has an in-process TTL response cache (60s agg, 120s detail).
-    - `get_event_details` now accepts `min_mentions` parameter — zoom-scaled filtering reduces DuckDB scan work and payload size at detail zoom.
-- **Backend Concurrency Hardening**:
-    - DuckDB repository serializes all shared-connection calls with a lock.
-    - `/health` BigQuery connectivity probe cached for 60 seconds.
-- **Daily Ingestion Improvements**:
-    - `scripts/daily_bq_pull.py` now joins Events + Mentions + GKG using URL-filtered GKG fetch (matching only known SOURCEURLs and mention URLs), reducing GKG scan from 500MB to ~50MB.
-    - GKG match rate improved from ~8% (SOURCEURL-only join) to ~50-70% (via Mentions.MentionIdentifier bridge).
-    - Added `--date YYYY-MM-DD` and `--backfill-days N` (max 7) CLI arguments.
-- **System Stability**: Frontend build restored; backend multi-query ingestion implemented.
-
-### Current Known Issues
-1. **LLM Analysis endpoint (`/events/{id}/analyze`) is returning "ANALYSIS FAILED"** — the `llm_analysis_service.py` or `scraper_service.py` is broken. Needs investigation. This is visible in the UI as "FAILED TO FETCH" under the Analysis section.
-2. **GKG match rate is ~50-70%** — events with no matching GKG article will have empty `themes`, `persons`, `organizations`. Frontend already handles this gracefully but it means enrichment is not universal.
-
-### Pending Tasks — Next Priority Order
-1. **Fix LLM analysis endpoint** — investigate `llm_analysis_service.py` and `scraper_service.py`, confirm Groq API key is set and working.
-2. **Surface unused columns** — `QuadClass`, `Actor1Type1Code`, `Actor2Type1Code`, `EventCode` are stored in Parquet but never returned to the frontend. See Section 17 for full plan.
-3. **Intelligence panel redesign** — replace raw codes with human-readable labels, add country risk score, add event timeline chart. See Section 17.
-4. **Conflict forecasting panel** — Prophet forecasts are precomputed nightly but no frontend UI consumes them yet.
-5. **Spark/HDFS evidence** — still pending for Big Data report. See Section 9.
-
----
-
-## Change Log (March 2026)
-
-- **BigQuery safety hardening completed**
-- **Scan budget enforcement implemented**
-- **Hot-tier repository added**
-- **Settings and startup robustness improved**
-- **Hot/cold routing and cold-tier policy enforcement completed**
-- **Backend verification expanded — 55 tests passing**
-- **Priority 1 ingestion scripts completed**
-- **Frontend runtime controls added**
-- **BigQuery partition pruning correction completed**
-- **Map data rendering and aggregation stability fixes completed**
-- **Frontend map readability and drill-down interaction improved**
-- **LLM model defaults updated**
-- **Map rendering and interaction stability fixes**
-- **Frontend build and TypeScript configuration restored**
-- **Geopolitical intelligence enriched with GKG and Mentions**
-- **Map query lifecycle and backend stability hardening completed**
-- **Daily ingestion script enhancements completed**
-    - URL-filtered GKG fetch via Mentions bridge
-    - CLI backfill options added (`--date`, `--backfill-days`)
-- **Map performance hardening completed**
-    - Frontend BBOX snapping (zoom-adaptive grid), staleTime 2min, gcTime 10min
-    - Backend in-process TTL cache in `map.py`
-    - `min_mentions` zoom-scaled filter threaded through all layers: `map.py` → `get_events.py` → `routed_repository.py` → `duckdb_repository.py`
-
----
-
 ## 1. Project Identity
 
 **Full name:** Global News Intelligence & Event Monitoring System (GNIEM)
@@ -88,16 +24,13 @@ GDELT (Global Database of Events, Language, and Tone) is a free, open dataset th
 |---|---|---|
 | **Events** | Structured geopolitical events. CAMEO-coded actors, actions, locations, Goldstein scale, avg tone. ~60 columns. | BigQuery public dataset + 15-min CSV feed |
 | **GKG** (Global Knowledge Graph) | Semi-structured. Themes, persons, organizations, tone, source URLs per news article. | BigQuery public dataset |
-| **Mentions** | Each article that mentions each event. Confidence scores, article URLs. | BigQuery public dataset |
+| **Mentions** | Each article that mentions each event. Confidence scores, article URLs. | BigQuery public dataset (optional) |
 
 ### BigQuery identifiers (CRITICAL — these are the correct table refs)
 ```
-gdelt-bq.gdeltv2.events                     -- legacy non-partitioned table
-gdelt-bq.gdeltv2.events_partitioned         -- DAY-partitioned (recommended)
-gdelt-bq.gdeltv2.gkg                        -- legacy non-partitioned table
-gdelt-bq.gdeltv2.gkg_partitioned            -- DAY-partitioned
-gdelt-bq.gdeltv2.eventmentions              -- legacy non-partitioned table
-gdelt-bq.gdeltv2.eventmentions_partitioned  -- DAY-partitioned
+gdelt-bq.gdeltv2.events          -- partitioned by SQLDATE (YYYYMMDD integer, NOT a date type)
+gdelt-bq.gdeltv2.gkg             -- partitioned by DATE (YYYYMMDD integer)
+gdelt-bq.gdeltv2.eventmentions   -- partitioned by SQLDATE
 ```
 
 ### GDELT Events — key columns to SELECT (never SELECT *)
@@ -111,7 +44,7 @@ Actor1Geo_CountryCode, Actor2Geo_CountryCode,
 ActionGeo_CountryCode, ActionGeo_Lat, ActionGeo_Long,
 SOURCEURL
 ```
-**Do NOT select:** Actor1Name, Actor2Name, Actor1Geo_FullName, Actor2Geo_FullName, MentionDocLen, or any column not in the list above, unless explicitly required.
+**Do NOT select:** Actor1Name, Actor2Name, Actor1Geo_FullName, Actor2Geo_FullName, MentionDocLen, or any column not in the list above, unless explicitly required. Every extra column costs money in BigQuery.
 
 ### BigQuery query safety rules (MANDATORY)
 1. **Always filter by SQLDATE** using integer comparison: `WHERE SQLDATE >= 20250101`
@@ -121,18 +54,22 @@ SOURCEURL
 5. **Daily batch job max scan budget:** 2 GB per run (hard limit in code)
 6. **Fallback queries only:** BigQuery is only queried for dates older than 90 days. All recent data comes from local Parquet.
 
-### BigQuery scan cost analysis
+### BigQuery scan cost analysis (per table, per query type)
+
+**Critical distinction:** BigQuery charges per bytes *scanned*, not bytes returned. The partition filter limits scanning to only that day's rows (~250k events). Column pruning reduces bytes per row. The large "full table" numbers below only apply when you forget the partition filter.
+
+**Table sizes — full scan vs properly guarded daily batch:**
 
 | Table | Full table size | Full scan (no guards) | After col pruning + 1-day partition | Monthly (30 daily runs) |
 |---|---|---|---|---|
-| Events | ~63 GB | ~6 GB | **~45 MB/day** | ~1.35 GB |
-| EventMentions | ~104 GB | ~10 GB | **~8 MB/day** | ~240 MB |
-| GKG | ~3.6 TB | ~7.7 GB | **~459 MB/day** (URL-filtered) | ~14 GB |
-| **All 3 combined** | | | | **~15.6 GB/month = ~1.6% of free quota** |
+| Events | ~63 GB | ~6 GB | **~7–15 MB/day** | ~300 MB |
+| EventMentions | ~104 GB | ~10 GB | **~20–40 MB/day** | ~900 MB |
+| GKG | ~3.6 TB | ~7.7 GB | **~200–500 MB/day** (blob cols) | ~12 GB |
+| **All 3 combined** | | | | **~13–15 GB/month = ~1.5% of free quota** |
 
-**GKG is uniquely dangerous.** Without the DATE partition filter, one GKG query scans the full 3.6 TB table = ~$17.50 instantly.
+**GKG is uniquely dangerous despite the small daily number.** Without the DATE partition filter, one GKG query scans the full 3.6 TB table = ~$17.50 instantly. The `dry_run=True` guard and `BQ_MAX_SCAN_BYTES` env var exist specifically for this.
 
-**Cold tier scan costs (Events only):**
+**Cold tier scan costs (Events only, spans multiple day-partitions):**
 
 | Date range requested | Events scan per query | Safe? |
 |---|---|---|
@@ -141,10 +78,18 @@ SOURCEURL
 | 90 days | ~600 MB–1.5 GB | ✓ Yes |
 | All history (no filter!) | ~63 GB | ✗ Never |
 
+**Monthly budget breakdown (normal operation):**
+- Hot tier batch jobs (all 3 tables, daily): ~15 GB/month
+- Cold tier user queries (Events only, 3/user/month × ~10 users, 30-day window): ~15 GB/month
+- Total: ~30 GB — **3% of free 1 TB quota — $0**
+- Worst case (100 users all hitting cold tier): ~160 GB — still $0
+
 ### 15-minute CSV feed (near-realtime — free, no BigQuery)
+GDELT publishes new CSVs every 15 minutes at:
 ```
 http://data.gdeltproject.org/gdeltv2/lastupdate.txt
 ```
+This file lists the 3 latest file URLs (Events, Mentions, GKG). Download, parse, append to hot tier. This is the velocity source for the 5V argument.
 
 ---
 
@@ -183,7 +128,7 @@ http://data.gdeltproject.org/gdeltv2/lastupdate.txt
 - Request for data **older than 90 days** → BigQuery cold tier, **Events table only**, max 30-day window per query, max 3 queries per user per month
 - AI briefing request → serve pre-computed JSON cache; fall back to live Groq API if cache miss
 - Conflict forecast request → serve pre-computed Parquet results (never on-demand Prophet)
-- **GKG is NEVER queried through the cold tier** — GKG only accessed during daily hot tier batch job
+- **GKG is NEVER queried through the cold tier** — GKG only accessed during nightly hot tier batch job
 
 ---
 
@@ -206,11 +151,11 @@ http://data.gdeltproject.org/gdeltv2/lastupdate.txt
 | 15-min CSV fetcher | systemd timer | — |
 | Nightly AI jobs | cron (3am UTC) | — |
 
-**Not running on VM:** Airflow, Kafka, Spark, Redis, PostgreSQL.
+**Not running on VM:** Airflow, Kafka, Spark, Redis, PostgreSQL. These are not needed and would OOM the instance.
 
 ### Scaling strategy
 **Current (100 users):** Single VM, no load balancer, Nginx handles all traffic directly.
-**At 5,000 users:** Manual scaling — upgrade VM to e2-standard-4, expand disk to 200 GB, add GCP Regional External Load Balancer. This is deliberate manual scaling, not auto-scaling or containerization.
+**At 5,000 users:** Manual scaling — upgrade VM to e2-standard-4, expand disk to 200 GB, add GCP Regional External Load Balancer. This is deliberate manual scaling, not auto-scaling or containerization. Do not describe it as containerized scaling in any report.
 
 ### Frontend
 - **Framework:** React + Vite + TypeScript
@@ -231,34 +176,35 @@ http://data.gdeltproject.org/gdeltv2/lastupdate.txt
 
 ### Daily BigQuery batch job (`scripts/daily_bq_pull.py`)
 - Runs at 2am UTC via cron
-- Pulls one day at a time using partition-pruned queries against Events, EventMentions, and GKG
-- **Join strategy:** Events → Mentions (for `mentions_count`, `avg_confidence`, and `mention_urls`) → GKG (URL-filtered using both SOURCEURL and Mentions.MentionIdentifier as candidates)
-- GKG match rate: ~50–70% of events get themes/persons/organizations enrichment
-- Supports CLI modes:
-    - `python scripts/daily_bq_pull.py` (default: yesterday)
-    - `python scripts/daily_bq_pull.py --date YYYY-MM-DD` (single date, max 7 days back)
-    - `python scripts/daily_bq_pull.py --backfill-days N` (up to 7 days, oldest first)
-- Appends to `/data/hot_tier/events_YYYYMM.parquet` (one file per month)
+- Queries previous day's GDELT events (SQLDATE = yesterday integer)
+- Column-pruned to the exact list in Section 2
+- Appends to `/data/hot_tier/events_YYYYMM.parquet` using PyArrow
 - Hard limit: abort if estimated bytes > 2 GB
+- On failure: logs error, sends no alert (check logs manually)
+- CLI: `python scripts/daily_bq_pull.py --backfill-days 7` to bootstrap 7 days at once
 
 ### 15-minute CSV fetcher (`scripts/realtime_fetcher.py`)
 - Runs every 15 min via systemd timer
 - Fetches `lastupdate.txt`, parses the Events CSV URL
+- Downloads, decompresses, parses into DataFrame
 - Deduplicates by GLOBALEVENTID against last 1000 rows of hot tier
 - Appends to `/data/hot_tier/realtime_buffer.parquet`
+- Buffer is merged into monthly Parquet nightly
 
 ### Nightly AI jobs (`scripts/nightly_ai.py`)
-- **Prophet forecasting:** Top 50 countries, 30-day forecast. Output: `/data/cache/forecasts.parquet`
-- **Groq briefings:** Top 30 countries, last 7 days. Output: `/data/cache/briefings.json`
+- **Prophet forecasting:** Runs on hot tier aggregated by country + day, forecasts 30 days ahead for top 50 countries by event volume. Output: `/data/cache/forecasts.parquet`
+- **Groq briefings:** For top 30 countries, sends last 7 days of event summary to Groq Llama 3 70B, stores result in `/data/cache/briefings.json`
 - Runs at 3am UTC (after batch pull completes)
+- **Must be run after backfilling** to get proper 30-day forecast horizon. With only 1-2 days of data Prophet will produce a very short forecast.
 
 ### Cold tier rules (MANDATORY — do not relax these)
+
 1. **Events table only** — never query GKG or EventMentions through the cold tier.
-2. **Maximum 30-day date window per cold query**
-3. **Maximum 3 cold queries per user per month**
+2. **Maximum 30-day date window per cold query** — enforce in the API layer before the query is built.
+3. **Maximum 3 cold queries per user per month** — track in a lightweight counter.
 4. **Always use `dry_run=True`** before executing any cold query. Abort if estimated bytes > 2 GB.
-5. **Cache cold results** — keyed by request shape hash, stored as Parquet.
-6. **Cold results are Events-only** — no GKG enrichment on cold tier data.
+5. **Cache cold results** — after a cold query runs, cache the result as a Parquet file keyed by `{country_code}_{start_date}_{end_date}`.
+6. **Result of cold queries is Events-only data** — do not attempt to enrich cold results with GKG themes/persons/orgs.
 
 ---
 
@@ -267,37 +213,56 @@ http://data.gdeltproject.org/gdeltv2/lastupdate.txt
 ```
 backend/
 ├── api/
-│   ├── main.py               # FastAPI app, lifespan, CORS, middleware
-│   ├── request_context.py    # Request-scoped user identity for quota accounting
+│   ├── main.py               # FastAPI app, lifespan, CORS
 │   ├── routers/
-│   │   ├── events.py         # GET /events, /events/region/{cc}, /events/counts
-│   │   ├── analytics.py      # GET /analytics/clusters, /analytics/forecast
-│   │   ├── map.py            # GET /events/map — zoom-aware, TTL-cached, min_mentions filter
+│   │   ├── events.py         # GET /events, /events/region/{cc}, /events/counts, /events/region/{cc}/risk-score
+│   │   ├── analytics.py      # GET /analytics/clusters, /analytics/forecast/{cc}
+│   │   ├── map.py            # GET /events/map (zoom-adaptive, TTL cache)
 │   │   └── health.py         # GET /health, /health/settings
-│   └── schemas/
-│       └── schemas.py        # Pydantic response models
+│   └── schemas/schemas.py    # Pydantic response models
 ├── application/
 │   └── use_cases/
-│       ├── get_events.py     # get_map_event_details now accepts min_mentions
+│       ├── get_events.py
 │       ├── cluster_events.py
 │       ├── forecast_events.py
 │       └── analyze_event.py
 ├── domain/
-│   ├── models/
-│   │   └── event.py
-│   └── ports/
-│       └── ports.py
+│   ├── models/event.py       # Event, EventFilter, ForecastResult, Briefing, MapEventDetail
+│   └── ports/ports.py        # IEventRepository, IAIService interfaces
 └── infrastructure/
-    ├── config/
-    │   └── settings.py
+    ├── config/settings.py
     ├── data_access/
+    │   ├── duckdb_repository.py   # Hot tier queries — per-query fresh connections (no shared lock)
     │   ├── bigquery_client.py
-    │   ├── gdelt_repository.py
-    │   ├── duckdb_repository.py  # get_event_details now accepts min_mentions
-    │   └── routed_repository.py  # get_event_details now accepts min_mentions
+    │   ├── gdelt_repository.py    # Cold tier BigQuery queries
+    │   └── routed_repository.py   # Routes hot/cold, enforces cold-tier policy
     └── services/
-        ├── llm_analysis_service.py  # ⚠️ BROKEN — analyze endpoint failing
-        └── scraper_service.py       # ⚠️ BROKEN — needs investigation
+        ├── llm_analysis_service.py
+        └── scraper_service.py
+```
+
+### Key API endpoints
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/events/map` | Zoom-adaptive map data (aggregated or detailed) |
+| GET | `/api/v1/events/region/{cc}` | Events for a country |
+| GET | `/api/v1/events/region/{cc}/risk-score` | Country risk score (hot-tier DuckDB only) |
+| GET | `/api/v1/events/region/{cc}/stats` | Top themes, persons, orgs for a country |
+| GET | `/api/v1/events/counts/{cc}` | Daily event counts for charting |
+| GET | `/api/v1/analytics/forecast/{cc}` | Prophet conflict forecast |
+| GET | `/api/v1/analytics/clusters` | TF-IDF + KMeans event clusters |
+| GET | `/api/v1/events/{id}/analyze` | LLM deep analysis of a single event |
+| GET | `/api/v1/health` | Service health check |
+| GET | `/api/v1/health/settings` | Runtime settings |
+
+### Key dependencies
+```
+fastapi, uvicorn, pydantic-settings
+duckdb
+google-cloud-bigquery, pyarrow, pandas
+scikit-learn (TF-IDF + KMeans clustering)
+prophet (time-series forecasting)
+httpx (async HTTP for CSV feed)
 ```
 
 ### Environment variables (`.env`)
@@ -307,14 +272,43 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 GDELT_DATASET=gdelt-bq.gdeltv2
 HOT_TIER_PATH=/data/hot_tier
 CACHE_PATH=/data/cache
-HOT_TIER_CUTOFF_DAYS=90
-COLD_TIER_MAX_WINDOW_DAYS=30
-COLD_TIER_MONTHLY_QUERY_LIMIT=3
 GROQ_API_KEY=
 MAPBOX_TOKEN=
 ENVIRONMENT=production
 BQ_MAX_SCAN_BYTES=2000000000
 ```
+
+### DuckDB concurrency pattern (IMPORTANT)
+DuckDB connections are **not** shared across threads. Each query opens a fresh `:memory:` connection, queries the parquet glob, and closes immediately. This allows FastAPI's thread pool to run multiple DuckDB queries in parallel without lock contention. Do NOT reintroduce a shared `self._conn` + `threading.Lock()` pattern — it caused all Regional Dossier queries (5 simultaneous) to serialize and appear stuck.
+
+```python
+def _query(self, sql: str, params: list[Any]) -> list[dict[str, Any]]:
+    conn = duckdb.connect(database=":memory:", read_only=False)
+    try:
+        result = conn.execute(sql, params)
+        columns = [col[0] for col in (result.description or [])]
+        values = result.fetchall()
+    finally:
+        conn.close()
+    return [dict(zip(columns, row)) for row in values]
+```
+
+### Country Risk Score endpoint
+- **Route:** `GET /api/v1/events/region/{country_code}/risk-score`
+- **Hot-tier only** — calls `DuckDbRepository.get_risk_score()` directly, never routes through `RoutedRepository`
+- **Formula (0–100, higher = more dangerous):**
+```python
+def compute_risk_score(conflict_ratio, avg_goldstein, avg_tone) -> int:
+    goldstein_score = max(0, min(100, ((-avg_goldstein + 10) / 20) * 100))
+    tone_score = max(0, min(100, ((-avg_tone + 30) / 60) * 100))
+    conflict_score = conflict_ratio * 100
+    return round(conflict_score * 0.4 + goldstein_score * 0.35 + tone_score * 0.25)
+```
+- Color coding: green < 30, amber 30–60, red > 60
+
+### Known data quality issues
+- `mentions_count` can be `None` in rows where the Mentions join had no match during `daily_bq_pull.py`. Always coerce: `int(row.get("mentions_count") or 0)` — do NOT use `row.get("mentions_count", 0)` which passes `None` through.
+- GDELT `ActionGeo_CountryCode` uses FIPS codes, not ISO-2. Some values are regional aggregates (e.g. `WE` = Western Europe) rather than real countries. The map cluster click uses this code for `setSelectedCountry` — it works for real country codes but regional codes will return empty dossiers.
 
 ---
 
@@ -322,26 +316,70 @@ BQ_MAX_SCAN_BYTES=2000000000
 
 ```
 frontend/src/
-├── App.tsx
 ├── components/
-│   ├── map/
-│   │   └── GlobalEventMap.tsx   # Mapbox map, zoom-adaptive BBOX snapping, TTL cache
+│   ├── map/GlobalEventMap.tsx       # Mapbox map, zoom-adaptive, BBOX snapping
 │   └── tables/
-│       ├── IntelligencePanel.tsx # Event + regional dossier panel (⚠️ analysis broken)
-│       └── SystemControlPanel.tsx
+│       ├── IntelligencePanel.tsx    # Event Intelligence + Regional Dossier panel
+│       └── SystemControlPanel.tsx   # Health, runtime settings, controls
+├── lib/
+│   └── gdelt-lookups.ts             # QUAD_CLASS_LABELS, CAMEO_ROOT_LABELS,
+│                                    # ACTOR_TYPE_LABELS, cleanGkgTheme()
 ├── services/
-│   └── api.ts                   # Typed API client with AbortSignal support
+│   └── api.ts                       # Typed API client (all fetch calls here)
 ├── store/
-│   └── useStore.ts
+│   └── useStore.ts                  # Zustand store
 └── types/
-    └── index.ts
+    └── index.ts                     # TypeScript interfaces for all API responses
 ```
 
-### Map behavior
-- **Zoom < 9:** Aggregated heatmap + intensity circles. Click drills down to zoom 9.2.
-- **Zoom ≥ 9:** Individual event circles. `min_mentions` filter scales with zoom (zoom 9 → min 3, zoom 11+ → min 1).
-- **BBOX snapping:** zoom < 4 → 5° grid, zoom 4–8 → 1° grid, zoom 8–11 → 0.2° grid, zoom 11+ → 0.05° grid.
-- **Cache:** React Query staleTime 2min, gcTime 10min. Backend TTL cache 60s (agg) / 120s (detail).
+### IntelligencePanel — two modes
+**Event Intelligence** (when `selectedEvent` is set):
+- QuadClass badge (colored by conflict type)
+- Goldstein context bar with label
+- CAMEO event type human-readable label
+- Actor display with type lookup
+- GKG themes (cleaned via `cleanGkgTheme()`), persons, organizations
+- LLM Analyze button → calls `/events/{id}/analyze`
+
+**Regional Dossier** (when `selectedCountry` is set, `selectedEvent` is null):
+- Threat Level score card (0–100, color-coded)
+- Event Frequency chart (Recharts LineChart, last 14 days, cyan)
+- Conflict Forecast — 30 Day (Recharts AreaChart, red uncertainty band + predicted line)
+- Top Regional Themes (cleaned GKG themes with counts)
+- Key Entities — People
+- Active Organizations
+- Top Events in Sector (clickable, transitions to Event Intelligence view)
+
+### Zustand store — critical ordering rule
+When handling aggregate cluster clicks in `GlobalEventMap.tsx`, **always call `setSelectedEvent(null)` BEFORE `setSelectedCountry(code)`**. The `setSelectedEvent` action resets `selectedCountry` to `null` as a side effect — calling it after `setSelectedCountry` wipes the country selection.
+
+```tsx
+// CORRECT order in onMapClick aggregate handler:
+setSelectedEvent(null);               // must be first
+setSelectedCountry(props.country_code); // must be second
+```
+
+### GKG theme cleanup (`cleanGkgTheme` in `gdelt-lookups.ts`)
+Strips machine-readable prefixes from raw GDELT GKG theme codes. Prefixes handled (order matters):
+`WB_\d+_`, `CRISISLEX_C\d+_`, `CRISISLEX_`, `FNCACT_`, `EPU_POLICY_`, `EPU_`, `SOC_`, `ENV_`, `ECON_`, `MED_`, `TAX_`, `USPEC_`, `UNGP_`
+
+Always deduplicate themes before rendering: `[...new Set(themes)].slice(0, 6)`
+
+### Frontend types (`types/index.ts`)
+All API response types are defined here. Key additions:
+- `RiskScoreResponse` — score, trend, conflict_ratio, avg_goldstein, avg_tone, total_events
+- `ForecastPoint` — date, predicted_count, lower_bound, upper_bound
+- `ForecastResponse` — country_code, horizon_days, model_type, historical_summary, predictions
+
+### API service (`services/api.ts`)
+All fetch calls go through `apiService`. Key methods:
+- `getMapData()` — map endpoint
+- `getEventsByRegion()` — regional events
+- `getRegionalStats()` — themes/persons/orgs aggregation
+- `getRiskScore(cc, startDate, endDate)` — country risk score
+- `getForecast(cc)` — Prophet forecast
+- `analyzeEvent(id)` — LLM analysis
+- `getHealth()` / `getRuntimeSettings()` — diagnostics
 
 ---
 
@@ -351,18 +389,20 @@ frontend/src/
 - Input: SOURCEURL strings from hot tier, last 7 days
 - Pipeline: `TfidfVectorizer(max_features=500)` → `KMeans(n_clusters=10)`
 - Output: 10 semantic clusters with top terms
-- Runs on-demand (cached 1 hour)
+- Runs on-demand (cached for 1 hour per request)
 
 ### Conflict forecasting (Prophet)
-- Input: daily event counts per country, QuadClass 3+4 only
-- Output: 30-day forecast with uncertainty intervals
-- Pre-computed nightly for top 50 countries
-- **⚠️ Frontend UI for forecasting not yet built** — data exists in `/data/cache/forecasts.parquet` but nothing renders it
+- Input: daily event counts per country, filtered to QuadClass 3+4 (conflict events)
+- Output: 30-day forecast with uncertainty intervals (lower_bound, upper_bound)
+- Pre-computed nightly for top 50 countries via `scripts/nightly_ai.py`
+- On-demand for others (slow, cached after first run)
+- **Requires at least 7 days of hot-tier data** for meaningful output. With 1–2 days Prophet produces a near-flat forecast. Run `--backfill-days 7` then re-run nightly_ai.py.
+- Forecast displayed in Regional Dossier as a red AreaChart with uncertainty band
 
-### LLM briefings (Groq Llama 3 70B / llama-3.1-8b-instant)
+### LLM briefings (Groq Llama 3 70B)
+- Prompt: "Summarize the geopolitical situation in {country} based on these recent events..."
 - Pre-generated nightly for top 30 countries
-- On-demand fallback for others
-- **⚠️ On-demand analyze endpoint currently broken** — see Section 6
+- On-demand fallback for others (Groq free tier: fast, <1s)
 
 ---
 
@@ -373,15 +413,16 @@ frontend/src/
 | **Volume** | GDELT Events: 3.5B+ rows, 2TB+ in BigQuery. Local hot tier: ~40 GB Parquet. | BigQuery table info screenshot + `du -sh /data/hot_tier` |
 | **Velocity** | 15-min CSV fetcher: new data every 15 minutes, logged with timestamps. | systemd timer logs, last-updated timestamp in UI |
 | **Variety** | Events (structured CAMEO), GKG (semi-structured themes/orgs), SOURCEURL (unstructured). | Schema screenshots of all 3 tables |
-| **Veracity** | Deduplication by GLOBALEVENTID, NumMentions threshold, GoldsteinScale sanity check. | Spark job output: before/after row counts |
+| **Veracity** | Deduplication by GLOBALEVENTID, cross-mention threshold (NumMentions ≥ 3), GoldsteinScale sanity check (-10 to +10). | Spark job output: before/after row counts |
 | **Value** | Conflict forecasts, semantic clustering, LLM country briefings, geospatial map. | Live demo at URL |
 
-### Spark/HDFS local evidence (STILL PENDING — needed for reports)
+### Phase 1 local evidence (Hadoop/Spark on WSL)
+For the Dataset Documentation and AI Requirements reports, you need screenshots and metrics from running Spark locally:
 1. Download 1 month of GDELT Events CSVs (~2 GB)
 2. Store in HDFS: `hdfs dfs -put gdelt_events/ /gdelt/raw/`
 3. Run Spark job: deduplicate by GLOBALEVENTID, drop nulls, cast types, write Parquet
 4. Capture: Spark UI screenshot, job DAG, input/output row counts, processing time
-5. Screenshots go in Dataset Documentation report under "Tools and Technologies Used"
+5. These screenshots go in the Dataset Documentation report under "Tools and Technologies Used" and "5V Perspective"
 
 ---
 
@@ -397,7 +438,7 @@ frontend/src/
 | AI / LLM | Groq free tier | Llama 3 70B | $0 | ₹0 | 14,400 req/day free |
 | **Total** | | | **$58.92** | **₹4,960** | **Offset to ₹0 by $300 credits (~5 months)** |
 
-**At 5,000 users:** ~₹11,560/month (~$137.69) — e2-standard-4, 200 GB disk, Regional Load Balancer
+**At 5,000 users:** ~₹11,560/month (~$137.69) — upgrade to e2-standard-4, 200 GB disk, add Regional Load Balancer
 
 ---
 
@@ -407,9 +448,10 @@ frontend/src/
 |---|---|
 | **Apache Kafka** | No streaming source. GDELT publishes batch CSVs, not an event stream. |
 | **Apache Airflow** | Scheduler + webserver + workers consume ~2 GB RAM alone. OOMs the VM. Use cron. |
-| **Apache Spark (cloud)** | Overkill for single-node 40 GB Parquet. DuckDB is faster. Spark is only for Phase 1 local evidence. |
+| **Apache Spark (cloud)** | Overkill for single-node 40 GB Parquet. DuckDB is faster and uses 0 extra RAM overhead. Spark is only for Phase 1 local evidence. |
 | **Cloud SQL / PostgreSQL** | $30+/month for a managed DB we don't need. DuckDB handles all OLAP in-process. |
 | **Redis** | Not needed. DuckDB metadata caches in memory automatically. |
+| **Shared DuckDB connection + threading.Lock** | Causes all parallel dashboard queries to serialize. Use per-query fresh connections instead. |
 
 ---
 
@@ -417,18 +459,43 @@ frontend/src/
 
 **URL:** https://github.com/ArceusOmkar7/gdelt_global_news_trends
 
+Current state (as of March 2026):
+- Phase 1 (backend foundation): complete
+- Phase 2 (AI analytics): complete — KMeans/TF-IDF clustering, Prophet forecasting
+- Phase 3 (frontend): complete and working
+  - GlobalEventMap with zoom-adaptive rendering, BBOX snapping, heatmap + event layers
+  - IntelligencePanel — Event Intelligence view (QuadClass badge, Goldstein bar, CAMEO labels, actors, GKG insights, LLM analysis)
+  - IntelligencePanel — Regional Dossier view (risk score, event frequency chart, conflict forecast chart, themes, entities, orgs, top events)
+  - SystemControlPanel with health monitoring and runtime settings
+  **UI Phase 4 — Dashboard ambient intelligence (planned, not yet built)**
+   See Section 15 for full spec.
+- **Known remaining work:** Spark/HDFS academic evidence (WSL, not blocking), GCP deployment, Nginx config
+
 ---
 
 ## 13. Quick reference — common tasks
 
-**Run DuckDB hot tier query:**
+**Fix BigQuery query (most urgent):**
+Add `WHERE SQLDATE >= {int(yesterday.strftime('%Y%m%d'))}` and explicit column SELECT to all queries in `gdelt_repository.py`. Add `dry_run=True` cost check before executing.
+
+**Bootstrap hot tier (first time or after VM wipe):**
+```bash
+python scripts/daily_bq_pull.py --backfill-days 7
+python scripts/nightly_ai.py   # after backfill to get proper forecasts
+```
+
+**Set up DuckDB hot tier query (per-query connection pattern):**
 ```python
 import duckdb
-conn = duckdb.connect()
-result = conn.execute(
-    "SELECT * FROM read_parquet('/data/hot_tier/*.parquet') WHERE ActionGeo_CountryCode = ? AND SQLDATE >= ?",
-    [country_code, start_date_int]
-).fetchdf()
+conn = duckdb.connect(database=":memory:")
+try:
+    result = conn.execute(
+        "SELECT * FROM read_parquet('/data/hot_tier/*.parquet') WHERE ActionGeo_CountryCode = ? AND SQLDATE >= ?",
+        [country_code, start_date_int]
+    )
+    rows = result.fetchdf()
+finally:
+    conn.close()
 ```
 
 **Run BigQuery safely:**
@@ -438,316 +505,169 @@ client = bigquery.Client()
 query = """
     SELECT GLOBALEVENTID, SQLDATE, ActionGeo_CountryCode, ActionGeo_Lat, ActionGeo_Long,
            QuadClass, GoldsteinScale, NumMentions, AvgTone, SOURCEURL
-    FROM `gdelt-bq.gdeltv2.events_partitioned`
-    WHERE _PARTITIONDATE = '2026-03-19' AND SQLDATE = 20260319
+    FROM `gdelt-bq.gdeltv2.events`
+    WHERE SQLDATE >= 20250101 AND SQLDATE < 20250201
 """
 job_config = bigquery.QueryJobConfig(dry_run=True)
 dry = client.query(query, job_config=job_config)
 assert dry.total_bytes_processed < 2_000_000_000, "Query too large!"
+# Then run for real
 ```
 
-**Backfill hot tier:**
-```bash
-PYTHONPATH=. python scripts/daily_bq_pull.py --backfill-days 7
-```
-
----
-
-## 14. Current File Status
-
-| File | Status | Notes |
-|---|---|---|
-| `backend/infrastructure/data_access/gdelt_repository.py` | 🟢 FIXED | Partition filters, column pruning |
-| `backend/infrastructure/data_access/bigquery_client.py` | 🟢 FIXED | dry_run guard + scan budget |
-| `backend/infrastructure/data_access/duckdb_repository.py` | 🟢 UPDATED | `get_event_details` accepts `min_mentions` |
-| `backend/infrastructure/data_access/routed_repository.py` | 🟢 UPDATED | `get_event_details` accepts `min_mentions`, passes through all route paths |
-| `backend/application/use_cases/get_events.py` | 🟢 UPDATED | `get_map_event_details` accepts and passes `min_mentions` |
-| `backend/api/routers/map.py` | 🟢 UPDATED | In-process TTL cache, zoom-scaled `min_mentions` and `detail_limit` |
-| `backend/api/request_context.py` | 🟢 ADDED | Request-scoped user identity |
-| `backend/infrastructure/config/settings.py` | 🟢 UPDATED | Runtime tier settings |
-| `backend/api/main.py` | 🟢 UPDATED | Routed repository + middleware + cold policy handler |
-| `backend/api/routers/events.py` | 🟢 ROUTED | No direct BigQuery dependency |
-| `backend/api/routers/analytics.py` | 🟢 ROUTED | Via routed repository |
-| `backend/api/routers/health.py` | 🟢 UPDATED | Hot-tier diagnostics + settings endpoint |
-| `backend/infrastructure/services/llm_analysis_service.py` | 🔴 BROKEN | Analyze endpoint returning 500 |
-| `backend/infrastructure/services/scraper_service.py` | 🔴 BROKEN | Needs investigation |
-| `scripts/daily_bq_pull.py` | 🟢 UPDATED | Events+Mentions+GKG join, URL-filtered GKG, CLI args |
-| `scripts/realtime_fetcher.py` | 🟢 ADDED | 15-min CSV ingestion |
-| `scripts/nightly_ai.py` | 🟢 UPDATED | Forecasts + briefings precompute |
-| `frontend/src/components/map/GlobalEventMap.tsx` | 🟢 UPDATED | BBOX snapping, staleTime 2min, gcTime 10min |
-| `frontend/src/` | 🟢 BUILDS | TypeScript config restored |
-
----
-
-## 15. Known Edge Cases
-
-1. **Per-user cold quota identity is coarse** — IP fallback means users behind NAT share quota.
-2. **Cold query counter is file-based and process-local** — not safe across multiple Uvicorn workers.
-3. **Cold cache has no TTL/LRU cleanup** — files grow over time.
-4. **GKG match rate is ~50-70%** — events with no GKG match have empty themes/persons/organizations.
-5. **Parquet hot tier only has data for days the script was actually run** — not automatically backfilled. Run `--backfill-days 7` manually after first deployment.
-
----
-
-## 16. What Next (Execution Order)
-
-### Priority 1 — Fix broken analyze endpoint
-- Investigate `llm_analysis_service.py` and `scraper_service.py`
-- Confirm `GROQ_API_KEY` is set in `.env`
-- Check what the actual 500 error is in the backend logs
-
-### Priority 2 — Surface unused data (see Section 17 for full plan)
-- Add `QuadClass`, `Actor1Type1Code`, `Actor2Type1Code`, `EventCode` to `MapEventDetail` domain model and API schema
-- Add these to `_row_to_map_detail` in `duckdb_repository.py`
-- Add these to the `SELECT` list in `get_event_details` SQL query
-- Update `MapEventDetailResponse` schema in `schemas.py`
-- Update `Event` and `MapEventDetail` types in `frontend/src/types/index.ts`
-
-### Priority 3 — Intelligence panel redesign (see Section 17)
-- CAMEO code → human-readable label lookup
-- QuadClass → color + label (Verbal Cooperation / Material Cooperation / Verbal Conflict / Material Conflict)
-- Country risk score card (DuckDB aggregation)
-- Event timeline chart (Recharts, uses existing `/events/counts/{cc}` endpoint)
-- Conflict forecasting panel (uses existing `/analytics/forecast/{cc}` endpoint)
-
-### Priority 4 — Ops and deployment hygiene
-- Add systemd unit + timer files for 15-minute fetcher
-- Add cron examples for daily and nightly jobs
-- Add cache cleanup job for `CACHE_PATH/cold_queries`
-
-### Priority 5 — Spark/HDFS academic evidence
-- Run on WSL, capture screenshots and job DAGs for Big Data report
-
----
-
-## 17. Unused Data & Intelligence Panel Redesign Plan
-
-This section documents exactly what data is available but not yet used, and the full plan to surface it. **This is the primary feature work for the next session.**
-
-### 17.1 Columns stored in Parquet but not returned to frontend
-
-| Column | Currently used | Value if surfaced |
-|---|---|---|
-| `QuadClass` | ✗ stored, never returned | Most important — 1=Verbal Coop, 2=Material Coop, 3=Verbal Conflict, 4=Material Conflict. Use for map dot color and risk score. |
-| `Actor1Type1Code` | ✗ stored, never returned | Actor type: GOV, MIL, REB, CVL, etc. Needed for bilateral tension tracker and actor breakdown. |
-| `Actor2Type1Code` | ✗ stored, never returned | Same as above for Actor 2. |
-| `EventCode` | ✓ stored, returned in `get_events` only | More specific than EventRootCode. "141" = demonstrate vs "145" = hunger strike. |
-| `EventBaseCode` | ✗ stored, never returned | Mid-level CAMEO code. Useful for grouping. |
-| `Actor1Geo_CountryCode` | ✗ stored, never returned | Where Actor 1 is from. Different from ActionGeo (where event happened). Needed for bilateral tracker. |
-| `Actor2Geo_CountryCode` | ✗ stored, never returned | Same for Actor 2. |
-| `MonthYear` | ✗ stored, never used | Not needed — derivable from SQLDATE. |
-| `Year` | ✗ stored, never used | Not needed — derivable from SQLDATE. |
-| `avg_confidence` | ✓ stored, returned, but not displayed in frontend | Show in media reach section. |
-| `mentions_count` | ✓ stored, returned, but not displayed in frontend | Show in media reach section. |
-
-### 17.2 Backend changes needed to surface unused columns
-
-**Step 1 — Add to domain model** (`backend/domain/models/event.py`):
-Add `quad_class`, `actor1_type_code`, `actor2_type_code`, `event_code` to `MapEventDetail`.
-
-**Step 2 — Add to DuckDB SELECT** (`backend/infrastructure/data_access/duckdb_repository.py`):
-In `get_event_details` SQL, add to the SELECT list:
-```sql
-QuadClass,
-Actor1Type1Code AS actor1_type_code,
-Actor2Type1Code AS actor2_type_code,
-EventCode,
-Actor1Geo_CountryCode,
-Actor2Geo_CountryCode,
-```
-
-**Step 3 — Add to `_row_to_map_detail`** in the same file:
+**Fetch latest GDELT CSV:**
 ```python
-quad_class=row.get("QuadClass"),
-actor1_type_code=row.get("actor1_type_code"),
-actor2_type_code=row.get("actor2_type_code"),
-event_code=row.get("EventCode"),
-actor1_geo_country_code=row.get("Actor1Geo_CountryCode"),
-actor2_geo_country_code=row.get("Actor2Geo_CountryCode"),
+import httpx, io, zipfile, pandas as pd
+r = httpx.get("http://data.gdeltproject.org/gdeltv2/lastupdate.txt")
+events_url = [l for l in r.text.strip().split('\n') if 'export.CSV' in l][0].split()[-1]
+zdata = httpx.get(events_url).content
+with zipfile.ZipFile(io.BytesIO(zdata)) as z:
+    df = pd.read_csv(z.open(z.namelist()[0]), sep='\t', header=None)
 ```
 
-**Step 4 — Add to API schema** (`backend/api/schemas/schemas.py`):
-Add same fields to `MapEventDetailResponse`.
+---
 
-**Step 5 — Add to frontend types** (`frontend/src/types/index.ts`):
-Add same fields to the `Event` interface.
+## 14. Session handoff notes
 
-### 17.3 CAMEO and QuadClass lookup tables (for frontend display)
+### To start the next session
+1. Share the latest `ingest.txt` (full codebase dump) before writing any code
+2. Always read actual file contents before making edits — the summary may be out of sync
 
-These are static lookup tables the frontend should embed — no API call needed.
+### What's working (as of March 2026)
+- Full backend: FastAPI, DuckDB hot tier, BigQuery cold tier, RoutedRepository, all endpoints
+- Full frontend: map, Event Intelligence panel, Regional Dossier panel, system controls
+- Data pipeline: daily_bq_pull.py, realtime_fetcher.py, nightly_ai.py all written and tested
+- LLM analysis: Groq + scraper working end-to-end
 
-**QuadClass lookup:**
-```ts
-const QUAD_CLASS_LABELS: Record<number, { label: string; color: string }> = {
-  1: { label: 'Verbal Cooperation',  color: '#00f3ff' },  // teal
-  2: { label: 'Material Cooperation', color: '#00ff41' }, // green
-  3: { label: 'Verbal Conflict',      color: '#ffdc00' }, // amber
-  4: { label: 'Material Conflict',    color: '#ff003c' }, // red
-};
-```
+### What's next
+1. **GCP VM deployment** — copy code to VM, set up systemd services, Nginx reverse proxy, SSL
+2. **Vercel deployment** — set `VITE_API_URL` to VM's public IP, deploy frontend
+3. **Spark/HDFS academic evidence** — WSL only, for Dataset Documentation report screenshots
+4. **Written reports** — Cloud Cost Estimation, AI Requirements, Dataset Documentation
 
-**CAMEO EventRootCode lookup (top 20 most common):**
-```ts
-const CAMEO_ROOT_LABELS: Record<string, string> = {
-  '01': 'Make Public Statement',
-  '02': 'Appeal',
-  '03': 'Express Intent to Cooperate',
-  '04': 'Consult',
-  '05': 'Engage in Diplomatic Cooperation',
-  '06': 'Engage in Material Cooperation',
-  '07': 'Provide Aid',
-  '08': 'Yield',
-  '09': 'Investigate',
-  '10': 'Demand',
-  '11': 'Disapprove',
-  '12': 'Reject',
-  '13': 'Threaten',
-  '14': 'Protest',
-  '15': 'Exhibit Military Posture',
-  '16': 'Reduce Relations',
-  '17': 'Coerce',
-  '18': 'Assault',
-  '19': 'Fight',
-  '20': 'Use Unconventional Mass Violence',
-};
-```
 
-**Actor type code lookup:**
-```ts
-const ACTOR_TYPE_LABELS: Record<string, string> = {
-  'GOV': 'Government',
-  'MIL': 'Military',
-  'REB': 'Rebel',
-  'MED': 'Media',
-  'NGO': 'NGO',
-  'IGO': 'Intergovernmental Org',
-  'CVL': 'Civilian',
-  'OPP': 'Political Opposition',
-  'BUS': 'Business',
-  'CRM': 'Criminal',
-  'UAF': 'Unaffiliated Armed Forces',
-  'AGR': 'Agriculture',
-  'EDU': 'Education',
-  'ELI': 'Elite',
-  'ENV': 'Environment',
-  'HLH': 'Health',
-  'LAB': 'Labor',
-  'LEG': 'Legislature',
-  'REL': 'Religion',
-  'SOC': 'Social',
-  'SPY': 'Intelligence',
-  'JUD': 'Judiciary',
-  'MOD': 'Moderate',
-  'RAD': 'Radical',
-  'REF': 'Refugee',
-  'SET': 'Settler',
-  'VET': 'Veteran',
-};
-```
+## 15. UI Phase 4 — Dashboard Ambient Intelligence (Planned)
 
-### 17.4 Intelligence Panel redesign — what to build
+These features make the default map state feel alive without requiring the user
+to click anything. All are collapsible panels. Priority order is fixed.
 
-**Current state (what the panel shows):**
-- Raw numbers: Goldstein -2.0, Tone -2.5, Mentions 1, Sources 1
-- Raw code: CAMEO Root Code "09"
-- Raw code: Actor 1 "IND"
-- Raw GKG theme codes: `WB_696_PUBLIC_SECTOR_MANAGEMENT`, `EPU_POLICY_REGULATORY`
+### 15.1 Global Stats Ticker (Priority 1)
+A thin bar fixed to the bottom of the map. Scrolls or cycles through live
+aggregated numbers computed on page load from a single DuckDB call.
 
-**Problem:** Raw codes, no narrative, no context for what numbers mean, no country-level summary.
+**New backend endpoint needed:**
+GET /api/v1/events/global-pulse
+Returns: { total_events_today: int, most_active_country: str,
+           most_hostile_country: str, avg_global_tone: float,
+           global_conflict_ratio: float, most_active_count: int }
 
-**Target state — Event Intelligence panel should show:**
-
-1. **QuadClass badge** — large colored badge: "MATERIAL CONFLICT" in red or "VERBAL COOPERATION" in teal. This is the first thing a user should see.
-
-2. **CAMEO label** — instead of "09", show "Investigate" with the code in smaller text below.
-
-3. **Actor display** — instead of "IND", show the country flag emoji + full name + actor type label. E.g. "🇮🇳 India — Government" using the `Actor1Type1Code` lookup.
-
-4. **Goldstein context** — add a mini progress bar from -10 to +10 with the value marked. Add a label: "Moderately Destabilizing" for -2.0 to -5.0 range.
-
-5. **GKG themes** — strip the `WB_`, `EPU_`, `SOC_` prefixes and convert underscores to spaces. `WB_696_PUBLIC_SECTOR_MANAGEMENT` → "Public Sector Management". Show top 5 only.
-
-6. **Media reach** — show `mentions_count` and `avg_confidence` as a media reach indicator, not just raw numbers.
-
-**Target state — Regional Dossier panel should show:**
-
-1. **Country risk score card** — a 0–100 score derived from a DuckDB aggregation over the selected date range:
-   - Formula: `score = (conflict_ratio * 40) + (avg_goldstein_normalized * 30) + (avg_tone_normalized * 20) + (media_spike * 10)`
-   - This requires a new backend endpoint: `GET /events/region/{cc}/risk-score?start_date=&end_date=`
-   - Color: green < 30, amber 30–60, red > 60
-
-2. **Event timeline chart** — daily event count line chart using Recharts. Data from existing `/events/counts/{cc}` endpoint. Show last 14 days. Color conflict events (QuadClass 3+4) separately from cooperation (1+2).
-
-3. **Actor breakdown** — pie or bar chart: what % of events involve MIL vs GOV vs REB actors. Uses `Actor1Type1Code` from the new enriched detail endpoint.
-
-4. **Top event types** — horizontal bar chart of top 5 CAMEO root codes with human-readable labels.
-
-5. **Conflict forecast** — line chart using existing `/analytics/forecast/{cc}` endpoint. Show next 30 days with uncertainty band. **Data already exists, just needs a UI.**
-
-### 17.5 New backend endpoint needed: Country Risk Score
-
-This is a single DuckDB aggregation query — not a BigQuery query.
-
-```
-GET /api/v1/events/region/{country_code}/risk-score
-Query params: start_date, end_date
-Returns: { score: float, trend: "improving"|"stable"|"worsening", conflict_ratio: float, avg_goldstein: float, avg_tone: float, total_events: int }
-```
-
-DuckDB query:
-```sql
+DuckDB query (single pass):
 SELECT
     COUNT(*) AS total_events,
-    SUM(CASE WHEN QuadClass IN (3, 4) THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS conflict_ratio,
-    AVG(GoldsteinScale) AS avg_goldstein,
-    AVG(AvgTone) AS avg_tone,
-    SUM(NumMentions) AS total_mentions
+    MODE(ActionGeo_CountryCode) AS most_active_country,
+    AVG(AvgTone) AS avg_global_tone,
+    SUM(CASE WHEN QuadClass IN (3,4) THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS conflict_ratio
 FROM read_parquet('/data/hot_tier/*.parquet')
-WHERE ActionGeo_CountryCode = ?
-  AND SQLDATE >= ?
-  AND SQLDATE < ?
-```
+WHERE SQLDATE >= ? AND SQLDATE < ?
 
-Score formula (0–100, higher = more dangerous):
-```python
-def compute_risk_score(conflict_ratio, avg_goldstein, avg_tone):
-    # conflict_ratio: 0.0–1.0, higher = more conflict
-    # avg_goldstein: -10 to +10, more negative = more conflict
-    # avg_tone: typically -30 to +30, more negative = more hostile
-    goldstein_score = max(0, min(100, ((-avg_goldstein + 10) / 20) * 100))
-    tone_score = max(0, min(100, ((-avg_tone + 30) / 60) * 100))
-    conflict_score = conflict_ratio * 100
-    return round(conflict_score * 0.4 + goldstein_score * 0.35 + tone_score * 0.25)
-```
+"Most hostile" requires a second grouped query — top country by lowest avg AvgTone.
+Cache this response for 60 seconds in-process (same pattern as map.py TTL cache).
 
----
+Frontend: fixed bottom bar, font-mono, cyber-blue, items separated by  ·  divider.
+Collapsible — a small chevron toggles it. Persisted in Zustand.
+staleTime: 60s, refetchInterval: 60s.
 
-## 18. GKG Theme Code Cleanup (for frontend display)
+### 15.2 Top 5 Countries by Threat Level (Priority 2)
+A collapsible card in the left sidebar (below Mission Parameters).
+Shows 5 countries with their risk scores as colored progress bars.
+Clicking a row calls setSelectedCountry() — opens the Regional Dossier.
 
-GKG theme codes look like `WB_696_PUBLIC_SECTOR_MANAGEMENT` or `EPU_POLICY_REGULATORY` or `SOC_GENERALCRIME`. These are machine-readable codes, not human labels.
+**New backend endpoint needed:**
+GET /api/v1/events/top-threat-countries?limit=5
+Returns: [{ country_code: str, score: int, conflict_ratio: float, total_events: int }]
 
-**Cleanup function for frontend:**
-```ts
-function cleanGkgTheme(raw: string): string {
-  // Remove known prefixes
-  const prefixes = ['WB_\\d+_', 'EPU_', 'SOC_', 'ENV_', 'ECON_', 'MED_', 'TAX_'];
-  let clean = raw;
-  for (const prefix of prefixes) {
-    clean = clean.replace(new RegExp(`^${prefix}`), '');
-  }
-  // Convert underscores to spaces, title case
-  return clean
-    .replace(/_/g, ' ')
-    .toLowerCase()
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
+DuckDB query:
+SELECT
+    ActionGeo_CountryCode AS country_code,
+    COUNT(*) AS total_events,
+    SUM(CASE WHEN QuadClass IN (3,4) THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS conflict_ratio,
+    AVG(GoldsteinScale) AS avg_goldstein,
+    AVG(AvgTone) AS avg_tone
+FROM read_parquet('/data/hot_tier/*.parquet')
+WHERE SQLDATE >= ? AND SQLDATE < ?
+  AND ActionGeo_CountryCode IS NOT NULL
+  AND ActionGeo_CountryCode != ''
+GROUP BY ActionGeo_CountryCode
+ORDER BY total_events DESC
+LIMIT 50   -- fetch top 50 by volume, compute risk score in Python, then return top 5
 
-// Example:
-// WB_696_PUBLIC_SECTOR_MANAGEMENT → "Public Sector Management"
-// EPU_POLICY_REGULATORY → "Policy Regulatory"
-// TAX_WEAPONS_BOMB → "Weapons Bomb"
-// SOC_GENERALCRIME → "Generalcrime"  (not perfect but readable)
-```
+Compute risk score for each row in Python using existing compute_risk_score(),
+sort descending, return top 5.
+Cache in-process for 120 seconds.
 
-Apply this in `IntelligencePanel.tsx` when rendering the themes list.
+Frontend: glass-panel card, collapsible. Each row shows:
+  [country_code]  [colored score bar 0-100]  [score number]
+Color: green < 30, amber 30-60, red > 60.
+Clicking a row: setSelectedCountry(country_code).
+staleTime: 2min.
 
+### 15.3 Country Choropleth Layer (Priority 3)
+Color countries on the Mapbox map by risk score using a Mapbox fill layer.
+Requires a static countries GeoJSON bundled in the frontend (~500 KB).
+Source: https://github.com/datasets/geo-countries (public domain)
+
+On load: fetch top-threat-countries endpoint (reuses Priority 2 endpoint) with
+limit=50 to get scores for the top 50 countries by event volume.
+Build a Mapbox paint expression that maps country ISO codes to colors.
+
+GDELT uses FIPS country codes, not ISO-2. Need a FIPS→ISO mapping table
+(~250 entries, static JSON in frontend/src/lib/fips-to-iso.ts).
+Countries with no data: transparent / very dark fill.
+
+Layer sits below the heatmap and circle layers. Opacity ~0.3 so map labels
+remain readable. Toggle button on the map ("CHOROPLETH ON/OFF").
+
+### 15.4 Breaking: High Activity Spike Alerts (Priority 4)
+Detect countries whose last-24h event count is ≥ 2× their 7-day rolling average.
+Show pulsing alert cards overlaid on the map (absolute positioned, top-left area,
+below Mission Parameters panel).
+
+**New backend endpoint needed:**
+GET /api/v1/events/activity-spikes
+Returns: [{ country_code: str, today_count: int, baseline_avg: float, ratio: float }]
+
+DuckDB query (two aggregations):
+-- today
+SELECT ActionGeo_CountryCode, COUNT(*) AS today_count
+FROM read_parquet(...)
+WHERE SQLDATE = {today_int} AND ActionGeo_CountryCode IS NOT NULL
+GROUP BY ActionGeo_CountryCode
+
+-- 7-day baseline
+SELECT ActionGeo_CountryCode, COUNT(*) * 1.0 / 7 AS daily_avg
+FROM read_parquet(...)
+WHERE SQLDATE >= {seven_days_ago_int} AND SQLDATE < {today_int}
+  AND ActionGeo_CountryCode IS NOT NULL
+GROUP BY ActionGeo_CountryCode
+
+Join in Python, filter where today_count / daily_avg >= 2.0, sort by ratio desc,
+return top 5 spikes. Cache 5 minutes.
+
+Frontend: each alert is a small pulsing card with cyber-red border.
+Shows: "⚠ {CC} — {ratio:.1f}× normal activity"
+Clicking opens Regional Dossier for that country.
+Entire alert stack is collapsible. refetchInterval: 5min.
+
+### 15.5 UI Refactor — Settings Modal (All Priorities)
+The SystemControlPanel (Runtime Controls + System Health + Backend Runtime Settings)
+should move into a Settings modal triggered by a gear icon button in the header.
+The left sidebar should only contain: Mission Parameters, Top Threat Countries card,
+and the Spike Alerts stack.
+
+Settings modal contents (same data, new location):
+- Map Auto-Refresh toggle + fetch interval
+- Health polling interval  
+- System Health status
+- Backend Runtime Settings (all the BQ cap / cron / cutoff numbers)
+
+The modal uses the same glass-panel / font-mono aesthetic.
+A single ⚙ SETTINGS button in the header (top-right area) opens it.

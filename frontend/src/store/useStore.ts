@@ -32,6 +32,12 @@ interface DashboardState {
   setFetchIntervalSeconds: (seconds: number) => void;
   healthPollIntervalSeconds: number;
   setHealthPollIntervalSeconds: (seconds: number) => void;
+
+  // UI State
+  tickerCollapsed: boolean;
+  setTickerCollapsed: (v: boolean) => void;
+  threatCardCollapsed: boolean;
+  setThreatCardCollapsed: (v: boolean) => void;
 }
 
 const getSevenDaysAgo = () => {
@@ -89,4 +95,9 @@ export const useStore = create<DashboardState>((set) => ({
   healthPollIntervalSeconds: 60,
   setHealthPollIntervalSeconds: (healthPollIntervalSeconds) =>
     set({ healthPollIntervalSeconds: Math.max(10, Math.min(healthPollIntervalSeconds, 300)) }),
+
+  tickerCollapsed: false,
+  setTickerCollapsed: (tickerCollapsed) => set({ tickerCollapsed }),
+  threatCardCollapsed: false,
+  setThreatCardCollapsed: (threatCardCollapsed) => set({ threatCardCollapsed }),
 }));
