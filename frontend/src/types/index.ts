@@ -8,6 +8,12 @@ export interface Event {
   action_geo_long?: number;
   actor1_country_code?: string;
   actor2_country_code?: string;
+  quad_class?: number;
+  actor1_type_code?: string;
+  actor2_type_code?: string;
+  event_code?: string;
+  actor1_geo_country_code?: string;
+  actor2_geo_country_code?: string;
   event_root_code?: string;
   goldstein_scale?: number;
   num_mentions: number;

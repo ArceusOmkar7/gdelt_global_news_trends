@@ -155,6 +155,12 @@ class MapEventDetailResponse(BaseModel):
     actor1_country_code: str | None = None
     actor2_country_code: str | None = None
     event_root_code: str | None = None
+    quad_class: int | None = None
+    actor1_type_code: str | None = None
+    actor2_type_code: str | None = None
+    event_code: str | None = None
+    actor1_geo_country_code: str | None = None
+    actor2_geo_country_code: str | None = None
     goldstein_scale: float | None = None
     num_mentions: int = 0
     num_sources: int = 0
@@ -229,3 +235,14 @@ class RuntimeSettingsResponse(BaseModel):
     realtime_fetch_interval_minutes: int
     daily_batch_cron_utc: str
     nightly_ai_cron_utc: str
+
+
+class RiskScoreResponse(BaseModel):
+    """Risk score response for a country and date range."""
+
+    score: int
+    trend: str = "stable"
+    conflict_ratio: float
+    avg_goldstein: float | None = None
+    avg_tone: float | None = None
+    total_events: int

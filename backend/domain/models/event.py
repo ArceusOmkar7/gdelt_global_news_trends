@@ -245,6 +245,12 @@ class MapEventDetail(BaseModel):
     source_url: str | None = None
     actor1_type: str | None = None
     actor2_type: str | None = None
+    quad_class: int | None = None
+    actor1_type_code: str | None = None
+    actor2_type_code: str | None = None
+    event_code: str | None = None
+    actor1_geo_country_code: str | None = None
+    actor2_geo_country_code: str | None = None
     themes: list[str] = []
     persons: list[str] = []
     organizations: list[str] = []

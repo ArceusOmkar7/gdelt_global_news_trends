@@ -6,7 +6,7 @@ delegates to the use case, and maps domain models to response schemas.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -18,10 +18,13 @@ from backend.api.schemas.schemas import (
     EventFilterRequest,
     EventListResponse,
     EventResponse,
+    RiskScoreResponse,
 )
 from backend.application.use_cases.analyze_event import AnalyzeEventUseCase
 from backend.application.use_cases.get_events import GetEventsUseCase
 from backend.domain.models.event import EventFilter
+from backend.infrastructure.config.settings import settings
+from backend.infrastructure.data_access.duckdb_repository import DuckDbRepository, compute_risk_score
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -86,6 +89,42 @@ def events_by_region(
     )
     data = [EventResponse.model_validate(e.model_dump()) for e in events]
     return EventListResponse(count=len(data), data=data)
+
+
+@router.get(
+    "/region/{country_code}/risk-score",
+    response_model=RiskScoreResponse,
+    summary="Country risk score",
+    description="Compute a country risk score from hot-tier DuckDB data.",
+)
+def country_risk_score(
+    country_code: str,
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+) -> RiskScoreResponse:
+    end = end_date or date.today()
+    start = start_date or (end - timedelta(days=7))
+
+    repository = DuckDbRepository(settings)
+    metrics = repository.get_risk_score(
+        country_code=country_code,
+        start_date=start,
+        end_date=end,
+    )
+    score = compute_risk_score(
+        metrics["conflict_ratio"],
+        metrics["avg_goldstein"],
+        metrics["avg_tone"],
+    )
+
+    return RiskScoreResponse(
+        score=score,
+        trend="stable",
+        conflict_ratio=metrics["conflict_ratio"],
+        avg_goldstein=metrics["avg_goldstein"],
+        avg_tone=metrics["avg_tone"],
+        total_events=metrics["total_events"],
+    )
 
 
 @router.get(

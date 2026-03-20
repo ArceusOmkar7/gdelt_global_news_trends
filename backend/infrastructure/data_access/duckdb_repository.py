@@ -28,6 +28,20 @@ from backend.infrastructure.config.settings import Settings
 logger = structlog.get_logger(__name__)
 
 
+def compute_risk_score(conflict_ratio, avg_goldstein, avg_tone) -> int:
+    # conflict_ratio: 0.0–1.0, higher = more conflict
+    # avg_goldstein: -10 to +10, more negative = more conflict
+    # avg_tone: typically -30 to +30, more negative = more hostile
+    conflict_ratio = float(conflict_ratio or 0.0)
+    avg_goldstein = float(avg_goldstein) if avg_goldstein is not None else 0.0
+    avg_tone = float(avg_tone) if avg_tone is not None else 0.0
+
+    goldstein_score = max(0, min(100, ((-avg_goldstein + 10) / 20) * 100))
+    tone_score = max(0, min(100, ((-avg_tone + 30) / 60) * 100))
+    conflict_score = conflict_ratio * 100
+    return round(conflict_score * 0.4 + goldstein_score * 0.35 + tone_score * 0.25)
+
+
 class DuckDbRepositoryError(Exception):
     """Raised when hot-tier DuckDB repository preconditions are not met."""
 
@@ -319,6 +333,12 @@ class DuckDbRepository(IEventRepository):
                 Actor1CountryCode,
                 Actor2CountryCode,
                 EventRootCode,
+                QuadClass,
+                Actor1Type1Code AS actor1_type_code,
+                Actor2Type1Code AS actor2_type_code,
+                EventCode,
+                Actor1Geo_CountryCode,
+                Actor2Geo_CountryCode,
                 GoldsteinScale,
                 NumMentions,
                 NumSources,
@@ -376,6 +396,49 @@ class DuckDbRepository(IEventRepository):
         if not rows:
             return None
         return self._row_to_event(rows[0])
+
+    def get_risk_score(
+        self,
+        country_code: str,
+        start_date: date,
+        end_date: date,
+    ) -> dict[str, Any]:
+        start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
+
+        sql = f"""
+            SELECT
+                COUNT(*) AS total_events,
+                CASE
+                    WHEN COUNT(*) = 0 THEN 0.0
+                    ELSE SUM(CASE WHEN QuadClass IN (3, 4) THEN 1 ELSE 0 END) * 1.0 / COUNT(*)
+                END AS conflict_ratio,
+                AVG(GoldsteinScale) AS avg_goldstein,
+                AVG(AvgTone) AS avg_tone,
+                COALESCE(SUM(NumMentions), 0) AS total_mentions
+            FROM read_parquet('{self._parquet_glob}')
+            WHERE ActionGeo_CountryCode = ?
+              AND SQLDATE >= ?
+              AND SQLDATE < ?
+        """
+
+        rows = self._query(sql, [country_code.upper(), start_int, end_exclusive_int])
+        if not rows:
+            return {
+                "total_events": 0,
+                "conflict_ratio": 0.0,
+                "avg_goldstein": None,
+                "avg_tone": None,
+                "total_mentions": 0,
+            }
+
+        row = rows[0]
+        return {
+            "total_events": int(row.get("total_events") or 0),
+            "conflict_ratio": float(row.get("conflict_ratio") or 0.0),
+            "avg_goldstein": row.get("avg_goldstein"),
+            "avg_tone": row.get("avg_tone"),
+            "total_mentions": int(row.get("total_mentions") or 0),
+        }
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -479,6 +542,12 @@ class DuckDbRepository(IEventRepository):
             actor1_country_code=row.get("Actor1CountryCode"),
             actor2_country_code=row.get("Actor2CountryCode"),
             event_root_code=row.get("EventRootCode"),
+            quad_class=row.get("QuadClass"),
+            actor1_type_code=row.get("actor1_type_code"),
+            actor2_type_code=row.get("actor2_type_code"),
+            event_code=row.get("EventCode"),
+            actor1_geo_country_code=row.get("Actor1Geo_CountryCode"),
+            actor2_geo_country_code=row.get("Actor2Geo_CountryCode"),
             goldstein_scale=row.get("GoldsteinScale"),
             num_mentions=row.get("NumMentions", 0),
             num_sources=row.get("NumSources", 0),

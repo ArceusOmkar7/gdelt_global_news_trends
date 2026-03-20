@@ -2,6 +2,20 @@ import React from 'react';
 import { useStore } from '../../store/useStore';
 import { apiService } from '../../services/api';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import {
+  QUAD_CLASS_LABELS,
+  CAMEO_ROOT_LABELS,
+  ACTOR_TYPE_LABELS,
+  cleanGkgTheme,
+} from '../../lib/gdelt-lookups';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from 'recharts';
 import { 
   X, 
   ExternalLink, 
@@ -39,6 +53,40 @@ export const IntelligencePanel: React.FC = () => {
     enabled: !!selectedCountry && !selectedEvent,
   });
 
+  const regionalRiskScoreQuery = useQuery({
+    queryKey: ['regional-risk-score', selectedCountry, dateRange],
+    queryFn: async () => {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+      const params = new URLSearchParams({
+        start_date: dateRange[0],
+        end_date: dateRange[1],
+      });
+      const response = await fetch(`${baseUrl}/events/region/${selectedCountry}/risk-score?${params}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch risk score: ${response.statusText}`);
+      }
+      return response.json();
+    },
+    enabled: !!selectedCountry && !selectedEvent,
+  });
+
+  const regionalCountsQuery = useQuery({
+    queryKey: ['regional-event-counts', selectedCountry, dateRange],
+    queryFn: async () => {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+      const params = new URLSearchParams({
+        start_date: dateRange[0],
+        end_date: dateRange[1],
+      });
+      const response = await fetch(`${baseUrl}/events/counts/${selectedCountry}?${params}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch event counts: ${response.statusText}`);
+      }
+      return response.json();
+    },
+    enabled: !!selectedCountry && !selectedEvent,
+  });
+
   const analyzeMutation = useMutation({
     mutationFn: (eventId: number) => apiService.analyzeEvent(eventId),
     onSuccess: (data) => {
@@ -58,6 +106,14 @@ export const IntelligencePanel: React.FC = () => {
     if (sentiment === 'Positive') return 'text-terminal-green';
     if (sentiment === 'Negative') return 'text-cyber-red';
     return 'text-cyber-blue';
+  };
+
+  const getGoldsteinLabel = (value: number): string => {
+    if (value < -5) return 'Highly Destabilizing';
+    if (value < -2) return 'Moderately Destabilizing';
+    if (value <= 2) return 'Neutral';
+    if (value <= 5) return 'Moderately Stabilizing';
+    return 'Stabilizing';
   };
 
   return (
@@ -89,6 +145,21 @@ export const IntelligencePanel: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
         {selectedEvent ? (
           <>
+            {selectedEvent.quad_class != null && QUAD_CLASS_LABELS[selectedEvent.quad_class] && (
+              <section className="pt-1">
+                <span
+                  className="inline-flex items-center px-3 py-1 rounded border font-mono text-[11px] uppercase tracking-wide"
+                  style={{
+                    color: QUAD_CLASS_LABELS[selectedEvent.quad_class].color,
+                    borderColor: `${QUAD_CLASS_LABELS[selectedEvent.quad_class].color}66`,
+                    backgroundColor: `${QUAD_CLASS_LABELS[selectedEvent.quad_class].color}14`,
+                  }}
+                >
+                  {QUAD_CLASS_LABELS[selectedEvent.quad_class].label}
+                </span>
+              </section>
+            )}
+
             {/* Core Metrics */}
             <section className="grid grid-cols-2 gap-4">
               <div className="bg-surface-900/40 p-3 rounded panel-border">
@@ -121,6 +192,30 @@ export const IntelligencePanel: React.FC = () => {
               </div>
             </section>
 
+            {/* Goldstein Context */}
+            <section className="bg-surface-900/30 p-4 rounded panel-border space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="data-ink">Goldstein Context</span>
+                <span className={`text-[11px] font-mono ${
+                  (selectedEvent.goldstein_scale || 0) < 0 ? 'text-cyber-red' : 'text-terminal-green'
+                }`}>
+                  {(selectedEvent.goldstein_scale || 0).toFixed(1)} / [-10, +10]
+                </span>
+              </div>
+              <div className="relative h-2 rounded bg-white/10 overflow-hidden">
+                <div
+                  className="absolute top-0 h-full w-[2px] bg-cyber-blue"
+                  style={{
+                    left: `${Math.max(0, Math.min(100, (((selectedEvent.goldstein_scale || 0) + 10) / 20) * 100))}%`,
+                    transform: 'translateX(-1px)',
+                  }}
+                />
+              </div>
+              <div className="text-[11px] font-mono text-white/70">
+                {getGoldsteinLabel(selectedEvent.goldstein_scale || 0)}
+              </div>
+            </section>
+
             {/* Location & Date */}
             <section className="space-y-4">
               <div className="flex items-start gap-3">
@@ -137,9 +232,14 @@ export const IntelligencePanel: React.FC = () => {
               <div className="flex items-start gap-3">
                 <Activity size={18} className="text-cyber-blue mt-0.5" />
                 <div>
-                  <span className="data-ink">CAMEO Root Code</span>
-                  <div className="text-sm font-mono mt-1">
-                    {selectedEvent.event_root_code || 'UNSPECIFIED'}
+                  <span className="data-ink">CAMEO Event Type</span>
+                  <div className="text-sm font-mono mt-1 text-white">
+                    {selectedEvent.event_root_code
+                      ? (CAMEO_ROOT_LABELS[selectedEvent.event_root_code] || selectedEvent.event_root_code)
+                      : 'UNSPECIFIED'}
+                  </div>
+                  <div className="text-[10px] font-mono text-white/40 mt-1">
+                    CODE: {selectedEvent.event_root_code || 'N/A'}
                   </div>
                 </div>
               </div>
@@ -152,41 +252,31 @@ export const IntelligencePanel: React.FC = () => {
                 <span className="data-ink">Key Actors</span>
               </div>
               <div className="grid grid-cols-1 gap-3">
-                {(selectedEvent.actor1_country_code || selectedEvent.actor1_type) && (
+                {(selectedEvent.actor1_country_code || selectedEvent.actor1_type || selectedEvent.actor1_type_code) && (
                   <div className="flex flex-col gap-1">
                     <span className="text-[10px] text-white/40 uppercase font-mono">Actor 1</span>
-                    <div className="flex gap-2">
-                      {selectedEvent.actor1_country_code && (
-                        <span className="px-2 py-1 bg-surface-900/60 rounded text-xs font-mono panel-border">
-                          {selectedEvent.actor1_country_code}
-                        </span>
-                      )}
-                      {selectedEvent.actor1_type && (
-                        <span className="px-2 py-1 bg-cyber-blue/10 text-cyber-blue rounded text-xs font-mono border border-cyber-blue/20">
-                          {selectedEvent.actor1_type}
-                        </span>
-                      )}
+                    <div className="text-xs font-mono text-white/90">
+                      {(selectedEvent.actor1_country_code || 'UNK')}
+                      {' — '}
+                      {selectedEvent.actor1_type_code
+                        ? (ACTOR_TYPE_LABELS[selectedEvent.actor1_type_code] || selectedEvent.actor1_type_code)
+                        : (selectedEvent.actor1_type || 'Unknown')}
                     </div>
                   </div>
                 )}
-                {(selectedEvent.actor2_country_code || selectedEvent.actor2_type) && (
+                {(selectedEvent.actor2_country_code || selectedEvent.actor2_type || selectedEvent.actor2_type_code) && (
                   <div className="flex flex-col gap-1">
                     <span className="text-[10px] text-white/40 uppercase font-mono">Actor 2</span>
-                    <div className="flex gap-2">
-                      {selectedEvent.actor2_country_code && (
-                        <span className="px-2 py-1 bg-surface-900/60 rounded text-xs font-mono panel-border">
-                          {selectedEvent.actor2_country_code}
-                        </span>
-                      )}
-                      {selectedEvent.actor2_type && (
-                        <span className="px-2 py-1 bg-cyber-blue/10 text-cyber-blue rounded text-xs font-mono border border-cyber-blue/20">
-                          {selectedEvent.actor2_type}
-                        </span>
-                      )}
+                    <div className="text-xs font-mono text-white/90">
+                      {(selectedEvent.actor2_country_code || 'UNK')}
+                      {' — '}
+                      {selectedEvent.actor2_type_code
+                        ? (ACTOR_TYPE_LABELS[selectedEvent.actor2_type_code] || selectedEvent.actor2_type_code)
+                        : (selectedEvent.actor2_type || 'Unknown')}
                     </div>
                   </div>
                 )}
-                {!selectedEvent.actor1_country_code && !selectedEvent.actor2_country_code && !selectedEvent.actor1_type && (
+                {!selectedEvent.actor1_country_code && !selectedEvent.actor2_country_code && !selectedEvent.actor1_type && !selectedEvent.actor1_type_code && !selectedEvent.actor2_type && !selectedEvent.actor2_type_code && (
                   <span className="text-white/30 text-xs font-mono">Anonymous Actors</span>
                 )}
               </div>
@@ -205,9 +295,9 @@ export const IntelligencePanel: React.FC = () => {
                     <div className="space-y-2">
                       <span className="text-[10px] text-white/40 uppercase font-mono">Top Themes</span>
                       <div className="flex flex-wrap gap-1">
-                        {selectedEvent.themes.slice(0, 12).map((theme, i) => (
+                        {selectedEvent.themes.slice(0, 6).map((theme, i) => (
                           <span key={i} className="px-2 py-0.5 bg-surface-900/40 rounded text-[10px] font-mono text-white/80 border border-white/5">
-                            {theme}
+                            {cleanGkgTheme(theme)}
                           </span>
                         ))}
                       </div>
@@ -342,6 +432,89 @@ export const IntelligencePanel: React.FC = () => {
               </div>
             ) : regionalStatsQuery.data ? (
               <>
+                <section className="space-y-3">
+                  <div className="data-ink text-cyber-blue uppercase tracking-wider text-xs">Threat Level</div>
+                  <div className="bg-surface-900/40 p-4 rounded panel-border">
+                    {regionalRiskScoreQuery.isLoading ? (
+                      <div className="text-[11px] font-mono text-white/40 uppercase">Calculating...</div>
+                    ) : regionalRiskScoreQuery.data ? (
+                      (() => {
+                        const score = Number(regionalRiskScoreQuery.data.score || 0);
+                        const scoreColor = score < 30
+                          ? 'text-terminal-green'
+                          : score <= 60
+                            ? 'text-amber-400'
+                            : 'text-cyber-red';
+                        return (
+                          <div className="flex items-end justify-between">
+                            <div className={`text-5xl font-bold font-mono ${scoreColor}`}>{score}</div>
+                            <div className="text-[10px] font-mono text-white/40 uppercase">0-100 Scale</div>
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <div className="text-[11px] font-mono text-white/40 uppercase">Unavailable</div>
+                    )}
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <div className="data-ink text-cyber-blue uppercase tracking-wider text-xs">Event Frequency</div>
+                  <div className="bg-surface-900/40 p-3 rounded panel-border h-[180px]">
+                    {regionalCountsQuery.isLoading ? (
+                      <div className="h-full flex items-center justify-center text-[11px] font-mono text-white/40 uppercase">
+                        Loading Timeline...
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={((regionalCountsQuery.data?.data || []) as Array<{ date: string; count: number }>)
+                            .slice(-14)
+                            .map((row) => ({
+                              ...row,
+                              shortDate: String(row.date).slice(5),
+                            }))}
+                          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                        >
+                          <XAxis
+                            dataKey="shortDate"
+                            stroke="rgba(255,255,255,0.35)"
+                            tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 10, fontFamily: 'monospace' }}
+                            tickLine={false}
+                            axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                          />
+                          <YAxis
+                            stroke="rgba(255,255,255,0.35)"
+                            tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 10, fontFamily: 'monospace' }}
+                            tickLine={false}
+                            width={30}
+                            axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              background: 'rgba(15, 23, 42, 0.95)',
+                              border: '1px solid rgba(14, 165, 233, 0.35)',
+                              borderRadius: 6,
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              color: '#e5e7eb',
+                            }}
+                            labelStyle={{ color: '#7dd3fc' }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="count"
+                            stroke="#06b6d4"
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 3, fill: '#06b6d4' }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </section>
+
                 <section className="space-y-4">
                   <div className="flex items-center gap-2">
                     <Globe size={16} className="text-terminal-green" />
@@ -350,7 +523,7 @@ export const IntelligencePanel: React.FC = () => {
                   <div className="flex flex-wrap gap-1.5">
                     {regionalStatsQuery.data.top_themes.map((t: any, i: number) => (
                       <div key={i} className="px-2 py-1 bg-surface-800/60 rounded border border-white/5 flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-white/90">{t.name}</span>
+                        <span className="text-[10px] font-mono text-white/90">{cleanGkgTheme(t.name)}</span>
                         <span className="text-[9px] font-mono text-terminal-green bg-terminal-green/10 px-1 rounded">{t.count}</span>
                       </div>
                     ))}
