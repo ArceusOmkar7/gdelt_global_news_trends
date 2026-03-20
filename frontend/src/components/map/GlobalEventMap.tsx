@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import Map, { Layer, Source } from 'react-map-gl/mapbox';
 import type { MapRef, MapMouseEvent } from 'react-map-gl/mapbox';
 import type { Feature, FeatureCollection, Point } from 'geojson';
@@ -12,11 +12,38 @@ const HAS_MAPBOX_TOKEN =
   typeof MAPBOX_ACCESS_TOKEN === 'string' && MAPBOX_ACCESS_TOKEN.trim().length > 0;
 const DETAIL_ZOOM_THRESHOLD = 9;
 
+// ── Snap helpers ──────────────────────────────────────────────────────────────
+// Round zoom to 1 decimal place. At low zoom (aggregated) this means the query
+// key only changes when grid_precision would change (every ~2 zoom levels in
+// practice). At high zoom (detailed) a 0.1 step is fine because the BBOX
+// filtering already limits the result set.
+function snapZoom(zoom: number): number {
+  return Math.round(zoom * 10) / 10;
+}
+
+// Snap BBOX coordinates to a grid so that small pans don't bust the React
+// Query cache. The grid size is zoom-adaptive:
+//   - Low zoom (world view): 5° grid  → ~500 km steps, rarely changes
+//   - Mid zoom (country view): 1° grid → ~100 km steps
+//   - High zoom (city view): 0.1° grid → ~10 km steps
+function snapBBox(
+  bbox: { n: number; s: number; e: number; w: number },
+  zoom: number
+): { n: number; s: number; e: number; w: number } {
+  const step = zoom < 4 ? 5 : zoom < 8 ? 1 : 0.1;
+  return {
+    n: Math.ceil(bbox.n / step) * step,
+    s: Math.floor(bbox.s / step) * step,
+    e: Math.ceil(bbox.e / step) * step,
+    w: Math.floor(bbox.w / step) * step,
+  };
+}
+
 export const GlobalEventMap: React.FC = () => {
-  const { 
-    viewState, 
-    setViewState, 
-    dateRange, 
+  const {
+    viewState,
+    setViewState,
+    dateRange,
     eventRootCode,
     setSelectedEvent,
     setSelectedCountry,
@@ -26,49 +53,49 @@ export const GlobalEventMap: React.FC = () => {
   const mapRef = useRef<MapRef>(null);
   const [mapBBox, setMapBBox] = useState({ n: 90, s: -90, e: 180, w: -180 });
 
-  // Helper to validate BBOX
-  const isValidBBox = (bbox: any) => {
-    return !Object.values(bbox).some(val => typeof val !== 'number' || isNaN(val));
-  };
+  const isValidBBox = (bbox: any) =>
+    !Object.values(bbox).some(val => typeof val !== 'number' || isNaN(val as number));
 
-  const updateBBox = () => {
+  const updateBBox = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (!map) return;
-
     const bounds = map.getBounds();
     if (!bounds) return;
-
-    const nextBBox = {
+    const next = {
       w: bounds.getWest(),
       s: bounds.getSouth(),
       e: bounds.getEast(),
-      n: bounds.getNorth()
+      n: bounds.getNorth(),
     };
+    if (isValidBBox(next)) setMapBBox(next);
+  }, []);
 
-    if (isValidBBox(nextBBox)) {
-      setMapBBox(nextBBox);
-    }
-  };
-
-  const queryZoom = Number(viewState.zoom.toFixed(2));
+  // ── Snapped query parameters ───────────────────────────────────────────────
+  // These are what goes into the React Query cache key. Snapping means many
+  // slightly-different viewports resolve to the same cache entry.
+  const queryZoom = snapZoom(viewState.zoom);
+  const queryBBox = snapBBox(mapBBox, queryZoom);
 
   const { data: mapResponse, isLoading, isFetching, isError, error } = useQuery({
-    queryKey: ['map-data', mapBBox, queryZoom, dateRange, eventRootCode],
+    queryKey: ['map-data', queryBBox, queryZoom, dateRange, eventRootCode],
     queryFn: async ({ signal }) => {
-      if (!isValidBBox(mapBBox)) return { zoom: queryZoom, is_aggregated: true, count: 0, data: [] };
-
-      const res = await apiService.getMapData(
-        mapBBox,
+      if (!isValidBBox(queryBBox))
+        return { zoom: queryZoom, is_aggregated: true, count: 0, data: [] };
+      return apiService.getMapData(
+        queryBBox,
         queryZoom,
         dateRange[0],
         dateRange[1],
         eventRootCode,
         signal
       );
-      return res;
     },
-    staleTime: 1000 * 15,
+    staleTime: 1000 * 60 * 2,   // 2 minutes — aggregated data doesn't change mid-session
+    gcTime:   1000 * 60 * 10,   // keep in memory for 10 minutes so back-navigation is free
+    placeholderData: (prev) => prev,  // keep showing last result while new one loads
   });
+
+  // ... rest of the component is UNCHANGED (memos, onMapClick, JSX)
 
   const aggregatedGeoJson = useMemo<FeatureCollection<Point, any> | null>(() => {
     if (!mapResponse?.is_aggregated || mapResponse.count === 0) return null;
