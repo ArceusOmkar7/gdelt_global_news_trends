@@ -143,6 +143,7 @@ class MapAggregationResponse(BaseModel):
     lat: float
     lon: float
     intensity: float
+    country_code: str | None = None
 
 
 class MapEventDetailResponse(BaseModel):
@@ -169,7 +170,7 @@ class MapEventDetailResponse(BaseModel):
 
 class MapDataResponse(BaseModel):
     """Unified response for the geospatial event map."""
-    zoom: int
+    zoom: float
     is_aggregated: bool
     count: int
     data: list[MapAggregationResponse] | list[MapEventDetailResponse]
@@ -201,6 +202,8 @@ class HotTierHealthDetail(BaseModel):
     available: bool
     parquet_files: int
     cutoff_days: int
+    total_rows: int = 0
+    last_updated_at: str | None = None
 
 
 class HealthResponse(BaseModel):

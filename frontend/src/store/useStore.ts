@@ -10,6 +10,8 @@ interface DashboardState {
   selectedEventId: number | null;
   selectedEvent: Event | null;
   setSelectedEvent: (event: Event | null) => void;
+  selectedCountry: string | null;
+  setSelectedCountry: (countryCode: string | null) => void;
   
   // Analysis State
   currentAnalysis: EventAnalysis | null;
@@ -58,7 +60,15 @@ export const useStore = create<DashboardState>((set) => ({
   setSelectedEvent: (event) => set({ 
     selectedEvent: event, 
     selectedEventId: event?.global_event_id || null,
-    currentAnalysis: null // Clear analysis when event changes
+    currentAnalysis: null,
+    selectedCountry: event?.action_geo_country_code || null
+  }),
+  selectedCountry: null,
+  setSelectedCountry: (countryCode) => set({ 
+    selectedCountry: countryCode,
+    selectedEvent: null,
+    selectedEventId: null,
+    currentAnalysis: null
   }),
   
   currentAnalysis: null,
@@ -76,7 +86,7 @@ export const useStore = create<DashboardState>((set) => ({
   fetchIntervalSeconds: 30,
   setFetchIntervalSeconds: (fetchIntervalSeconds) =>
     set({ fetchIntervalSeconds: Math.max(5, Math.min(fetchIntervalSeconds, 300)) }),
-  healthPollIntervalSeconds: 20,
+  healthPollIntervalSeconds: 60,
   setHealthPollIntervalSeconds: (healthPollIntervalSeconds) =>
     set({ healthPollIntervalSeconds: Math.max(10, Math.min(healthPollIntervalSeconds, 300)) }),
 }));

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from pathlib import Path
+import threading
 from typing import Any
 
 import duckdb
@@ -37,6 +38,7 @@ class DuckDbRepository(IEventRepository):
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._conn = duckdb.connect(database=":memory:")
+        self._conn_lock = threading.Lock()
         hot_tier_dir = Path(settings.hot_tier_path)
         self._parquet_glob = str(hot_tier_dir / "*.parquet")
 
@@ -49,6 +51,36 @@ class DuckDbRepository(IEventRepository):
             raise DuckDbRepositoryError(
                 f"No parquet files found in hot-tier path: {hot_tier_dir}"
             )
+
+    def get_ingestion_stats(self) -> dict[str, Any]:
+        """Returns row count and last modified time for the hot tier."""
+        hot_tier_dir = Path(self._settings.hot_tier_path)
+        if not hot_tier_dir.exists() or not any(hot_tier_dir.glob("*.parquet")):
+            return {"total_rows": 0, "last_updated_at": None}
+
+        try:
+            # Get total row count
+            with self._conn_lock:
+                res = self._conn.execute(
+                    f"SELECT COUNT(*) FROM read_parquet('{self._parquet_glob}')"
+                ).fetchone()
+            total_rows = res[0] if res else 0
+
+            # Get latest modified time of any parquet file in the hot tier
+            files = list(hot_tier_dir.glob("*.parquet"))
+            if not files:
+                return {"total_rows": total_rows, "last_updated_at": None}
+            
+            latest_mtime = max(f.stat().st_mtime for f in files)
+            last_updated = date.fromtimestamp(latest_mtime).isoformat()
+            
+            return {
+                "total_rows": total_rows,
+                "last_updated_at": last_updated
+            }
+        except Exception as e:
+            logger.error("failed_to_get_ingestion_stats", error=str(e))
+            return {"total_rows": 0, "last_updated_at": None}
 
     # ------------------------------------------------------------------
     # IEventRepository implementation
@@ -203,6 +235,7 @@ class DuckDbRepository(IEventRepository):
             SELECT
                 ROUND(ActionGeo_Lat, ?) AS lat,
                 ROUND(ActionGeo_Long, ?) AS lon,
+                MODE(ActionGeo_CountryCode) AS country_code,
                 COUNT(*) AS intensity
             FROM read_parquet('{self._parquet_glob}')
             WHERE {' AND '.join(where_clauses)}
@@ -217,6 +250,7 @@ class DuckDbRepository(IEventRepository):
                 lat=row["lat"],
                 lon=row["lon"],
                 intensity=row["intensity"],
+                country_code=row.get("country_code"),
             )
             for row in rows
         ]
@@ -347,9 +381,12 @@ class DuckDbRepository(IEventRepository):
     def _query(self, sql: str, params: list[Any]) -> list[dict[str, Any]]:
         """Execute a DuckDB query and return rows as dictionaries."""
         logger.debug("duckdb_query", sql_preview=sql[:200], params_count=len(params))
-        result = self._conn.execute(sql, params)
-        columns = [col[0] for col in (result.description or [])]
-        values = result.fetchall()
+        # DuckDB connections are not safe for concurrent execute/fetch cycles.
+        # FastAPI can process sync route handlers in parallel threads.
+        with self._conn_lock:
+            result = self._conn.execute(sql, params)
+            columns = [col[0] for col in (result.description or [])]
+            values = result.fetchall()
         return [dict(zip(columns, row)) for row in values]
 
     def _resolve_dates(self, filters: EventFilter) -> tuple[date, date]:

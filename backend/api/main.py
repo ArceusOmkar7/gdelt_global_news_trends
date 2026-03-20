@@ -20,7 +20,12 @@ from backend.api.routers import health as health_router
 from backend.api.routers import analytics as analytics_router
 from backend.api.routers import map as map_router
 from backend.api.routers.events import _get_use_case, _get_analyze_use_case
-from backend.api.routers.health import _get_bq_client, _get_settings, set_app_start_time
+from backend.api.routers.health import (
+    _get_bq_client,
+    _get_settings,
+    _get_hot_repository,
+    set_app_start_time,
+)
 from backend.api.routers.analytics import _get_cluster_use_case, _get_forecast_use_case
 from backend.api.routers.map import _get_use_case as _get_map_use_case
 from backend.api.request_context import set_request_user_id
@@ -78,6 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.dependency_overrides[_get_forecast_use_case] = lambda: forecast_use_case
     app.dependency_overrides[_get_bq_client] = lambda: bq_client
     app.dependency_overrides[_get_settings] = lambda: settings
+    app.dependency_overrides[_get_hot_repository] = lambda: hot_repository
 
     yield
 

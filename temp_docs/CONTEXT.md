@@ -2,19 +2,28 @@
 
 > **For AI assistants:** This file is the single source of truth for the GNIEM project. Read it fully before generating any code, queries, configs, or documentation. Do not assume anything not stated here.
 
-## Session Findings & Roadmap (March 19, 2026)
+## Session Findings & Roadmap (March 20, 2026)
 
 ### Status Update
 - **Data Enrichment**: Hot-tier Parquet schema updated. Now includes `themes`, `persons`, `organizations`, `mentions_count`, and `avg_confidence`.
 - **Map Visualization**: 
     - Fixed "artificial grid" by increasing `grid_precision` dynamically.
     - Fixed "missing points" at high zoom by delaying detailed transition to level 12 and using high-precision bins (~1m) for aggregated centroids.
+- **Map Stability Hardening (new)**:
+    - Frontend map requests now pass abort signals so superseded viewport requests are cancelled instead of piling up.
+    - Removed sticky previous map payload behavior that could retain zoomed-in data after zoom-out failures.
+    - BBOX refresh now occurs on map move-end to reduce transient viewport churn.
+    - Detail click path now includes fallback event selection from clicked feature properties to avoid lost panel opens during refetch races.
+- **Backend Concurrency Hardening (new)**:
+    - DuckDB repository now serializes all shared-connection calls with a lock (including ingestion stats), preventing concurrent access crashes under map + health polling load.
+    - `/health` BigQuery connectivity probe is cached for 60 seconds to reduce repetitive dry-run/execution cycles.
+    - BigQuery dry-run informational `print()` calls replaced with structured debug logging to reduce noisy stdout logs.
 - **System Stability**: Frontend build restored; backend multi-query ingestion implemented to prevent BigQuery timeouts.
 
 ### Pending Tasks for Next Session
-1. **Health Panel Fix**: Debug `HOT_TIER_PATH` resolution in `uvicorn` context (currently reports MISSING despite data existing).
-2. **Regional Narratives**: Add UI components to show "Top Themes" and "Active Entities" for the currently selected country (aggregated from hot tier).
-3. **Ingestion Stats**: Add visibility into total rows and last-updated timestamps in the control panel.
+1. **Map Request Budgeting**: Add frontend viewport request throttling/hysteresis (zoom and pan) to reduce rapid query churn during continuous navigation.
+2. **Map Response Caching**: Add short-lived backend cache for frequent repeated BBOX+zoom requests (especially detailed mode around zoom >= 9).
+3. **Regional Narratives**: Final polish for country-level panel UX and loading states under heavy map interaction.
 
 ---
 
@@ -85,6 +94,14 @@
     - Rewrote `realtime_fetcher.py` to ingest and join all three GDELT CSV streams (Events, Mentions, GKG) every 15 minutes.
     - Updated DuckDB repository to serve enriched fields from the hot-tier Parquet files.
     - Expanded frontend `IntelligencePanel` with dedicated "Knowledge Graph Insights" and "Media Reach Analysis" sections.
+- **Map query lifecycle and backend stability hardening completed (March 20 update)**
+    - Frontend map API now supports request cancellation via `AbortSignal` and passes query cancellation from React Query.
+    - Frontend map query flow no longer pins stale prior payloads as placeholder state when viewport changes.
+    - Frontend map updates BBOX on move-end for better viewport consistency during zoom/pan transitions.
+    - Frontend map selection now falls back to feature properties when detailed payload refresh races user clicks.
+    - DuckDB repository protects all shared connection calls with a lock, including health/ingestion stat reads.
+    - Health endpoint now caches BigQuery health probes for 60 seconds to avoid repeated dry-run + execution on every poll.
+    - Default frontend health polling cadence increased to 60 seconds.
 
 ---
 
@@ -622,6 +639,8 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
     - Cache files can grow over time; no TTL/LRU cleanup job currently runs.
 4. **Cold-cache keying is shape-based with hash digest.**
     - Correct for functional reuse, but operators should still monitor duplicate near-equivalent queries (e.g., different limits) for cache fragmentation.
+5. **Map detailed mode can still be expensive under rapid pan/zoom.**
+    - Even with cancellation and move-end updates, dense detailed view (`zoom >= 9`) can produce frequent high-cardinality DuckDB scans without viewport result caching.
 
 ---
 
@@ -643,6 +662,7 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 1. Confirm frontend uses `VITE_API_URL` and `VITE_MAPBOX_ACCESS_TOKEN`.
 2. Validate API response shape changes (article-count fields removed) in UI types/components.
 3. Add smoke tests for: events list, map layer load, forecast chart, analyze-event flow.
+4. Add map interaction performance guardrails: viewport-change debounce, optional move-threshold before refetch, and UX-safe loading indicator behavior.
 
 ### Priority 4 — Quota robustness hardening
 1. Replace IP fallback with authenticated user/session ID for quota keys.

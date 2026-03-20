@@ -137,8 +137,11 @@ class BigQueryClient:
                 query=sql,
             )
 
-        print(f"Dry run successful: estimated scan {estimated_bytes / (1024*1024):.2f} MB")
-        print("Starting actual query execution (this may take a minute for complex joins)...")
+        logger.debug(
+            "bigquery_dry_run_success",
+            estimated_bytes=estimated_bytes,
+            sql_preview=sql[:200],
+        )
         job_config = bigquery.QueryJobConfig(query_parameters=query_parameters)
 
         start = time.monotonic()

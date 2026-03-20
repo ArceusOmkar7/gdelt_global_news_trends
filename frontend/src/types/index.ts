@@ -3,6 +3,9 @@ export interface Event {
   sql_date: string;
   lat: number;
   lon: number;
+  action_geo_country_code?: string;
+  action_geo_lat?: number;
+  action_geo_long?: number;
   actor1_country_code?: string;
   actor2_country_code?: string;
   event_root_code?: string;
@@ -24,6 +27,7 @@ export interface MapAggregation {
   lat: number;
   lon: number;
   intensity: number;
+  country_code?: string;
 }
 
 export interface MapDataResponse {
@@ -62,6 +66,8 @@ export interface HotTierHealthDetail {
   available: boolean;
   parquet_files: number;
   cutoff_days: number;
+  total_rows?: number;
+  last_updated_at?: string | null;
 }
 
 export interface HealthResponse {

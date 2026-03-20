@@ -13,14 +13,15 @@ export const apiService = {
     zoom: number,
     startDate: string,
     endDate: string,
-    eventRootCode?: string | null
+    eventRootCode?: string | null,
+    signal?: AbortSignal
   ): Promise<MapDataResponse> => {
     const params = new URLSearchParams({
       bbox_n: bbox.n.toString(),
       bbox_s: bbox.s.toString(),
       bbox_e: bbox.e.toString(),
       bbox_w: bbox.w.toString(),
-      zoom: Math.round(zoom).toString(),
+      zoom: zoom.toString(),
       start_date: startDate,
       end_date: endDate,
     });
@@ -29,9 +30,45 @@ export const apiService = {
       params.append('event_root_code', eventRootCode);
     }
 
-    const response = await fetch(`${API_BASE_URL}/events/map?${params}`);
+    const response = await fetch(`${API_BASE_URL}/events/map?${params}`, { signal });
     if (!response.ok) {
       throw new Error(`Failed to fetch map data: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getEventsByRegion: async (
+    countryCode: string,
+    startDate: string,
+    endDate: string,
+    limit: number = 10
+  ) => {
+    const params = new URLSearchParams({
+      start_date: startDate,
+      end_date: endDate,
+      limit: limit.toString(),
+    });
+
+    const response = await fetch(`${API_BASE_URL}/events/region/${countryCode}?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch regional events: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getRegionalStats: async (
+    countryCode: string,
+    startDate: string,
+    endDate: string
+  ) => {
+    const params = new URLSearchParams({
+      start_date: startDate,
+      end_date: endDate,
+    });
+
+    const response = await fetch(`${API_BASE_URL}/events/region/${countryCode}/stats?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch regional stats: ${response.statusText}`);
     }
     return response.json();
   },

@@ -89,6 +89,45 @@ def events_by_region(
 
 
 @router.get(
+    "/region/{country_code}/stats",
+    summary="Regional intelligence stats",
+    description="Get top themes and entities for a specific region.",
+)
+def regional_stats(
+    country_code: str,
+    use_case: Annotated[GetEventsUseCase, Depends(_get_use_case)],
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+):
+    """Returns top themes, persons, and organizations for a country."""
+    # This logic would ideally be in a service/use case, but for now we'll 
+    # use the use_case to get events and aggregate them here for brevity.
+    events = use_case.get_by_region(
+        country_code=country_code,
+        start_date=start_date,
+        end_date=end_date,
+        limit=2000, # Use a larger sample for better stats
+    )
+    
+    from collections import Counter
+    themes = Counter()
+    persons = Counter()
+    orgs = Counter()
+    
+    for e in events:
+        themes.update(e.themes)
+        persons.update(e.persons)
+        orgs.update(e.organizations)
+        
+    return {
+        "country_code": country_code.upper(),
+        "top_themes": [{"name": k, "count": v} for k, v in themes.most_common(10)],
+        "top_persons": [{"name": k, "count": v} for k, v in persons.most_common(10)],
+        "top_organizations": [{"name": k, "count": v} for k, v in orgs.most_common(10)],
+    }
+
+
+@router.get(
     "/counts/{country_code}",
     response_model=EventCountListResponse,
     summary="Daily event counts by country",

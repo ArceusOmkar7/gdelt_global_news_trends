@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import Map, { Layer, Source } from 'react-map-gl/mapbox';
 import type { MapRef, MapMouseEvent } from 'react-map-gl/mapbox';
 import type { Feature, FeatureCollection, Point } from 'geojson';
@@ -10,6 +10,7 @@ import type { MapAggregation, Event } from '../../types';
 const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 const HAS_MAPBOX_TOKEN =
   typeof MAPBOX_ACCESS_TOKEN === 'string' && MAPBOX_ACCESS_TOKEN.trim().length > 0;
+const DETAIL_ZOOM_THRESHOLD = 9;
 
 export const GlobalEventMap: React.FC = () => {
   const { 
@@ -18,9 +19,8 @@ export const GlobalEventMap: React.FC = () => {
     dateRange, 
     eventRootCode,
     setSelectedEvent,
+    setSelectedCountry,
     selectedEventId,
-    autoRefreshEnabled,
-    fetchIntervalSeconds,
   } = useStore();
 
   const mapRef = useRef<MapRef>(null);
@@ -31,97 +31,137 @@ export const GlobalEventMap: React.FC = () => {
     return !Object.values(bbox).some(val => typeof val !== 'number' || isNaN(val));
   };
 
-  useEffect(() => {
-    const updateBBox = () => {
-      const map = mapRef.current?.getMap();
-      if (!map) return;
+  const updateBBox = () => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
 
-      const bounds = map.getBounds();
-      if (!bounds) return;
+    const bounds = map.getBounds();
+    if (!bounds) return;
 
-      const nextBBox = {
-        w: bounds.getWest(),
-        s: bounds.getSouth(),
-        e: bounds.getEast(),
-        n: bounds.getNorth()
-      };
-
-      if (isValidBBox(nextBBox)) {
-        setMapBBox(nextBBox);
-        console.log('Map BBOX Updated:', nextBBox, 'Zoom:', viewState.zoom);
-      } else {
-        console.warn('Map BBOX calculation resulted in NaN, skipping update.');
-      }
+    const nextBBox = {
+      w: bounds.getWest(),
+      s: bounds.getSouth(),
+      e: bounds.getEast(),
+      n: bounds.getNorth()
     };
 
-    const timer = setTimeout(updateBBox, 100);
-    return () => clearTimeout(timer);
-  }, [viewState]);
+    if (isValidBBox(nextBBox)) {
+      setMapBBox(nextBBox);
+    }
+  };
 
-  const { data: mapResponse, isLoading } = useQuery({
-    queryKey: ['map-data', mapBBox, Math.round(viewState.zoom), dateRange, eventRootCode],
-    queryFn: async () => {
-      // Final guard against NaN in query
-      if (!isValidBBox(mapBBox)) {
-        console.error('Blocking API call due to invalid BBOX:', mapBBox);
-        return { zoom: viewState.zoom, is_aggregated: true, count: 0, data: [] };
-      }
+  const queryZoom = Number(viewState.zoom.toFixed(2));
+
+  const { data: mapResponse, isLoading, isFetching, isError, error } = useQuery({
+    queryKey: ['map-data', mapBBox, queryZoom, dateRange, eventRootCode],
+    queryFn: async ({ signal }) => {
+      if (!isValidBBox(mapBBox)) return { zoom: queryZoom, is_aggregated: true, count: 0, data: [] };
 
       const res = await apiService.getMapData(
         mapBBox,
-        viewState.zoom,
+        queryZoom,
         dateRange[0],
         dateRange[1],
-        eventRootCode
+        eventRootCode,
+        signal
       );
-      console.log('API Response:', res.count, 'items', 'Aggregated:', res.is_aggregated);
       return res;
     },
-    placeholderData: (previousData) => previousData,
-    staleTime: 1000 * 30,
-    refetchInterval: autoRefreshEnabled ? fetchIntervalSeconds * 1000 : false,
+    staleTime: 1000 * 15,
   });
 
-  const aggregatedGeoJson = useMemo<FeatureCollection<Point, { intensity: number }> | null>(() => {
+  const aggregatedGeoJson = useMemo<FeatureCollection<Point, any> | null>(() => {
     if (!mapResponse?.is_aggregated || mapResponse.count === 0) return null;
     const aggData = mapResponse.data as MapAggregation[];
     return {
       type: 'FeatureCollection',
       features: aggData.map(
-        (d): Feature<Point, { intensity: number }> => ({
+        (d): Feature<Point, any> => ({
           type: 'Feature',
           geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
-          properties: { intensity: d.intensity },
+          properties: { 
+            intensity: d.intensity,
+            country_code: d.country_code 
+          },
         })
       ),
     };
   }, [mapResponse]);
 
-  const detailedGeoJson = useMemo<FeatureCollection<Point, Event> | null>(() => {
+  const detailedGeoJson = useMemo<FeatureCollection<Point, any> | null>(() => {
     if (!mapResponse || mapResponse.is_aggregated || mapResponse.count === 0) return null;
-    const eventData = mapResponse.data as Event[];
+    const eventData = mapResponse.data as any[];
     return {
       type: 'FeatureCollection',
       features: eventData.map(
-        (d): Feature<Point, Event> => ({
+        (d): Feature<Point, any> => ({
           type: 'Feature',
-          geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
-          properties: d,
+          geometry: { type: 'Point', coordinates: [d.lon ?? d.ActionGeo_Long, d.lat ?? d.ActionGeo_Lat] },
+          properties: { 
+            ...d,
+            // Mapbox requires strings for property IDs in some contexts, 
+            // but we need the raw number for our logic.
+            global_event_id: Number(d.global_event_id)
+          },
         })
       ),
     };
   }, [mapResponse]);
 
   const onMapClick = (evt: MapMouseEvent) => {
-    // Check for aggregate bins first
+    // 1. Individual events (detailed view)
+    const eventFeature = evt.features?.find((f) => f.layer?.id === 'events-layer');
+    if (eventFeature && eventFeature.properties) {
+      const eventId = Number(eventFeature.properties.global_event_id);
+      const originalEvent = (mapResponse?.data as Event[])?.find(e => Number(e.global_event_id) === eventId);
+      if (originalEvent) {
+        setSelectedEvent(originalEvent);
+        return;
+      }
+
+      // Fallback to clicked feature properties when a refresh races the click.
+      const clickedGeometry = eventFeature.geometry as Point;
+      const [lon, lat] = clickedGeometry.coordinates;
+      setSelectedEvent({
+        global_event_id: eventId,
+        sql_date: String(eventFeature.properties.sql_date || ''),
+        lat: Number(eventFeature.properties.lat ?? lat),
+        lon: Number(eventFeature.properties.lon ?? lon),
+        action_geo_country_code: eventFeature.properties.action_geo_country_code || undefined,
+        action_geo_lat: eventFeature.properties.action_geo_lat !== undefined ? Number(eventFeature.properties.action_geo_lat) : undefined,
+        action_geo_long: eventFeature.properties.action_geo_long !== undefined ? Number(eventFeature.properties.action_geo_long) : undefined,
+        actor1_country_code: eventFeature.properties.actor1_country_code || undefined,
+        actor2_country_code: eventFeature.properties.actor2_country_code || undefined,
+        event_root_code: eventFeature.properties.event_root_code || undefined,
+        goldstein_scale: eventFeature.properties.goldstein_scale !== undefined ? Number(eventFeature.properties.goldstein_scale) : undefined,
+        num_mentions: Number(eventFeature.properties.num_mentions ?? 0),
+        num_sources: eventFeature.properties.num_sources !== undefined ? Number(eventFeature.properties.num_sources) : undefined,
+        avg_tone: eventFeature.properties.avg_tone !== undefined ? Number(eventFeature.properties.avg_tone) : undefined,
+        source_url: eventFeature.properties.source_url || undefined,
+        actor1_type: eventFeature.properties.actor1_type || undefined,
+        actor2_type: eventFeature.properties.actor2_type || undefined,
+        themes: Array.isArray(eventFeature.properties.themes) ? eventFeature.properties.themes : undefined,
+        persons: Array.isArray(eventFeature.properties.persons) ? eventFeature.properties.persons : undefined,
+        organizations: Array.isArray(eventFeature.properties.organizations) ? eventFeature.properties.organizations : undefined,
+        mentions_count: eventFeature.properties.mentions_count !== undefined ? Number(eventFeature.properties.mentions_count) : undefined,
+        avg_confidence: eventFeature.properties.avg_confidence !== undefined ? Number(eventFeature.properties.avg_confidence) : undefined,
+      });
+      return;
+    }
+
+    // 2. Aggregate bins (drill-down)
     const aggregateFeature = evt.features?.find((f) => f.layer?.id === 'agg-circle-layer');
-    if (aggregateFeature) {
+    if (aggregateFeature && aggregateFeature.properties) {
+      const props = aggregateFeature.properties;
       const aggregatePoint = aggregateFeature.geometry as Point;
       const [longitude, latitude] = aggregatePoint.coordinates;
-      const nextZoom = 9.2;
-
-      // Clear selected event while drilling from aggregate bins to event-level detail.
+      
+      if (props.country_code) {
+        setSelectedCountry(props.country_code);
+      }
       setSelectedEvent(null);
+
+      const nextZoom = Math.max(viewState.zoom + 2, DETAIL_ZOOM_THRESHOLD + 0.2);
       setViewState({
         ...viewState,
         longitude,
@@ -129,22 +169,6 @@ export const GlobalEventMap: React.FC = () => {
         zoom: nextZoom,
       });
       return;
-    }
-
-    // Check for individual events
-    const eventFeature = evt.features?.find((f) => f.layer?.id === 'events-layer');
-    const props = eventFeature?.properties as Event | undefined;
-    if (props && props.global_event_id) {
-      setSelectedEvent({
-        ...props,
-        global_event_id: Number(props.global_event_id),
-        lat: Number(props.lat),
-        lon: Number(props.lon),
-        num_mentions: Number(props.num_mentions ?? 0),
-        num_sources: props.num_sources == null ? undefined : Number(props.num_sources),
-        goldstein_scale: props.goldstein_scale == null ? undefined : Number(props.goldstein_scale),
-        avg_tone: props.avg_tone == null ? undefined : Number(props.avg_tone),
-      });
     }
   };
 
@@ -165,7 +189,7 @@ export const GlobalEventMap: React.FC = () => {
   return (
     <div className="relative w-full h-full">
       {/* Data Scanning Progress Bar */}
-      {isLoading && (
+      {(isLoading || isFetching) && (
         <div className="absolute top-0 left-0 w-full h-[2px] z-50 overflow-hidden bg-cyber-blue/10">
           <div className="h-full bg-cyber-blue animate-[progress_2s_infinite_linear]" 
                style={{ width: '30%', boxShadow: '0 0 10px #00f3ff' }} />
@@ -176,6 +200,8 @@ export const GlobalEventMap: React.FC = () => {
         ref={mapRef}
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
+        onLoad={updateBBox}
+          onMoveEnd={updateBBox}
         onClick={onMapClick}
         interactiveLayerIds={['agg-circle-layer', 'events-layer']}
         mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
@@ -187,7 +213,7 @@ export const GlobalEventMap: React.FC = () => {
             <Layer
               id="agg-heatmap-layer"
               type="heatmap"
-              maxzoom={7}
+              maxzoom={22}
               paint={{
                 'heatmap-weight': [
                   'interpolate',
@@ -243,10 +269,12 @@ export const GlobalEventMap: React.FC = () => {
                   ['zoom'],
                   1,
                   0.6,
-                  4,
-                  0.4,
                   7,
-                  0,
+                  0.5,
+                  12,
+                  0.35,
+                  18,
+                  0.2,
                 ],
               }}
             />
@@ -254,6 +282,7 @@ export const GlobalEventMap: React.FC = () => {
               id="agg-circle-layer"
               type="circle"
               minzoom={0}
+              maxzoom={22}
               paint={{
                 'circle-color': [
                   'interpolate',
@@ -291,12 +320,12 @@ export const GlobalEventMap: React.FC = () => {
                   ['zoom'],
                   0,
                   0.4,
-                  5,
+                  8,
                   0.6,
-                  9,
-                  0.8,
                   12,
-                  0.9,
+                  0.65,
+                  18,
+                  0.6,
                 ],
                 'circle-stroke-width': 1,
                 'circle-stroke-color': 'rgba(255,255,255,0.1)',
@@ -306,7 +335,7 @@ export const GlobalEventMap: React.FC = () => {
         )}
 
         {detailedGeoJson && (
-          <Source id="events-source" type="geojson" data={detailedGeoJson}>
+          <Source id="events-source" type="geojson" data={detailedGeoJson} maxzoom={24}>
             <Layer
               id="events-layer"
               type="circle"
@@ -324,40 +353,40 @@ export const GlobalEventMap: React.FC = () => {
                   ['linear'],
                   ['ln', ['+', ['coalesce', ['get', 'num_mentions'], 0], 1]],
                   0,
-                  6,
                   8,
-                  18,
+                  8,
+                  24,
                 ],
                 'circle-stroke-width': [
                   'case',
                   ['==', ['to-number', ['get', 'global_event_id']], selectedEventId ?? -1],
-                  2,
-                  0,
+                  3,
+                  1.5,
                 ],
                 'circle-stroke-color': '#ffffff',
-                'circle-opacity': [
-                  'interpolate',
-                  ['linear'],
-                  ['ln', ['+', ['coalesce', ['get', 'num_mentions'], 0], 1]],
-                  0,
-                  0.5,
-                  8,
-                  0.9,
-                ],
+                'circle-opacity': 1.0,
               }}
             />
           </Source>
         )}
       </Map>
 
-      {isLoading && (
+      {(isLoading || isFetching) && (
         <div className="absolute top-4 right-4 z-10 px-3 py-1 bg-surface-800/80 border border-cyber-blue/30 rounded flex items-center gap-2">
           <div className="w-2 h-2 bg-cyber-blue rounded-full animate-pulse" />
           <span className="data-ink text-cyber-blue">Uplink Active</span>
         </div>
       )}
 
-      {mapResponse?.count === 0 && !isLoading && (
+      {isError && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 px-4 py-2 bg-cyber-red/15 border border-cyber-red/40 rounded">
+          <span className="data-ink text-cyber-red">
+            MAP QUERY FAILED: {error instanceof Error ? error.message : 'Unknown error'}
+          </span>
+        </div>
+      )}
+
+      {mapResponse?.count === 0 && !(isLoading || isFetching) && (
         <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-surface-900/80 border border-white/10 rounded">
            <span className="data-ink text-white/50">NO SIGNAL DETECTED IN THIS SECTOR</span>
         </div>

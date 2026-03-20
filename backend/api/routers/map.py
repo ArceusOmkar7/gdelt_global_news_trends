@@ -41,26 +41,23 @@ def get_map_data(
     bbox_s: float = Query(..., description="South latitude bound"),
     bbox_e: float = Query(..., description="East longitude bound"),
     bbox_w: float = Query(..., description="West longitude bound"),
-    zoom: int = Query(..., ge=0, le=22, description="Zoom level"),
+    zoom: float = Query(..., ge=0, le=22, description="Zoom level"),
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
     event_root_code: str | None = Query(default=None, max_length=2),
     limit: int = Query(default=10000, ge=1, le=100_000, description="Row limit"),
 ) -> MapDataResponse:
-    # We switch to detailed view much later to keep the map populated
-    # with aggregated bins when data is sparse at high zoom.
-    if zoom < 12:
+    # We switch to detailed view at zoom 9.
+    if zoom < 9.0:
         # Level 1/2: Aggregated view
         # Finer grid as we zoom in
-        if zoom >= 10:
-            grid_precision = 5  # ~1m - practically raw coordinates
-        elif zoom >= 8:
+        if zoom >= 7:
             grid_precision = 4  # ~10m
-        elif zoom >= 6:
+        elif zoom >= 5:
             grid_precision = 3  # ~100m
-        elif zoom >= 4:
+        elif zoom >= 3:
             grid_precision = 2  # ~1km
-        elif zoom >= 2:
+        elif zoom >= 1:
             grid_precision = 1  # ~10km
         else:
             grid_precision = 0  # ~111km

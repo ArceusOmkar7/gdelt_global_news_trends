@@ -223,6 +223,7 @@ class MapAggregation(BaseModel):
     lat: float = Field(description="Rounded latitude of the aggregated grid cell.")
     lon: float = Field(description="Rounded longitude of the aggregated grid cell.")
     intensity: float = Field(description="Aggregated intensity, typically event count.")
+    country_code: str | None = Field(default=None, description="Primary country code for this bin.")
 
     model_config = {"frozen": True}
 

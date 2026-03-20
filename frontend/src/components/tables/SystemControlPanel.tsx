@@ -153,6 +153,12 @@ export const SystemControlPanel = () => {
             <div>
               Hot Tier: {health?.hot_tier.available ? 'READY' : 'MISSING'}
             </div>
+            <div className="col-span-2 text-white/55">
+              Total Rows: {health?.hot_tier.total_rows?.toLocaleString() ?? '--'}
+            </div>
+            <div className="col-span-2 text-white/55">
+              Last Ingest: {health?.hot_tier.last_updated_at ?? '--'}
+            </div>
             <div className="col-span-2 text-white/55 truncate">
               Parquet files: {health?.hot_tier.parquet_files ?? '--'}
             </div>
