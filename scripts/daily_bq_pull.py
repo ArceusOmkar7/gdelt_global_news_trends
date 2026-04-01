@@ -16,8 +16,9 @@ from pathlib import Path
 import pandas as pd
 from google.cloud import bigquery
 
-from backend.infrastructure.config.settings import Settings
+from backend.infrastructure.config.settings import settings
 from backend.infrastructure.data_access.bigquery_client import BigQueryClient
+from backend.infrastructure.services.lookup_service import lookup_service
 
 # Final column order for the hot tier
 EVENTS_COLUMNS: list[str] = [
@@ -159,7 +160,7 @@ def fetch_enriched_data(
     return pd.DataFrame(rows) if rows else pd.DataFrame()
 
 
-def cleanup_realtime_buffer(target_date: date, settings: Settings) -> None:
+def cleanup_realtime_buffer(target_date: date, settings: settings) -> None:
     """Remove records for the processed date from the realtime buffer to prevent duplicates."""
     hot_tier_dir = Path(settings.hot_tier_path)
     buffer_file = hot_tier_dir / "realtime_buffer.parquet"
@@ -192,7 +193,7 @@ def cleanup_realtime_buffer(target_date: date, settings: Settings) -> None:
 
 def run_for_date(target_date: date) -> Path | None:
     """Run the ingestion for a specific date and save to a daily Parquet file."""
-    settings = Settings()
+    # Use global settings instance
     bq_client = BigQueryClient(settings)
     dataset = settings.gdelt_dataset
 
@@ -229,6 +230,10 @@ def run_for_date(target_date: date) -> Path | None:
 
 if __name__ == "__main__":
     args = parse_args()
+
+    # Ensure lookups are available and fresh
+    print("Refreshing GDELT country lookups...")
+    lookup_service.refresh_country_codes()
 
     if args.backfill_days is not None:
         days = min(args.backfill_days, 14)
