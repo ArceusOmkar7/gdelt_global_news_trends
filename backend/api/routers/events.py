@@ -30,6 +30,7 @@ from backend.application.use_cases.get_events import GetEventsUseCase
 from backend.domain.models.event import EventFilter
 from backend.infrastructure.config.settings import settings
 from backend.infrastructure.data_access.duckdb_repository import DuckDbRepository, compute_risk_score
+from backend.infrastructure.services.lookup_service import lookup_service
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -125,6 +126,9 @@ def country_risk_score(
     return RiskScoreResponse(
         score=score,
         trend="stable",
+        country_code=country_code.upper(),
+        country_name=lookup_service.get_country_name(country_code.upper()),
+        country_display=lookup_service.get_country_display(country_code.upper()),
         conflict_ratio=metrics["conflict_ratio"],
         avg_goldstein=metrics["avg_goldstein"],
         avg_tone=metrics["avg_tone"],
@@ -272,11 +276,18 @@ def global_pulse(
     repository = DuckDbRepository(settings)
     metrics = repository.get_global_pulse(start_date=start, end_date=end)
  
+    most_active = metrics["most_active_country"]
+    most_hostile = metrics["most_hostile_country"]
+
     response = GlobalPulseResponse(
         total_events_today=metrics["total_events_today"],
-        most_active_country=metrics["most_active_country"],
+        most_active_country=most_active,
+        most_active_name=lookup_service.get_country_name(most_active) if most_active else None,
+        most_active_display=lookup_service.get_country_display(most_active) if most_active else None,
         most_active_count=metrics["most_active_count"],
-        most_hostile_country=metrics["most_hostile_country"],
+        most_hostile_country=most_hostile,
+        most_hostile_name=lookup_service.get_country_name(most_hostile) if most_hostile else None,
+        most_hostile_display=lookup_service.get_country_display(most_hostile) if most_hostile else None,
         avg_global_tone=metrics["avg_global_tone"],
         global_conflict_ratio=metrics["global_conflict_ratio"],
     )
@@ -326,6 +337,8 @@ def top_threat_countries(
     data = [
         ThreatCountryEntry(
             country_code=r["country_code"],
+            country_name=lookup_service.get_country_name(r["country_code"]),
+            country_display=lookup_service.get_country_display(r["country_code"]),
             score=r["score"],
             conflict_ratio=r["conflict_ratio"],
             total_events=r["total_events"],

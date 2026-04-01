@@ -45,8 +45,10 @@ interface TickerItem {
 function buildItems(data: {
   total_events_today: number;
   most_active_country: string | null;
+  most_active_display?: string | null;
   most_active_count: number;
   most_hostile_country: string | null;
+  most_hostile_display?: string | null;
   avg_global_tone: number | null;
   global_conflict_ratio: number;
 }): TickerItem[] {
@@ -54,13 +56,15 @@ function buildItems(data: {
     { label: 'EVENTS TODAY', value: fmtCount(data.total_events_today) },
     {
       label: 'MOST ACTIVE',
-      value: data.most_active_country
+      value: data.most_active_display
+        ? `${data.most_active_display} (${fmtCount(data.most_active_count)})`
+        : data.most_active_country
         ? `${data.most_active_country} (${fmtCount(data.most_active_count)})`
         : 'N/A',
     },
     {
       label: 'MOST HOSTILE',
-      value: data.most_hostile_country ?? 'N/A',
+      value: data.most_hostile_display ?? data.most_hostile_country ?? 'N/A',
       highlight: !!data.most_hostile_country,
     },
     { label: 'AVG GLOBAL TONE', value: fmtTone(data.avg_global_tone) },

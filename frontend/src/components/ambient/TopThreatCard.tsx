@@ -66,14 +66,12 @@ const ThreatRow = ({
         <span className="text-[9px] font-mono text-white/25 w-4 shrink-0">
           #{rank}
         </span>
-        {/* Country code */}
-        <span className="text-[11px] font-mono font-bold text-white/80 group-hover:text-white transition-colors w-8 shrink-0">
-          {entry.country_code}
+        {/* Country code / name */}
+        <span className="text-[11px] font-mono font-bold text-white/80 group-hover:text-white transition-colors flex-1 truncate">
+          {entry.country_display || entry.country_code}
         </span>
-        {/* Spacer */}
-        <div className="flex-1" />
         {/* Score number */}
-        <span className={`text-[11px] font-mono font-bold ${scoreColor(entry.score)}`}>
+        <span className={`text-[11px] font-mono font-bold ${scoreColor(entry.score)} shrink-0`}>
           {entry.score}
         </span>
       </div>

@@ -122,7 +122,7 @@ export const IntelligencePanel: React.FC = () => {
       <div className="p-6 border-b border-white/10 flex justify-between items-center bg-surface-900/50">
         <div>
           <span className="data-ink text-cyber-blue">
-            {selectedEvent ? 'Event Intelligence' : `Regional Dossier: ${selectedCountry}`}
+            {selectedEvent ? 'Event Intelligence' : `Regional Dossier: ${regionalRiskScoreQuery.data?.country_display || selectedCountry}`}
           </span>
           <h2 className="text-xl font-bold font-mono glowing-text mt-1 uppercase">
             {selectedEvent ? `EID-${selectedEvent.global_event_id}` : 'Sector Analysis'}

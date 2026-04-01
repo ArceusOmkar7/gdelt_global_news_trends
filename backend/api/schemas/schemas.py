@@ -242,6 +242,9 @@ class RiskScoreResponse(BaseModel):
 
     score: int
     trend: str = "stable"
+    country_code: str | None = None
+    country_name: str | None = None
+    country_display: str | None = None
     conflict_ratio: float
     avg_goldstein: float | None = None
     avg_tone: float | None = None
@@ -256,8 +259,12 @@ class GlobalPulseResponse(BaseModel):
  
     total_events_today: int = Field(description="Total events in the current day window.")
     most_active_country: str | None = Field(description="Country code with the highest event count.")
+    most_active_name: str | None = Field(description="Full name for most-active country.")
+    most_active_display: str | None = Field(description="Display string for most-active country.")
     most_active_count: int = Field(description="Event count for the most-active country.")
     most_hostile_country: str | None = Field(description="Country code with the lowest avg AvgTone.")
+    most_hostile_name: str | None = Field(description="Full name for most-hostile country.")
+    most_hostile_display: str | None = Field(description="Display string for most-hostile country.")
     avg_global_tone: float | None = Field(description="Mean AvgTone across all events in the window.")
     global_conflict_ratio: float = Field(description="Fraction of events with QuadClass 3 or 4.")
  
@@ -270,6 +277,8 @@ class ThreatCountryEntry(BaseModel):
     """One row in the top-threat list (15.2)."""
  
     country_code: str
+    country_name: str | None = None
+    country_display: str | None = None
     score: int = Field(description="0–100 risk score (higher = more dangerous).")
     conflict_ratio: float
     total_events: int
