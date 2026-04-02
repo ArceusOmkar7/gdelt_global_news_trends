@@ -3,6 +3,8 @@ domains:
   - bigquery
   - backend
   - frontend
+  - ui-design
+  - ml-pipeline
 governance:
   max_entries: 100
   warn_entries: 150
