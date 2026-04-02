@@ -251,6 +251,19 @@ class RiskScoreResponse(BaseModel):
     avg_tone: float | None = None
     total_events: int
 
+
+class CountryDelta(BaseModel):
+    """Week-over-week deltas for a single country."""
+    event_delta_pct: float
+    conflict_delta: float
+    tone_delta: float
+    score_delta: int
+
+
+class AnalyticsDeltaResponse(BaseModel):
+    """Week-over-week deltas for top countries."""
+    data: dict[str, CountryDelta]
+
 # ---------------------------------------------------------------------------
 # 15.1 — Global Pulse
 # ---------------------------------------------------------------------------

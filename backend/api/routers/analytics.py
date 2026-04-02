@@ -6,12 +6,15 @@ and time-series forecasting.
 
 from __future__ import annotations
 
+import time
+import threading
 from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
 from backend.api.schemas.schemas import (
+    AnalyticsDeltaResponse,
     ClusterListResponse,
     EventClusterResponse,
     EventFilterRequest,
@@ -21,6 +24,7 @@ from backend.api.schemas.schemas import (
 from backend.application.use_cases.cluster_events import ClusterEventsUseCase
 from backend.application.use_cases.forecast_events import ForecastEventsUseCase
 from backend.domain.models.event import EventFilter
+from backend.infrastructure.data_access.duckdb_repository import DuckDbRepository
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -33,6 +37,17 @@ def _get_cluster_use_case() -> ClusterEventsUseCase:
 def _get_forecast_use_case() -> ForecastEventsUseCase:
     """Dependency stub — overridden at app startup."""
     raise NotImplementedError("ForecastEventsUseCase dependency not wired")
+
+
+def _get_hot_repository() -> DuckDbRepository:
+    """Dependency stub — overridden at app startup."""
+    raise NotImplementedError("DuckDbRepository dependency not wired")
+
+
+_delta_cache: dict | None = None
+_delta_cache_at: float = 0.0
+_delta_cache_lock = threading.Lock()
+DELTA_CACHE_TTL = 3600.0
 
 
 @router.get(
@@ -91,3 +106,25 @@ def get_regional_forecast(
 ) -> ForecastResponse:
     result = use_case.execute(horizon_days=horizon_days, country_code=country_code)
     return ForecastResponse.model_validate(result.model_dump())
+
+
+@router.get(
+    "/deltas",
+    response_model=AnalyticsDeltaResponse,
+    summary="Week-over-week deltas",
+    description="Calculates WoW changes for top 20 countries.",
+)
+def get_analytics_deltas(
+    hot_repo: Annotated[DuckDbRepository, Depends(_get_hot_repository)],
+) -> AnalyticsDeltaResponse:
+    global _delta_cache, _delta_cache_at
+
+    now = time.monotonic()
+    with _delta_cache_lock:
+        if _delta_cache is not None and (now - _delta_cache_at) < DELTA_CACHE_TTL:
+            return AnalyticsDeltaResponse(data=_delta_cache)
+
+        deltas = hot_repo.get_analytics_deltas()
+        _delta_cache = deltas
+        _delta_cache_at = now
+        return AnalyticsDeltaResponse(data=deltas)

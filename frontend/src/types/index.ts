@@ -72,6 +72,7 @@ export interface HotTierHealthDetail {
   available: boolean;
   parquet_files: number;
   cutoff_days: number;
+  coverage_days: number;
   total_rows?: number;
   last_updated_at?: string | null;
 }
@@ -100,10 +101,22 @@ export interface RuntimeSettingsResponse {
 export interface RiskScoreResponse {
   score: number;
   trend: string;
+  country_display?: string;
   conflict_ratio: number;
   avg_goldstein: number | null;
   avg_tone: number | null;
   total_events: number;
+}
+
+export interface CountryDelta {
+  event_delta_pct: number;
+  conflict_delta: number;
+  tone_delta: number;
+  score_delta: number;
+}
+
+export interface AnalyticsDeltaResponse {
+  data: Record<string, CountryDelta>;
 }
 
 export interface ForecastPoint {

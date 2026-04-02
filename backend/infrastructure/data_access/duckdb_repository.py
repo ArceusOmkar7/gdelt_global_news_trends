@@ -703,3 +703,85 @@ class DuckDbRepository(IEventRepository):
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:limit]
  
+    # ------------------------------------------------------------------
+    # Week-over-week Deltas
+    # ------------------------------------------------------------------
+
+    def get_analytics_deltas(self) -> dict[str, Any]:
+        """Calculate WoW deltas for the top 20 countries by event volume."""
+        today = date.today()
+        seven_days_ago = today - timedelta(days=7)
+        fourteen_days_ago = today - timedelta(days=14)
+
+        start_7d, end_7d = self._sql_date_bounds(seven_days_ago, today)
+        start_prior, end_prior = self._sql_date_bounds(fourteen_days_ago, seven_days_ago - timedelta(days=1))
+
+        # 1. Identify top 20 countries in last 14 days
+        sql_top_20 = f"""
+            SELECT ActionGeo_CountryCode, COUNT(*) as cnt
+            FROM read_parquet('{self._parquet_glob}')
+            WHERE SQLDATE >= ? AND SQLDATE <= ?
+              AND ActionGeo_CountryCode IS NOT NULL
+              AND ActionGeo_CountryCode != ''
+            GROUP BY ActionGeo_CountryCode
+            ORDER BY cnt DESC
+            LIMIT 20
+        """
+        top_20_rows = self._query(sql_top_20, [int(fourteen_days_ago.strftime("%Y%m%d")), int(today.strftime("%Y%m%d"))])
+        top_20_ccs = [row["ActionGeo_CountryCode"] for row in top_20_rows]
+
+        if not top_20_ccs:
+            return {}
+
+        # 2. Get stats for both periods
+        def get_stats(start_int: int, end_int: int):
+            sql_stats = f"""
+                SELECT
+                    ActionGeo_CountryCode,
+                    COUNT(*) AS total_events,
+                    SUM(CASE WHEN QuadClass IN (3, 4) THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS conflict_ratio,
+                    AVG(GoldsteinScale) AS avg_goldstein,
+                    AVG(AvgTone) AS avg_tone
+                FROM read_parquet('{self._parquet_glob}')
+                WHERE SQLDATE >= ? AND SQLDATE < ?
+                  AND ActionGeo_CountryCode IN ({','.join(['?' for _ in top_20_ccs])})
+                GROUP BY ActionGeo_CountryCode
+            """
+            return self._query(sql_stats, [start_int, end_int, *top_20_ccs])
+
+        stats_7d = {row["ActionGeo_CountryCode"]: row for row in get_stats(start_7d, end_7d)}
+        stats_prior = {row["ActionGeo_CountryCode"]: row for row in get_stats(start_prior, end_prior)}
+
+        deltas = {}
+        for cc in top_20_ccs:
+            curr = stats_7d.get(cc, {"total_events": 0, "conflict_ratio": 0.0, "avg_goldstein": 0.0, "avg_tone": 0.0})
+            prev = stats_prior.get(cc, {"total_events": 0, "conflict_ratio": 0.0, "avg_goldstein": 0.0, "avg_tone": 0.0})
+
+            # Event delta %
+            e_curr = curr["total_events"]
+            e_prev = prev["total_events"]
+            event_delta_pct = ((e_curr - e_prev) / max(1, e_prev)) * 100
+
+            # Conflict delta
+            c_curr = float(curr["conflict_ratio"] or 0.0)
+            c_prev = float(prev["conflict_ratio"] or 0.0)
+            conflict_delta = (c_curr - c_prev) * 100
+
+            # Tone delta
+            t_curr = float(curr["avg_tone"] or 0.0)
+            t_prev = float(prev["avg_tone"] or 0.0)
+            tone_delta = t_curr - t_prev
+
+            # Score delta
+            s_curr = compute_risk_score(c_curr, curr["avg_goldstein"], t_curr)
+            s_prev = compute_risk_score(c_prev, prev["avg_goldstein"], t_prev)
+            score_delta = s_curr - s_prev
+
+            deltas[cc] = {
+                "event_delta_pct": round(event_delta_pct, 1),
+                "conflict_delta": round(conflict_delta, 1),
+                "tone_delta": round(tone_delta, 1),
+                "score_delta": int(score_delta),
+            }
+
+        return deltas

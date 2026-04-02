@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useStore } from '../../store/useStore';
 import { apiService } from '../../services/api';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -42,8 +42,16 @@ export const IntelligencePanel: React.FC = () => {
     setCurrentAnalysis,
     selectedCountry,
     setSelectedCountry,
+    topThreats,
     dateRange
   } = useStore();
+
+  const regionalMedian = useMemo(() => {
+    if (!topThreats || topThreats.length === 0) return null;
+    const scores = [...topThreats].map(t => t.score).sort((a, b) => a - b);
+    const mid = Math.floor(scores.length / 2);
+    return scores.length % 2 !== 0 ? scores[mid] : (scores[mid - 1] + scores[mid]) / 2;
+  }, [topThreats]);
 
   const regionalStatsQuery = useQuery({
     queryKey: ['regional-stats', selectedCountry, dateRange],
@@ -114,6 +122,20 @@ export const IntelligencePanel: React.FC = () => {
     if (value <= 2) return 'Neutral';
     if (value <= 5) return 'Moderately Stabilizing';
     return 'Stabilizing';
+  };
+
+  const getThreatLabel = (score: number): string => {
+    if (score > 70) return 'CRITICAL';
+    if (score > 50) return 'ELEVATED';
+    if (score > 30) return 'MODERATE';
+    return 'LOW';
+  };
+
+  const getThreatColor = (score: number): string => {
+    if (score > 70) return 'text-cyber-red';
+    if (score > 50) return 'text-orange-500';
+    if (score > 30) return 'text-amber-400';
+    return 'text-terminal-green';
   };
 
   return (
@@ -223,8 +245,8 @@ export const IntelligencePanel: React.FC = () => {
                 <div>
                   <span className="data-ink">Geography</span>
                   <div className="text-sm font-mono mt-1">
-                    LAT: {selectedEvent.lat?.toFixed(4)}<br/>
-                    LON: {selectedEvent.lon?.toFixed(4)}
+                    LAT: {selectedEvent.lat ? selectedEvent.lat.toFixed(4) : 'Unavailable'}<br/>
+                    LON: {selectedEvent.lon ? selectedEvent.lon.toFixed(4) : 'Unavailable'}
                   </div>
                 </div>
               </div>
@@ -238,6 +260,11 @@ export const IntelligencePanel: React.FC = () => {
                       ? (CAMEO_ROOT_LABELS[selectedEvent.event_root_code] || selectedEvent.event_root_code)
                       : 'UNSPECIFIED'}
                   </div>
+                  {selectedEvent.event_root_code && CAMEO_ROOT_LABELS[selectedEvent.event_root_code] && (
+                    <div className="text-[11px] font-mono text-white/70 mt-1 italic">
+                      {CAMEO_ROOT_LABELS[selectedEvent.event_root_code]}
+                    </div>
+                  )}
                   <div className="text-[10px] font-mono text-white/40 mt-1">
                     CODE: {selectedEvent.event_root_code || 'N/A'}
                   </div>
@@ -260,7 +287,7 @@ export const IntelligencePanel: React.FC = () => {
                       {' — '}
                       {selectedEvent.actor1_type_code
                         ? (ACTOR_TYPE_LABELS[selectedEvent.actor1_type_code] || selectedEvent.actor1_type_code)
-                        : (selectedEvent.actor1_type || 'Unknown')}
+                        : (selectedEvent.actor1_type || '(No actor type)')}
                     </div>
                   </div>
                 )}
@@ -272,7 +299,7 @@ export const IntelligencePanel: React.FC = () => {
                       {' — '}
                       {selectedEvent.actor2_type_code
                         ? (ACTOR_TYPE_LABELS[selectedEvent.actor2_type_code] || selectedEvent.actor2_type_code)
-                        : (selectedEvent.actor2_type || 'Unknown')}
+                        : (selectedEvent.actor2_type || '(No actor type)')}
                     </div>
                   </div>
                 )}
@@ -466,11 +493,23 @@ export const IntelligencePanel: React.FC = () => {
                                   width: `${score}%`,
                                   background: score < 30
                                     ? '#00ff41'
-                                    : score <= 60
+                                    : score <= 50
                                       ? '#fbbf24'
-                                      : '#ff003c',
+                                      : score <= 70
+                                        ? '#f97316'
+                                        : '#ff003c',
                                 }}
                               />
+                            </div>
+                            <div className="flex justify-between items-center pt-1">
+                              <div className={`text-[10px] font-mono font-bold ${getThreatColor(score)} uppercase`}>
+                                {getThreatLabel(score)}
+                              </div>
+                              {regionalMedian !== null && (
+                                <div className="text-[9px] font-mono text-white/30 uppercase">
+                                  {score > regionalMedian ? 'Above regional median' : score < regionalMedian ? 'Below regional median' : 'At regional median'}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );

@@ -1,24 +1,24 @@
 import { create } from 'zustand';
-import type { ViewState, Event, EventAnalysis } from '../types';
+import type { ViewState, Event, EventAnalysis, ThreatCountryEntry } from '../types';
 
 interface DashboardState {
   // Map State
   viewState: ViewState;
   setViewState: (viewState: ViewState) => void;
-  
+
   // Selection State
   selectedEventId: number | null;
   selectedEvent: Event | null;
   setSelectedEvent: (event: Event | null) => void;
   selectedCountry: string | null;
   setSelectedCountry: (countryCode: string | null) => void;
-  
+
   // Analysis State
   currentAnalysis: EventAnalysis | null;
   setCurrentAnalysis: (analysis: EventAnalysis | null) => void;
   isAnalyzing: boolean;
   setIsAnalyzing: (isAnalyzing: boolean) => void;
-  
+
   // Filter State
   dateRange: [string, string];
   setDateRange: (range: [string, string]) => void;
@@ -40,11 +40,16 @@ interface DashboardState {
   setTickerCollapsed: (v: boolean) => void;
   threatCardCollapsed: boolean;
   setThreatCardCollapsed: (v: boolean) => void;
+  topThreats: ThreatCountryEntry[];
+  setTopThreats: (threats: ThreatCountryEntry[]) => void;
 }
+...
+  threatCardCollapsed: false,
+  setThreatCardCollapsed: (threatCardCollapsed) => set({ threatCardCollapsed }),
+  topThreats: [],
+  setTopThreats: (topThreats) => set({ topThreats }),
+}));
 
-const getSevenDaysAgo = () => {
-  const d = new Date();
-  d.setDate(d.getDate() - 7);
   return d.toISOString().split('T')[0];
 };
 

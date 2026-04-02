@@ -7,6 +7,7 @@ import type {
   ForecastResponse,
   GlobalPulseResponse,
   TopThreatCountriesResponse,
+  AnalyticsDeltaResponse,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
@@ -148,6 +149,14 @@ export const apiService = {
     const response = await fetch(`${API_BASE_URL}/events/top-threat-countries?${params}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch top threat countries: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getDeltas: async (): Promise<AnalyticsDeltaResponse> => {
+    const response = await fetch(`${API_BASE_URL}/analytics/deltas`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch deltas: ${response.statusText}`);
     }
     return response.json();
   },

@@ -32,6 +32,15 @@ function fmtCount(n: number): string {
   return n.toString();
 }
 
+function getToneDescriptor(tone: number | null): string {
+  if (tone === null) return '';
+  if (tone > 0) return '(Cooperative)';
+  if (tone >= -1) return '(Neutral)';
+  if (tone >= -3) return '(Mildly Hostile)';
+  if (tone >= -6) return '(Hostile)';
+  return '(Severely Hostile)';
+}
+
 // ---------------------------------------------------------------------------
 // Ticker items
 // ---------------------------------------------------------------------------
@@ -67,7 +76,10 @@ function buildItems(data: {
       value: data.most_hostile_display ?? data.most_hostile_country ?? 'N/A',
       highlight: !!data.most_hostile_country,
     },
-    { label: 'AVG GLOBAL TONE', value: fmtTone(data.avg_global_tone) },
+    {
+      label: 'AVG GLOBAL TONE',
+      value: `${fmtTone(data.avg_global_tone)} ${getToneDescriptor(data.avg_global_tone)}`,
+    },
     {
       label: 'CONFLICT RATIO',
       value: fmtRatio(data.global_conflict_ratio),

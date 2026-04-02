@@ -12,27 +12,51 @@ import { ChevronDown, ChevronUp, ShieldAlert } from 'lucide-react';
 
 import { apiService } from '../../services/api';
 import { useStore } from '../../store/useStore';
-import type { ThreatCountryEntry } from '../../types';
+import type { ThreatCountryEntry, CountryDelta } from '../../types';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+function getThreatLabel(score: number): string {
+  if (score > 70) return 'CRITICAL';
+  if (score > 50) return 'ELEVATED';
+  if (score > 30) return 'MODERATE';
+  return 'LOW';
+}
+
+function getThreatColor(score: number): string {
+  if (score > 70) return 'text-cyber-red';
+  if (score > 50) return 'text-orange-500';
+  if (score > 30) return 'text-amber-400';
+  return 'text-terminal-green';
+}
+
+function getDeltaColor(delta: number): string {
+  // For threat score, lower is better (improvement)
+  if (delta < 0) return 'text-terminal-green';
+  if (delta > 0) return 'text-cyber-red';
+  return 'text-white/20';
+}
+
 function scoreColor(score: number): string {
-  if (score > 60) return 'text-cyber-red';
-  if (score > 30) return 'text-yellow-400';
+  if (score > 70) return 'text-cyber-red';
+  if (score > 50) return 'text-orange-500';
+  if (score > 30) return 'text-amber-400';
   return 'text-terminal-green';
 }
 
 function barColor(score: number): string {
-  if (score > 60) return 'bg-cyber-red';
-  if (score > 30) return 'bg-yellow-400';
+  if (score > 70) return 'bg-cyber-red';
+  if (score > 50) return 'bg-orange-500';
+  if (score > 30) return 'bg-amber-400';
   return 'bg-terminal-green';
 }
 
 function barGlow(score: number): string {
-  if (score > 60) return 'shadow-[0_0_6px_rgba(255,0,60,0.6)]';
-  if (score > 30) return 'shadow-[0_0_6px_rgba(255,220,0,0.4)]';
+  if (score > 70) return 'shadow-[0_0_6px_rgba(255,0,60,0.6)]';
+  if (score > 50) return 'shadow-[0_0_6px_rgba(249,115,22,0.4)]';
+  if (score > 30) return 'shadow-[0_0_6px_rgba(251,191,36,0.4)]';
   return 'shadow-[0_0_6px_rgba(0,255,65,0.4)]';
 }
 
@@ -43,10 +67,12 @@ function barGlow(score: number): string {
 const ThreatRow = ({
   entry,
   rank,
+  delta,
   onClick,
 }: {
   entry: ThreatCountryEntry;
   rank: number;
+  delta?: CountryDelta;
   onClick: () => void;
 }) => {
   const pct = Math.min(100, Math.max(0, entry.score));
@@ -70,10 +96,21 @@ const ThreatRow = ({
         <span className="text-[11px] font-mono font-bold text-white/80 group-hover:text-white transition-colors flex-1 truncate">
           {entry.country_display || entry.country_code}
         </span>
+        {/* Delta */}
+        {delta && delta.score_delta !== 0 && (
+          <span className={`text-[9px] font-mono ${getDeltaColor(delta.score_delta)} shrink-0`}>
+            {delta.score_delta > 0 ? '▲' : '▼'} {Math.abs(delta.score_delta)}
+          </span>
+        )}
         {/* Score number */}
-        <span className={`text-[11px] font-mono font-bold ${scoreColor(entry.score)} shrink-0`}>
-          {entry.score}
-        </span>
+        <div className="flex flex-col items-end shrink-0">
+          <span className={`text-[11px] font-mono font-bold ${scoreColor(entry.score)}`}>
+            {entry.score}
+          </span>
+          <span className={`text-[7px] font-mono font-bold ${getThreatColor(entry.score)}`}>
+            {getThreatLabel(entry.score)}
+          </span>
+        </div>
       </div>
 
       {/* Score bar */}
@@ -107,6 +144,7 @@ export const TopThreatCard = () => {
     setThreatCardCollapsed,
     setSelectedEvent,
     setSelectedCountry,
+    setTopThreats,
     dateRange,
   } = useStore();
 
@@ -118,6 +156,19 @@ export const TopThreatCard = () => {
     refetchInterval: 120_000,
     retry: 1,
   });
+
+  const deltasQuery = useQuery({
+    queryKey: ['analytics-deltas'],
+    queryFn: () => apiService.getDeltas(),
+    staleTime: 3600_000,
+    refetchInterval: 3600_000,
+  });
+
+  useEffect(() => {
+    if (threatQuery.data?.data) {
+      setTopThreats(threatQuery.data.data);
+    }
+  }, [threatQuery.data?.data, setTopThreats]);
 
   const handleRowClick = (countryCode: string) => {
     // Critical ordering rule from CONTEXT.md §7:
@@ -179,6 +230,7 @@ export const TopThreatCard = () => {
                   key={entry.country_code}
                   entry={entry}
                   rank={i + 1}
+                  delta={deltasQuery.data?.data[entry.country_code]}
                   onClick={() => handleRowClick(entry.country_code)}
                 />
               ))}
