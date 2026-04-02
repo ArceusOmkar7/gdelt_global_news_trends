@@ -43,13 +43,10 @@ interface DashboardState {
   topThreats: ThreatCountryEntry[];
   setTopThreats: (threats: ThreatCountryEntry[]) => void;
 }
-...
-  threatCardCollapsed: false,
-  setThreatCardCollapsed: (threatCardCollapsed) => set({ threatCardCollapsed }),
-  topThreats: [],
-  setTopThreats: (topThreats) => set({ topThreats }),
-}));
 
+const getSevenDaysAgo = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
   return d.toISOString().split('T')[0];
 };
 
@@ -109,4 +106,6 @@ export const useStore = create<DashboardState>((set) => ({
   setTickerCollapsed: (tickerCollapsed) => set({ tickerCollapsed }),
   threatCardCollapsed: false,
   setThreatCardCollapsed: (threatCardCollapsed) => set({ threatCardCollapsed }),
+  topThreats: [],
+  setTopThreats: (topThreats) => set({ topThreats }),
 }));

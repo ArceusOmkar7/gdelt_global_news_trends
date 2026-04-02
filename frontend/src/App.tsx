@@ -8,8 +8,7 @@ import { TopThreatCard } from './components/ambient/TopThreatCard';
 import { useStore } from './store/useStore';
 import { apiService } from './services/api';
 import { useQuery } from '@tanstack/react-query';
-import { Globe, Calendar, Terminal, PanelLeftClose, PanelLeftOpen, Database, Activity, Layers, Clock } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Globe, Calendar, Terminal, PanelLeftClose, PanelLeftOpen, Database, Activity, Layers } from 'lucide-react';
 
 const queryClient = new QueryClient({
   defaultOptions: {

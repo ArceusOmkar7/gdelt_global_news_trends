@@ -153,6 +153,7 @@ export interface GlobalPulseResponse {
  
 export interface ThreatCountryEntry {
   country_code: string;
+  country_display?: string;
   score: number;          // 0–100
   conflict_ratio: number;
   total_events: number;

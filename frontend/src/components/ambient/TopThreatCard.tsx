@@ -7,6 +7,7 @@
  * Clicking a row calls setSelectedCountry() to open the Regional Dossier.
  */
 
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp, ShieldAlert } from 'lucide-react';
 
@@ -144,6 +145,7 @@ export const TopThreatCard = () => {
     setThreatCardCollapsed,
     setSelectedEvent,
     setSelectedCountry,
+    selectedCountry,
     setTopThreats,
     dateRange,
   } = useStore();
