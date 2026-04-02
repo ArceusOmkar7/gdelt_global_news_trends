@@ -48,6 +48,7 @@ export const GlobalEventMap: React.FC = () => {
     setSelectedEvent,
     setSelectedCountry,
     selectedEventId,
+    mapMode,
   } = useStore();
 
   const mapRef = useRef<MapRef>(null);
@@ -243,6 +244,9 @@ export const GlobalEventMap: React.FC = () => {
               id="agg-heatmap-layer"
               type="heatmap"
               maxzoom={22}
+              layout={{
+                visibility: mapMode === 'heatmap' ? 'visible' : 'none',
+              }}
               paint={{
                 'heatmap-weight': [
                   'interpolate',
@@ -312,6 +316,9 @@ export const GlobalEventMap: React.FC = () => {
               type="circle"
               minzoom={0}
               maxzoom={22}
+              layout={{
+                visibility: mapMode === 'clusters' ? 'visible' : 'none',
+              }}
               paint={{
                 'circle-color': [
                   'interpolate',

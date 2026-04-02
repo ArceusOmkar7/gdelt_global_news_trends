@@ -34,6 +34,8 @@ interface DashboardState {
   setHealthPollIntervalSeconds: (seconds: number) => void;
 
   // UI State
+  mapMode: 'heatmap' | 'clusters';
+  setMapMode: (mode: 'heatmap' | 'clusters') => void;
   tickerCollapsed: boolean;
   setTickerCollapsed: (v: boolean) => void;
   threatCardCollapsed: boolean;
@@ -96,6 +98,8 @@ export const useStore = create<DashboardState>((set) => ({
   setHealthPollIntervalSeconds: (healthPollIntervalSeconds) =>
     set({ healthPollIntervalSeconds: Math.max(10, Math.min(healthPollIntervalSeconds, 300)) }),
 
+  mapMode: 'heatmap',
+  setMapMode: (mapMode) => set({ mapMode }),
   tickerCollapsed: false,
   setTickerCollapsed: (tickerCollapsed) => set({ tickerCollapsed }),
   threatCardCollapsed: false,

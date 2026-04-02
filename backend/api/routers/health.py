@@ -102,6 +102,7 @@ def health_check(
         available=hot_tier_path.exists() and len(parquet_files) > 0,
         parquet_files=len(parquet_files),
         cutoff_days=settings.hot_tier_cutoff_days,
+        coverage_days=ingestion_stats.get("coverage_days", 0),
         total_rows=ingestion_stats["total_rows"],
         last_updated_at=ingestion_stats["last_updated_at"],
     )

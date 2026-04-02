@@ -7,7 +7,7 @@ BigQuery repository.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 import threading
 from typing import Any
@@ -67,29 +67,41 @@ class DuckDbRepository(IEventRepository):
             )
 
     def get_ingestion_stats(self) -> dict[str, Any]:
-        """Returns row count and last modified time for the hot tier."""
+        """Returns row count, coverage days, and last modified time for the hot tier."""
         hot_tier_dir = Path(self._settings.hot_tier_path)
         if not hot_tier_dir.exists() or not any(hot_tier_dir.glob("*.parquet")):
-            return {"total_rows": 0, "last_updated_at": None}
+            return {"total_rows": 0, "coverage_days": 0, "last_updated_at": None}
  
         try:
-            rows = self._query(
-                f"SELECT COUNT(*) AS cnt FROM read_parquet('{self._parquet_glob}')",
-                [],
-            )
+            sql = f"""
+                SELECT 
+                    COUNT(*) AS cnt,
+                    COUNT(DISTINCT SQLDATE) AS days
+                FROM read_parquet('{self._parquet_glob}')
+            """
+            rows = self._query(sql, [])
             total_rows = int(rows[0]["cnt"]) if rows else 0
+            coverage_days = int(rows[0]["days"]) if rows else 0
  
             files = list(hot_tier_dir.glob("*.parquet"))
             if not files:
-                return {"total_rows": total_rows, "last_updated_at": None}
+                return {
+                    "total_rows": total_rows, 
+                    "coverage_days": coverage_days,
+                    "last_updated_at": None
+                }
  
             latest_mtime = max(f.stat().st_mtime for f in files)
-            last_updated = date.fromtimestamp(latest_mtime).isoformat()
+            last_updated = datetime.fromtimestamp(latest_mtime).isoformat()
  
-            return {"total_rows": total_rows, "last_updated_at": last_updated}
+            return {
+                "total_rows": total_rows, 
+                "coverage_days": coverage_days,
+                "last_updated_at": last_updated
+            }
         except Exception as e:
             logger.error("failed_to_get_ingestion_stats", error=str(e))
-            return {"total_rows": 0, "last_updated_at": None}
+            return {"total_rows": 0, "coverage_days": 0, "last_updated_at": None}
  
 
     # ------------------------------------------------------------------

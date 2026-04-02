@@ -6,7 +6,10 @@ import { SystemControlPanel } from './components/tables/SystemControlPanel';
 import { GlobalStatsTicker } from './components/ambient/GlobalStatsTicker';
 import { TopThreatCard } from './components/ambient/TopThreatCard';
 import { useStore } from './store/useStore';
-import { Globe, Calendar, Terminal, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { apiService } from './services/api';
+import { useQuery } from '@tanstack/react-query';
+import { Globe, Calendar, Terminal, PanelLeftClose, PanelLeftOpen, Database, Activity, Layers, Clock } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,9 +20,33 @@ const queryClient = new QueryClient({
   },
 });
 
+function formatDistanceToNow(dateStr: string | null): string {
+  if (!dateStr) return 'NEVER';
+  const lastUpdate = new Date(dateStr);
+  const diffMs = new Date().getTime() - lastUpdate.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'JUST NOW';
+  if (diffMin < 60) return `${diffMin} MIN AGO`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours} HR AGO`;
+  return `${Math.floor(diffHours / 24)} DAYS AGO`;
+}
+
 function App() {
-  const { dateRange } = useStore();
+  const { dateRange, mapMode, setMapMode } = useStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const healthQuery = useQuery({
+    queryKey: ['health'],
+    queryFn: apiService.getHealth,
+    refetchInterval: 60000,
+  });
+
+  const pulseQuery = useQuery({
+    queryKey: ['global-pulse', dateRange[0], dateRange[1]],
+    queryFn: () => apiService.getGlobalPulse(dateRange[0], dateRange[1]),
+    refetchInterval: 60000,
+  });
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -44,11 +71,13 @@ function App() {
             </div>
             <div>
               <h1 className="text-sm font-bold font-mono tracking-tighter glowing-text">
-                GNIEM <span className="text-white/40">V0.1.0</span>
+                GNIEM
               </h1>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="w-1.5 h-1.5 bg-terminal-green rounded-full animate-pulse" />
-                <span className="data-ink">Satellite Link Established</span>
+                <span className={`w-1.5 h-1.5 ${healthQuery.isSuccess ? 'bg-terminal-green animate-pulse' : 'bg-cyber-red'} rounded-full`} />
+                <span className="data-ink uppercase">
+                  LAST SYNC: {formatDistanceToNow(healthQuery.data?.hot_tier.last_updated_at || null)}
+                </span>
               </div>
             </div>
           </div>
@@ -60,9 +89,24 @@ function App() {
                 {dateRange[0]} — {dateRange[1]}
               </span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1 bg-surface-900 border border-white/10 rounded">
-              <Terminal size={14} className="text-cyber-blue" />
-              <span className="data-ink">OP-MODE: INTELLIGENCE</span>
+            
+            {/* Map Mode Toggle */}
+            <div className="flex items-center bg-surface-900 border border-white/10 rounded overflow-hidden">
+              <button
+                onClick={() => setMapMode('heatmap')}
+                className={`flex items-center gap-2 px-3 py-1 transition-colors ${mapMode === 'heatmap' ? 'bg-cyber-blue text-surface-900' : 'hover:bg-white/5 text-white/50'}`}
+              >
+                <Activity size={12} />
+                <span className="text-[9px] font-mono font-bold uppercase tracking-tight">HEATMAP</span>
+              </button>
+              <div className="w-[1px] h-4 bg-white/10" />
+              <button
+                onClick={() => setMapMode('clusters')}
+                className={`flex items-center gap-2 px-3 py-1 transition-colors ${mapMode === 'clusters' ? 'bg-cyber-blue text-surface-900' : 'hover:bg-white/5 text-white/50'}`}
+              >
+                <Layers size={12} />
+                <span className="text-[9px] font-mono font-bold uppercase tracking-tight">CLUSTERS</span>
+              </button>
             </div>
           </div>
         </header>
@@ -97,15 +141,28 @@ function App() {
           >
             {/* Mission Parameters */}
             <div className="glass-panel p-4 space-y-4 pointer-events-auto shrink-0">
-              <div className="data-ink">Mission Parameters</div>
+              <div className="flex items-center justify-between">
+                <div className="data-ink uppercase">Filters</div>
+                <Terminal size={12} className="text-white/20" />
+              </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-[11px] font-mono text-white/60">
-                  <span>GEO-SYNC</span>
-                  <span className="text-terminal-green">ACTIVE</span>
+                  <div className="flex items-center gap-2">
+                    <Database size={12} className="text-cyber-blue" />
+                    <span>HOT TIER</span>
+                  </div>
+                  <span className="text-terminal-green uppercase">
+                    {healthQuery.data?.hot_tier.coverage_days || 0} Days Coverage
+                  </span>
                 </div>
                 <div className="flex justify-between text-[11px] font-mono text-white/60">
-                  <span>LLM-UPLINK</span>
-                  <span className="text-terminal-green">READY</span>
+                  <div className="flex items-center gap-2">
+                    <Activity size={12} className="text-cyber-blue" />
+                    <span>EVENTS TODAY</span>
+                  </div>
+                  <span className="text-terminal-green">
+                    {pulseQuery.data?.total_events_today.toLocaleString() || 0}
+                  </span>
                 </div>
               </div>
             </div>

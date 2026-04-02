@@ -208,6 +208,7 @@ class HotTierHealthDetail(BaseModel):
     available: bool
     parquet_files: int
     cutoff_days: int
+    coverage_days: int = 0
     total_rows: int = 0
     last_updated_at: str | None = None
 

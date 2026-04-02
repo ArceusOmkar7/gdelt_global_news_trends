@@ -182,9 +182,11 @@ export const TopThreatCard = () => {
                   onClick={() => handleRowClick(entry.country_code)}
                 />
               ))}
-              <div className="pt-1 text-[9px] font-mono text-white/15 uppercase tracking-widest text-center">
-                Click to open regional dossier
-              </div>
+              {!selectedCountry && (
+                <div className="pt-1 text-[9px] font-mono text-white/15 uppercase tracking-widest text-center animate-pulse">
+                  Click to open regional dossier
+                </div>
+              )}
             </>
           ) : (
             <div className="text-[10px] font-mono text-white/30 uppercase py-2">

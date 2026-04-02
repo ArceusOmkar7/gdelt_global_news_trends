@@ -547,7 +547,16 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 
 ---
 
-## 14. Session handoff notes
+## 14. UI State (last updated)
+
+- **Navbar Header:** Removed "V0.1.0" version number.
+- **Sync Indicator:** "LAST SYNC: {X} MIN AGO" (polled every 60s from `/health` endpoint).
+- **Sidebar Header:** Renamed "MISSION PARAMETERS" to "FILTERS".
+- **Sidebar Status:** Replaced with "HOT TIER: {X} DAYS COVERAGE" (actual parquet date coverage) and "EVENTS TODAY: {N}" (global count).
+- **Regional Dossier Hint:** "CLICK TO OPEN REGIONAL DOSSIER" only visible when no country is selected.
+- **Map View Mode:** Functional toggle in top-right between "HEATMAP" and "CLUSTERS".
+
+## 15. Session handoff notes
 
 ### To start the next session
 1. Share the latest `ingest.txt` (full codebase dump) before writing any code
@@ -573,9 +582,9 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 4. Add integration tests that assert top known codes resolve correctly from `LOOKUP-COUNTRIES.txt` (e.g., `US`, `IR`, `UP`, `UK`, `RS`).
 
 
-## 15. UI Phase 4 — Dashboard Ambient Intelligence
+## 16. UI Phase 4 — Dashboard Ambient Intelligence
  
-### 15.1 Global Stats Ticker ✅ COMPLETE
+### 16.1 Global Stats Ticker ✅ COMPLETE
 Fixed bottom bar (`position: fixed, bottom-0, z-50`). Fetches from
 `GET /api/v1/events/global-pulse` every 60s. Shows 5 stats:
 - EVENTS TODAY — total event count in date window
@@ -593,7 +602,7 @@ Chevron toggle collapses to a 1-line strip. State in Zustand (`tickerCollapsed`)
 - Schemas: `GlobalPulseResponse` in `schemas.py`
 - Methods: `get_global_pulse()` in `duckdb_repository.py`
  
-### 15.2 Top 5 Countries by Threat Level ✅ COMPLETE
+### 16.2 Top 5 Countries by Threat Level ✅ COMPLETE
 Collapsible glass-panel card in the left sidebar (below Mission Parameters).
 Shows 5 rows: rank badge, country code, colored score bar (0–100), numeric score,
 conflict % and event count sub-row. Clicking a row opens the Regional Dossier
@@ -607,12 +616,12 @@ Color: green < 30, amber 30–60, red > 60. State in Zustand (`threatCardCollaps
 - Schemas: `ThreatCountryEntry`, `TopThreatCountriesResponse` in `schemas.py`
 - Methods: `get_top_threat_countries()` in `duckdb_repository.py`
  
-### 15.3 Country Choropleth Layer (Priority 3) ⬜ NOT YET BUILT
+### 16.3 Country Choropleth Layer (Priority 3) ⬜ NOT YET BUILT
 Color countries on the Mapbox map by risk score using a Mapbox fill layer.
 Requires a static countries GeoJSON bundled in the frontend (~500 KB).
 Source: https://github.com/datasets/geo-countries (public domain)
  
-On load: fetch top-threat-countries endpoint (reuses 15.2 endpoint) with
+On load: fetch top-threat-countries endpoint (reuses 16.2 endpoint) with
 limit=50 to get scores for the top 50 countries by event volume.
 Build a Mapbox paint expression that maps country ISO codes to colors.
  
@@ -623,7 +632,7 @@ Countries with no data: transparent / very dark fill.
 Layer sits below the heatmap and circle layers. Opacity ~0.3 so map labels
 remain readable. Toggle button on the map ("CHOROPLETH ON/OFF").
  
-### 15.4 Breaking: High Activity Spike Alerts (Priority 4) ⬜ NOT YET BUILT
+### 16.4 Breaking: High Activity Spike Alerts (Priority 4) ⬜ NOT YET BUILT
 Detect countries whose last-24h event count is ≥ 2× their 7-day rolling average.
 Show pulsing alert cards overlaid on the map (absolute positioned, top-left area,
 below Mission Parameters panel).
@@ -654,7 +663,7 @@ Shows: "⚠ {CC} — {ratio:.1f}× normal activity"
 Clicking opens Regional Dossier for that country.
 Entire alert stack is collapsible. refetchInterval: 5min.
  
-### 15.5 UI Refactor — Settings Modal (All Priorities) ⬜ NOT YET BUILT
+### 16.5 UI Refactor — Settings Modal (All Priorities) ⬜ NOT YET BUILT
 The SystemControlPanel (Runtime Controls + System Health + Backend Runtime Settings)
 should move into a Settings modal triggered by a gear icon button in the header.
 The left sidebar should only contain: Mission Parameters, Top Threat Countries card,
