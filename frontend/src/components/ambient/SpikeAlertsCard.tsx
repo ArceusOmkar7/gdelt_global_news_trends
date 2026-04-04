@@ -18,6 +18,7 @@ export const SpikeAlertsCard: React.FC = () => {
   const { setSelectedEvent, setSelectedCountry } = useStore();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
+  // Poll spikes every 5 minutes
   const spikeQuery = useQuery({
     queryKey: ['activity-spikes'],
     queryFn: () => apiService.getActivitySpikes(),
@@ -25,6 +26,7 @@ export const SpikeAlertsCard: React.FC = () => {
     staleTime: 300_000,
   });
 
+  // Poll anomalies every 5 minutes
   const anomalyQuery = useQuery({
     queryKey: ['anomalies'],
     queryFn: () => apiService.getAnomalies(),
@@ -33,6 +35,7 @@ export const SpikeAlertsCard: React.FC = () => {
   });
 
   const handleOpenDossier = (countryCode: string) => {
+    // Standard event/country selection pattern
     setSelectedEvent(null);
     setSelectedCountry(countryCode);
   };
@@ -40,13 +43,14 @@ export const SpikeAlertsCard: React.FC = () => {
   const spikes = spikeQuery.data?.data || [];
   const anomalies = anomalyQuery.data?.data || {};
   
-  // Identify anomalies that aren't already in spikes
+  // Identify anomalies that aren't already in spikes to avoid duplicates
   const anomalyOnlyCCs = Object.keys(anomalies).filter(
     cc => anomalies[cc].is_anomaly && !spikes.some(s => s.country_code === cc)
   );
 
   const hasAlerts = spikes.length > 0 || anomalyOnlyCCs.length > 0;
 
+  // Empty state if no spikes or anomalies
   if (!hasAlerts) {
     return (
       <div className="glass-panel w-full p-3 flex items-center justify-center border-terminal-green/20">
@@ -59,7 +63,7 @@ export const SpikeAlertsCard: React.FC = () => {
 
   return (
     <div className="glass-panel w-full overflow-hidden border-cyber-red/20 flex flex-col">
-      {/* Header */}
+      {/* Header with toggle */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
         className="
@@ -86,10 +90,10 @@ export const SpikeAlertsCard: React.FC = () => {
         )}
       </button>
 
-      {/* Body */}
+      {/* Body — Scrollable if many alerts */}
       {!isCollapsed && (
         <div className="p-3 space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
-          {/* Spikes */}
+          {/* Spike Alerts */}
           {spikes.map((s: SpikeAlertEntry) => (
             <div 
               key={s.country_code}
@@ -117,6 +121,7 @@ export const SpikeAlertsCard: React.FC = () => {
                   [OPEN DOSSIER]
                 </button>
               </div>
+              {/* Highlight if this spike is also an AI anomaly */}
               {anomalies[s.country_code]?.is_anomaly && (
                 <div className="mt-1 flex items-center gap-1.5 ml-[17px]">
                   <AlertCircle size={9} className="text-amber-400 shrink-0" />
@@ -128,7 +133,7 @@ export const SpikeAlertsCard: React.FC = () => {
             </div>
           ))}
 
-          {/* Anomaly-only entries */}
+          {/* Anomaly-only entries (AI detected deviation without raw volume spike) */}
           {anomalyOnlyCCs.map((cc) => (
             <div 
               key={cc}

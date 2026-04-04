@@ -519,6 +519,8 @@ def run_anomaly_detection(settings: Settings) -> dict[str, dict]:
     results = {}
     feature_cols = ["event_count", "conflict_ratio", "avg_goldstein", "avg_tone", "num_mentions_sum"]
     
+    from backend.infrastructure.services.lookup_service import lookup_service
+
     for cc, group in df.groupby("country_code"):
         if len(group) < 14:
             continue
@@ -559,6 +561,8 @@ def run_anomaly_detection(settings: Settings) -> dict[str, dict]:
             reason = f"{feat_display} {abs(z_val):.1f}σ {'above' if z_val > 0 else 'below'} mean"
 
         results[cc] = {
+            "country_name": lookup_service.get_country_name(cc),
+            "country_display": lookup_service.get_country_display(cc),
             "is_anomaly": bool(is_anomaly),
             "score": round(score, 3),
             "reason": reason

@@ -141,8 +141,10 @@ export interface ForecastResponse {
 export interface GlobalPulseResponse {
   total_events_today: number;
   most_active_country: string | null;
+  most_active_display?: string | null;
   most_active_count: number;
   most_hostile_country: string | null;
+  most_hostile_display?: string | null;
   avg_global_tone: number | null;
   global_conflict_ratio: number;
 }
@@ -150,6 +152,20 @@ export interface GlobalPulseResponse {
 // ---------------------------------------------------------------------------
 // PHASE 4 — Activity Spikes & Anomalies
 // ---------------------------------------------------------------------------
+
+export interface ThreatCountryEntry {
+  country_code: string;
+  country_name?: string;
+  country_display?: string;
+  score: number;
+  conflict_ratio: number;
+  total_events: number;
+}
+
+export interface TopThreatCountriesResponse {
+  count: number;
+  data: ThreatCountryEntry[];
+}
 
 export interface SpikeAlertEntry {
   country_code: string;
@@ -167,6 +183,8 @@ export interface SpikeAlertResponse {
 }
 
 export interface AnomalyEntry {
+  country_name?: string;
+  country_display?: string;
   is_anomaly: boolean;
   score: number;
   reason: string | null;
