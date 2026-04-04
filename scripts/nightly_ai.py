@@ -1,8 +1,9 @@
-"""Nightly AI precompute job for forecasts and country briefings.
+"""Nightly AI precompute job for forecasts, country briefings, and anomaly detection.
 
 This script reads hot-tier parquet data and produces:
 1) CACHE_PATH/forecasts.parquet (30-day predictions for top countries)
 2) CACHE_PATH/briefings.json (country-level briefing text cache)
+3) CACHE_PATH/anomalies.json (IsolationForest anomaly detection results)
 """
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ from pathlib import Path
 import duckdb
 import httpx
 import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
 
 from backend.domain.models.event import EventCountByDate
 from backend.domain.services.forecasting_service import ForecastingService
@@ -479,8 +482,93 @@ async def build_briefings_payload(settings: Settings) -> dict[str, dict[str, str
     return payload
 
 
-def run_nightly_ai() -> tuple[Path, Path]:
-    """Run nightly forecast and briefing precompute and write cache outputs."""
+def run_anomaly_detection(settings: Settings) -> dict[str, dict]:
+    """Run IsolationForest anomaly detection for all countries with enough data."""
+    hot_dir = Path(settings.hot_tier_path)
+    parquet_glob = str(hot_dir / "*.parquet")
+    conn = duckdb.connect(database=":memory:")
+
+    today = date.today()
+    today_int = sql_date_int(today)
+    lookback_90d = today - timedelta(days=90)
+    lookback_90d_int = sql_date_int(lookback_90d)
+
+    # 1. Fetch daily features for all countries
+    sql = f"""
+        SELECT
+            ActionGeo_CountryCode AS country_code,
+            SQLDATE,
+            COUNT(*) AS event_count,
+            AVG(CASE WHEN QuadClass IN (3, 4) THEN 1 ELSE 0 END) AS conflict_ratio,
+            AVG(GoldsteinScale) AS avg_goldstein,
+            AVG(AvgTone) AS avg_tone,
+            SUM(NumMentions) AS num_mentions_sum
+        FROM read_parquet('{parquet_glob}')
+        WHERE SQLDATE >= ? AND SQLDATE <= ?
+          AND ActionGeo_CountryCode IS NOT NULL
+          AND ActionGeo_CountryCode != ''
+        GROUP BY country_code, SQLDATE
+        ORDER BY country_code, SQLDATE ASC
+    """
+    df = conn.execute(sql, [lookback_90d_int, today_int]).df()
+    conn.close()
+
+    if df.empty:
+        return {}
+
+    results = {}
+    feature_cols = ["event_count", "conflict_ratio", "avg_goldstein", "avg_tone", "num_mentions_sum"]
+    
+    for cc, group in df.groupby("country_code"):
+        if len(group) < 30:
+            continue
+        
+        # Fill NaNs
+        group = group.fillna(0)
+        
+        # Check if today is in the group
+        today_row = group[group["SQLDATE"] == today_int]
+        if today_row.empty:
+            continue
+            
+        X = group[feature_cols].values
+        
+        # Fit IsolationForest
+        clf = IsolationForest(contamination=0.05, random_state=42)
+        clf.fit(X)
+        
+        # Score today
+        today_X = today_row[feature_cols].values
+        score = float(clf.decision_function(today_X)[0])
+        is_anomaly = score < -0.1
+        
+        reason = None
+        if is_anomaly:
+            # Compare features to historical mean/std
+            means = group[feature_cols].mean()
+            stds = group[feature_cols].std().replace(0, 1) # avoid div by zero
+            z_scores = (today_row[feature_cols].iloc[0] - means) / stds
+            
+            # Find most deviant feature
+            z_abs = np.abs(z_scores.values)
+            most_deviant_idx = np.argmax(z_abs)
+            feat_name = feature_cols[most_deviant_idx]
+            z_val = z_scores[feat_name]
+            
+            feat_display = feat_name.replace("_", " ").capitalize()
+            reason = f"{feat_display} {abs(z_val):.1f}σ {'above' if z_val > 0 else 'below'} mean"
+
+        results[cc] = {
+            "is_anomaly": bool(is_anomaly),
+            "score": round(score, 3),
+            "reason": reason
+        }
+
+    return results
+
+
+def run_nightly_ai() -> tuple[Path, Path, Path]:
+    """Run nightly forecast, briefing, and anomaly precompute and write cache outputs."""
     settings = Settings()
     cache_dir = Path(settings.cache_path)
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -494,11 +582,16 @@ def run_nightly_ai() -> tuple[Path, Path]:
     with briefings_path.open("w", encoding="utf-8") as handle:
         json.dump(briefings, handle, indent=2)
 
+    anomalies = run_anomaly_detection(settings)
+    anomalies_path = cache_dir / "anomalies.json"
+    with anomalies_path.open("w", encoding="utf-8") as handle:
+        json.dump(anomalies, handle, indent=2)
+
     print(
         f"Nightly AI success: forecasts={forecasts_path}, briefings={briefings_path}, "
-        f"countries={len(briefings)}"
+        f"anomalies={anomalies_path}, countries={len(briefings)}"
     )
-    return forecasts_path, briefings_path
+    return forecasts_path, briefings_path, anomalies_path
 
 
 if __name__ == "__main__":

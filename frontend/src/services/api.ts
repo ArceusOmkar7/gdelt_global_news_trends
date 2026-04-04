@@ -8,6 +8,8 @@ import type {
   GlobalPulseResponse,
   TopThreatCountriesResponse,
   AnalyticsDeltaResponse,
+  SpikeAlertResponse,
+  AnomalyResponse,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
@@ -157,6 +159,22 @@ export const apiService = {
     const response = await fetch(`${API_BASE_URL}/analytics/deltas`);
     if (!response.ok) {
       throw new Error(`Failed to fetch deltas: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getActivitySpikes: async (): Promise<SpikeAlertResponse> => {
+    const response = await fetch(`${API_BASE_URL}/analytics/spikes`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch activity spikes: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getAnomalies: async (): Promise<AnomalyResponse> => {
+    const response = await fetch(`${API_BASE_URL}/analytics/anomalies`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch anomalies: ${response.statusText}`);
     }
     return response.json();
   },

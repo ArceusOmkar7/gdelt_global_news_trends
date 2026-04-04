@@ -15,11 +15,14 @@ from fastapi import APIRouter, Depends, Query
 
 from backend.api.schemas.schemas import (
     AnalyticsDeltaResponse,
+    AnomalyResponse,
     ClusterListResponse,
     EventClusterResponse,
     EventFilterRequest,
     ForecastPointResponse,
     ForecastResponse,
+    SpikeAlertEntry,
+    SpikeAlertResponse,
 )
 from backend.application.use_cases.cluster_events import ClusterEventsUseCase
 from backend.application.use_cases.forecast_events import ForecastEventsUseCase
@@ -128,3 +131,46 @@ def get_analytics_deltas(
         _delta_cache = deltas
         _delta_cache_at = now
         return AnalyticsDeltaResponse(data=deltas)
+
+
+_spike_cache: list[SpikeAlertEntry] | None = None
+_spike_cache_at: float = 0.0
+_spike_cache_lock = threading.Lock()
+SPIKE_CACHE_TTL = 900.0  # 15 minutes
+
+
+@router.get(
+    "/spikes",
+    response_model=SpikeAlertResponse,
+    summary="Activity spike alerts",
+    description="Identifies countries with >= 2.0x event spike vs 7-day average.",
+)
+def get_activity_spikes(
+    hot_repo: Annotated[DuckDbRepository, Depends(_get_hot_repository)],
+) -> SpikeAlertResponse:
+    global _spike_cache, _spike_cache_at
+
+    now = time.monotonic()
+    with _spike_cache_lock:
+        if _spike_cache is not None and (now - _spike_cache_at) < SPIKE_CACHE_TTL:
+            return SpikeAlertResponse(count=len(_spike_cache), data=_spike_cache)
+
+        spikes = hot_repo.get_activity_spikes()
+        # Map to schema
+        data = [SpikeAlertEntry.model_validate(s) for s in spikes]
+        _spike_cache = data
+        _spike_cache_at = now
+        return SpikeAlertResponse(count=len(data), data=data)
+
+
+@router.get(
+    "/anomalies",
+    response_model=AnomalyResponse,
+    summary="Regional anomalies",
+    description="Returns pre-computed IsolationForest anomaly detection results.",
+)
+def get_regional_anomalies(
+    hot_repo: Annotated[DuckDbRepository, Depends(_get_hot_repository)],
+) -> AnomalyResponse:
+    anomalies = hot_repo.get_anomalies()
+    return AnomalyResponse(data=anomalies)

@@ -300,7 +300,35 @@ class ThreatCountryEntry(BaseModel):
  
 class TopThreatCountriesResponse(BaseModel):
     """Ranked list of highest-threat countries."""
- 
+
     count: int
     data: list[ThreatCountryEntry]
- 
+
+# ---------------------------------------------------------------------------
+# PHASE 4 — Activity Spikes & Anomalies
+# ---------------------------------------------------------------------------
+
+class SpikeAlertEntry(BaseModel):
+    """One row in the activity spikes list."""
+    country_code: str
+    country_name: str | None = None
+    country_display: str | None = None
+    events_24h: int
+    baseline_avg: float
+    spike_ratio: float
+    top_cameo_root: str | None = None
+
+class SpikeAlertResponse(BaseModel):
+    """List of active activity spikes."""
+    count: int
+    data: list[SpikeAlertEntry]
+
+class AnomalyEntry(BaseModel):
+    """Anomaly detection result for a single country."""
+    is_anomaly: bool
+    score: float
+    reason: str | None = None
+
+class AnomalyResponse(BaseModel):
+    """Cached anomaly detection results for all countries."""
+    data: dict[str, AnomalyEntry]

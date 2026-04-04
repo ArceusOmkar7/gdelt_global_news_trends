@@ -96,7 +96,36 @@ export const GlobalEventMap: React.FC = () => {
     placeholderData: (prev) => prev,  // keep showing last result while new one loads
   });
 
-  // ... rest of the component is UNCHANGED (memos, onMapClick, JSX)
+  const anomalyQuery = useQuery({
+    queryKey: ['anomalies'],
+    queryFn: () => apiService.getAnomalies(),
+    refetchInterval: 300_000,
+  });
+
+  const anomalyGeoJson = useMemo<FeatureCollection<Point, any> | null>(() => {
+    if (!anomalyQuery.data?.data || !mapResponse?.is_aggregated) return null;
+    const anomalies = anomalyQuery.data.data;
+    const aggData = mapResponse.data as MapAggregation[];
+    
+    // Map anomalous countries to their aggregate point coordinates
+    const anomalousFeatures = aggData
+      .filter(d => d.country_code && anomalies[d.country_code]?.is_anomaly)
+      .map((d): Feature<Point, any> => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
+        properties: { 
+          country_code: d.country_code,
+          reason: anomalies[d.country_code!].reason
+        },
+      }));
+
+    if (anomalousFeatures.length === 0) return null;
+
+    return {
+      type: 'FeatureCollection',
+      features: anomalousFeatures,
+    };
+  }, [anomalyQuery.data, mapResponse]);
 
   const aggregatedGeoJson = useMemo<FeatureCollection<Point, any> | null>(() => {
     if (!mapResponse?.is_aggregated || mapResponse.count === 0) return null;
@@ -365,6 +394,44 @@ export const GlobalEventMap: React.FC = () => {
                 ],
                 'circle-stroke-width': 1,
                 'circle-stroke-color': 'rgba(255,255,255,0.1)',
+              }}
+            />
+          </Source>
+        )}
+
+        {anomalyGeoJson && (
+          <Source id="anomaly-source" type="geojson" data={anomalyGeoJson}>
+            <Layer
+              id="anomaly-glow-layer"
+              type="circle"
+              paint={{
+                'circle-color': '#f59e0b', // amber-500
+                'circle-radius': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  0, 8,
+                  10, 20
+                ],
+                'circle-opacity': 0.4,
+                'circle-blur': 0.8,
+              }}
+            />
+            <Layer
+              id="anomaly-pulse-layer"
+              type="circle"
+              paint={{
+                'circle-color': '#f59e0b',
+                'circle-radius': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  0, 4,
+                  10, 10
+                ],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#fbbf24', // amber-400
+                'circle-opacity': 0.8,
               }}
             />
           </Source>

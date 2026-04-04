@@ -1,0 +1,1 @@
+{"type":"pattern","name":"isolation-forest-anomaly","description":"IsolationForest(contamination=0.05) per country on 5-feature daily vector. Score < -0.1 = anomaly. Pre-computed nightly, served from JSON cache.","classification":"tactical","recorded_at":"2026-04-04T16:42:36.340Z","id":"mx-5a1028"}

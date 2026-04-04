@@ -1,19 +1,24 @@
 # Active Context — GNIEM
 
 ## Current Status
-- **Phase 1 (Navbar Cleanup):** COMPLETED.
-- **Phase 2 (Contextual Labels + Delta Indicators):** COMPLETED.
-  - Implemented threat level thresholds (LOW/MODERATE/ELEVATED/CRITICAL).
-  - Added Week-over-Week (WoW) delta indicators for threat scores.
-  - Integrated descriptive tone labels and Goldstein context.
-- **UI Phase 4 (Ambient Intelligence):** IN PROGRESS.
-  - GlobalStatsTicker (Completed).
-  - TopThreatCard (Completed).
-  - Next: Country Choropleth Layer or Activity Spike Alerts.
+- **Phase 1, 2, 3:** COMPLETED.
+- **UI Phase 4 (Ambient Intelligence):** COMPLETED.
+  - GlobalStatsTicker (Fixed bottom bar).
+  - TopThreatCard (Sidebar ranked threats).
+  - Activity Spike Alerts (2.0x detection).
+  - IsolationForest Anomaly Detection (Nightly pre-compute).
+  - Map & Sidebar Anomaly Visuals (Pulsing amber glow, badges).
+- **Next: UI Phase 4.3 Country Choropleth Layer.**
 
 ## Last Session Summary
-- Established the structured memory system (`GEMINI.md` and `memory-bank/`).
-- Verified that Phase 2 features were successfully implemented in previous commits.
+- Implemented `GET /analytics/spikes` with 2.0x threshold logic and 15-min cache.
+- Implemented IsolationForest anomaly detection in `scripts/nightly_ai.py` with 5-feature vectors.
+- Added `GET /analytics/anomalies` to serve nightly pre-computed flags.
+- Created `SpikeAlertsCard` component with 5-min polling and [OPEN DOSSIER] integration.
+- Updated `GlobalEventMap` with pulsing amber markers for anomalous countries.
+- Updated `TopThreatCard` with ◈ ANOMALY badges.
+- Recorded patterns/conventions via `mulch`.
+- Updated `CONTEXT.md` section 14 and 17.
 
 ## Next Task
-- UI Phase 4: Implement the Country Choropleth Layer or Activity Spike Alerts as specified in `CONTEXT.md`.
+- UI Phase 4.3: Implement the Country Choropleth Layer (risk score Mapbox fill layer).

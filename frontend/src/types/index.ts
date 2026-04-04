@@ -148,19 +148,30 @@ export interface GlobalPulseResponse {
 }
  
 // ---------------------------------------------------------------------------
-// 15.2 — Top Threat Countries
+// PHASE 4 — Activity Spikes & Anomalies
 // ---------------------------------------------------------------------------
- 
-export interface ThreatCountryEntry {
+
+export interface SpikeAlertEntry {
   country_code: string;
+  country_name?: string;
   country_display?: string;
-  score: number;          // 0–100
-  conflict_ratio: number;
-  total_events: number;
+  events_24h: number;
+  baseline_avg: number;
+  spike_ratio: number;
+  top_cameo_root?: string;
 }
- 
-export interface TopThreatCountriesResponse {
+
+export interface SpikeAlertResponse {
   count: number;
-  data: ThreatCountryEntry[];
+  data: SpikeAlertEntry[];
 }
- 
+
+export interface AnomalyEntry {
+  is_anomaly: boolean;
+  score: number;
+  reason: string | null;
+}
+
+export interface AnomalyResponse {
+  data: Record<string, AnomalyEntry>;
+}

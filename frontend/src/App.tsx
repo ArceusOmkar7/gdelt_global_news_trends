@@ -4,6 +4,7 @@ import { IntelligencePanel } from './components/tables/IntelligencePanel';
 import { SystemControlPanel } from './components/tables/SystemControlPanel';
 import { GlobalStatsTicker } from './components/ambient/GlobalStatsTicker';
 import { TopThreatCard } from './components/ambient/TopThreatCard';
+import { SpikeAlertsCard } from './components/ambient/SpikeAlertsCard';
 import { useStore } from './store/useStore';
 import { apiService } from './services/api';
 import { useQuery } from '@tanstack/react-query';
@@ -153,6 +154,11 @@ function App() {
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Activity Spike Alerts (PHASE 4) */}
+          <div className="pointer-events-auto shrink-0">
+            <SpikeAlertsCard />
           </div>
 
           {/* 15.2 Threat Monitor */}

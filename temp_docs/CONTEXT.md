@@ -194,6 +194,7 @@ This file lists the 3 latest file URLs (Events, Mentions, GKG). Download, parse,
 ### Nightly AI jobs (`scripts/nightly_ai.py`)
 - **Prophet forecasting:** Runs on hot tier aggregated by country + day, forecasts 30 days ahead for top 50 countries by event volume. Output: `/data/cache/forecasts.parquet`
 - **Groq briefings:** For top 30 countries, sends last 7 days of event summary to Groq Llama 3 70B, stores result in `/data/cache/briefings.json`
+- **Anomaly Detection (implemented):** Runs IsolationForest per country on 5 features (count, conflict_ratio, goldstein, tone, mentions). Flagged if score < -0.1. Stores in `/data/cache/anomalies.json`.
 - **Country label mapping (implemented):** Briefings now prefer ActionGeo 2-letter lookup (`LOOKUP-COUNTRIES.txt`) for country/region names, then fall back to CAMEO lookup.
 - **Prompt grounding (implemented):** Groq system prompt now includes an authoritative run-time codebook (`CODE -> LABEL`) and user prompt requires label usage in output.
 - **Quality gate (implemented):** Low-quality/hallucination patterns (e.g., "code is invalid", "could refer to") are rejected and replaced by deterministic fallback text.
@@ -220,7 +221,7 @@ backend/
 │   ├── main.py               # FastAPI app, lifespan, CORS
 │   ├── routers/
 │   │   ├── events.py         # GET /events, /events/region/{cc}, /events/counts, /events/region/{cc}/risk-score
-│   │   ├── analytics.py      # GET /analytics/clusters, /analytics/forecast/{cc}
+│   │   ├── analytics.py      # GET /analytics/clusters, /analytics/forecast/{cc}, /spikes, /anomalies
 │   │   ├── map.py            # GET /events/map (zoom-adaptive, TTL cache)
 │   │   └── health.py         # GET /health, /health/settings
 │   └── schemas/schemas.py    # Pydantic response models
@@ -255,6 +256,8 @@ backend/
 | GET | `/api/v1/events/counts/{cc}` | Daily event counts for charting |
 | GET | `/api/v1/analytics/forecast/{cc}` | Prophet conflict forecast |
 | GET | `/api/v1/analytics/clusters` | TF-IDF + KMeans event clusters |
+| GET | `/api/v1/analytics/spikes` | Activity spike alerts (2.0x vs 7d avg) |
+| GET | `/api/v1/analytics/anomalies` | IsolationForest regional anomalies |
 | GET | `/api/v1/events/{id}/analyze` | LLM deep analysis of a single event |
 | GET | `/api/v1/health` | Service health check |
 | GET | `/api/v1/health/settings` | Runtime settings |
@@ -263,8 +266,8 @@ backend/
 ```
 fastapi, uvicorn, pydantic-settings
 duckdb
-google-cloud-bigquery, pyarrow, pandas
-scikit-learn (TF-IDF + KMeans clustering)
+google-cloud-bigquery, pyarrow, pandas, numpy
+scikit-learn (TF-IDF + KMeans clustering, IsolationForest)
 prophet (time-series forecasting)
 httpx (async HTTP for CSV feed)
 ```
@@ -327,7 +330,11 @@ def compute_risk_score(conflict_ratio, avg_goldstein, avg_tone) -> int:
 ```
 frontend/src/
 ├── components/
-│   ├── map/GlobalEventMap.tsx       # Mapbox map, zoom-adaptive, BBOX snapping
+│   ├── map/GlobalEventMap.tsx       # Mapbox map, zoom-adaptive, BBOX snapping, anomalies
+│   ├── ambient/
+│   │   ├── SpikeAlertsCard.tsx      # Activity spikes & anomaly stack
+│   │   ├── GlobalStatsTicker.tsx
+│   │   └── TopThreatCard.tsx
 │   └── tables/
 │       ├── IntelligencePanel.tsx    # Event Intelligence + Regional Dossier panel
 │       └── SystemControlPanel.tsx   # Health, runtime settings, controls
@@ -377,12 +384,16 @@ Always deduplicate themes before rendering: `[...new Set(themes)].slice(0, 6)`
 
 ### Frontend types (`types/index.ts`)
 All API response types are defined here. Key additions:
+- `SpikeAlertResponse` — country_code, spike_ratio, events_24h, baseline_avg
+- `AnomalyResponse` — Record of is_anomaly, score, reason per country
 - `RiskScoreResponse` — score, trend, conflict_ratio, avg_goldstein, avg_tone, total_events
 - `ForecastPoint` — date, predicted_count, lower_bound, upper_bound
 - `ForecastResponse` — country_code, horizon_days, model_type, historical_summary, predictions
 
 ### API service (`services/api.ts`)
 All fetch calls go through `apiService`. Key methods:
+- `getActivitySpikes()` — activity spike alerts
+- `getAnomalies()` — IsolationForest results
 - `getMapData()` — map endpoint
 - `getEventsByRegion()` — regional events
 - `getRegionalStats()` — themes/persons/orgs aggregation
@@ -408,6 +419,12 @@ All fetch calls go through `apiService`. Key methods:
 - On-demand for others (slow, cached after first run)
 - **Requires at least 7 days of hot-tier data** for meaningful output. With 1–2 days Prophet produces a near-flat forecast. Run `--backfill-days 7` then re-run nightly_ai.py.
 - Forecast displayed in Regional Dossier as a red AreaChart with uncertainty band
+
+### Anomaly Detection (IsolationForest)
+- Input: 5-feature vector per country/day (event_count, conflict_ratio, goldstein, tone, mentions)
+- Pipeline: `IsolationForest(contamination=0.05)` per country
+- Output: Anomaly flag and score (< -0.1 = anomalous). "Reason" string based on feature Z-scores.
+- Runs nightly, cached in `/data/cache/anomalies.json`.
 
 ### LLM briefings (Groq Llama 3 70B)
 - Prompt: "Summarize the geopolitical situation in {country} based on these recent events..."
@@ -477,11 +494,11 @@ Current state (as of March 2026):
   - IntelligencePanel — Event Intelligence view (QuadClass badge, Goldstein bar, CAMEO labels, actors, GKG insights, LLM analysis)
   - IntelligencePanel — Regional Dossier view (risk score, event frequency chart, conflict forecast chart, themes, entities, orgs, top events)
   - SystemControlPanel — collapsed by default, health badge always visible in header, full panel expands on click
-- **UI Phase 4 — Ambient Intelligence (partially complete):**
-  - ✅ 15.1 GlobalStatsTicker — fixed bottom bar, 60s refetch, collapsible
-  - ✅ 15.2 TopThreatCard — sidebar card, top 5 countries by risk score, 2min refetch, collapsible
+- **UI Phase 4 — Ambient Intelligence (complete):**
+  - ✅ 15.1 GlobalStatsTicker — complete
+  - ✅ 15.2 TopThreatCard — complete
   - ⬜ 15.3 Country Choropleth Layer — not yet built
-  - ⬜ 15.4 Activity Spike Alerts — not yet built
+  - ✅ 15.4 Activity Spike Alerts — complete
   - ⬜ 15.5 Settings Modal refactor — not yet built
 - **Sidebar layout:** scrollable w-[22rem] column, pointer-events-none wrapper, header toggle to slide sidebar in/out
 - **Known remaining work:** Spark/HDFS academic evidence (WSL, not blocking), GCP deployment, Nginx config, written reports
@@ -562,6 +579,10 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
   - 71-100: CRITICAL (red)
   - Applied to sidebar cards and dossier panel.
 - **WoW Deltas:** Sidebar cards show week-over-week score deltas (e.g. ▲ +7 red, ▼ -3 green).
+- **Activity Spike Alerts (PHASE 4):** New "SPIKE ALERTS" section in sidebar. Shows pulsing Zap icon and count. Displays countries with > 2.0x spike or IsolationForest anomaly flags. [OPEN DOSSIER] button opens regional intelligence.
+- **Anomaly Visuals (PHASE 4):**
+  - **Map:** Anomalous countries get a pulsing amber glow + pulse circle overlay.
+  - **Sidebar:** Top Threat rows get a ◈ ANOMALY badge in amber.
 - **Tone Labels:** Global pulse ticker shows descriptive labels for mean tone (e.g. "(Mildly Hostile)").
 - **Event Intelligence fixes:**
   - Null/0 LAT/LON now displays as "Unavailable".
@@ -586,6 +607,7 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 ### What's working (as of March 2026)
 - Full backend: FastAPI, DuckDB hot tier, BigQuery cold tier, RoutedRepository, all endpoints
 - Full frontend: map, Event Intelligence panel, Regional Dossier panel, system controls
+- Activity Spikes & Anomalies: IsolationForest detection and 2.0x spike detection working end-to-end.
 - Data pipeline: daily_bq_pull.py, realtime_fetcher.py, nightly_ai.py all written and tested
 - LLM analysis: Groq + scraper working end-to-end
 - Nightly briefing improvements: ActionGeo 2-letter lookup integration, codebook-aware prompts, low-quality response filtering, and config-driven lookup URLs/paths are implemented.
@@ -593,14 +615,10 @@ with zipfile.ZipFile(io.BytesIO(zdata)) as z:
 ### What's next
 1. **GCP VM deployment** — copy code to VM, set up systemd services, Nginx reverse proxy, SSL
 2. **Vercel deployment** — set `VITE_API_URL` to VM's public IP, deploy frontend
-3. **Spark/HDFS academic evidence** — WSL only, for Dataset Documentation report screenshots
-4. **Written reports** — Cloud Cost Estimation, AI Requirements, Dataset Documentation
-
-### Suggestions (optional)
-1. Add a forecast post-check in `nightly_ai.py`: if a country's 30-day forecast is all zeros while recent conflict history exists, tag with a warning field (or fallback to a short moving-average baseline).
-2. Store `country_label` alongside `country_code` in `forecasts.parquet` and `briefings.json` to reduce repeated lookup work in API/frontend.
-3. Add a small nightly quality report (`/data/cache/nightly_ai_report.json`) summarizing: Groq success count, fallback count, low-quality rejections, and per-country forecast zero-rate.
-4. Add integration tests that assert top known codes resolve correctly from `LOOKUP-COUNTRIES.txt` (e.g., `US`, `IR`, `UP`, `UK`, `RS`).
+3. **UI Phase 4.3 Country Choropleth Layer** — risk score Mapbox fill layer
+4. **UI Phase 4.5 Settings Modal** — header gear icon + system panel move
+5. **Spark/HDFS academic evidence** — WSL only, for Dataset Documentation report screenshots
+6. **Written reports** — Cloud Cost Estimation, AI Requirements, Dataset Documentation
 
 
 ## 17. UI Phase 4 — Dashboard Ambient Intelligence
@@ -614,87 +632,28 @@ Fixed bottom bar (`position: fixed, bottom-0, z-50`). Fetches from
 - AVG GLOBAL TONE — mean AvgTone across all events
 - CONFLICT RATIO — % of events with QuadClass 3 or 4 (red when > 35%)
  
-Desktop: all items inline separated by `·`. Mobile: cycles every 3s.
-Chevron toggle collapses to a 1-line strip. State in Zustand (`tickerCollapsed`).
- 
-**Backend endpoint:** `GET /api/v1/events/global-pulse`
-- 3 DuckDB queries (global aggregates, most-active count, most-hostile country)
-- 60s in-process TTL cache keyed by `{start_date}:{end_date}`
-- Schemas: `GlobalPulseResponse` in `schemas.py`
-- Methods: `get_global_pulse()` in `duckdb_repository.py`
- 
 ### 17.2 Top 5 Countries by Threat Level ✅ COMPLETE
 Collapsible glass-panel card in the left sidebar (below Mission Parameters).
 Shows 5 rows: rank badge, country code, colored score bar (0–100), numeric score,
-conflict % and event count sub-row. Clicking a row opens the Regional Dossier
-(calls `setSelectedEvent(null)` then `setSelectedCountry(cc)` — ordering is mandatory).
-Color: green < 30, amber 30–60, red > 60. State in Zustand (`threatCardCollapsed`).
- 
-**Backend endpoint:** `GET /api/v1/events/top-threat-countries?limit=5`
-- Fetches top 50 countries by event volume from DuckDB
-- Computes `compute_risk_score()` in Python for each, sorts descending, returns top N
-- 120s in-process TTL cache keyed by `{start_date}:{end_date}:{limit}`
-- Schemas: `ThreatCountryEntry`, `TopThreatCountriesResponse` in `schemas.py`
-- Methods: `get_top_threat_countries()` in `duckdb_repository.py`
+conflict % and event count sub-row. Clicking a row opens the Regional Dossier.
  
 ### 17.3 Country Choropleth Layer (Priority 3) ⬜ NOT YET BUILT
 Color countries on the Mapbox map by risk score using a Mapbox fill layer.
-Requires a static countries GeoJSON bundled in the frontend (~500 KB).
-Source: https://github.com/datasets/geo-countries (public domain)
  
-On load: fetch top-threat-countries endpoint (reuses 17.2 endpoint) with
-limit=50 to get scores for the top 50 countries by event volume.
-Build a Mapbox paint expression that maps country ISO codes to colors.
- 
-GDELT uses FIPS country codes, not ISO-2. Need a FIPS→ISO mapping table
-(~250 entries, static JSON in frontend/src/lib/fips-to-iso.ts).
-Countries with no data: transparent / very dark fill.
- 
-Layer sits below the heatmap and circle layers. Opacity ~0.3 so map labels
-remain readable. Toggle button on the map ("CHOROPLETH ON/OFF").
- 
-### 17.4 Breaking: High Activity Spike Alerts (Priority 4) ⬜ NOT YET BUILT
+### 17.4 Breaking: High Activity Spike Alerts ✅ COMPLETE
 Detect countries whose last-24h event count is ≥ 2× their 7-day rolling average.
-Show pulsing alert cards overlaid on the map (absolute positioned, top-left area,
-below Mission Parameters panel).
+Also integrates IsolationForest anomaly detection results pre-computed nightly.
  
-**New backend endpoint needed:**
-GET /api/v1/events/activity-spikes
-Returns: [{ country_code: str, today_count: int, baseline_avg: float, ratio: float }]
+**Backend endpoints:**
+- `GET /api/v1/analytics/spikes`: 2.0x detection, cached 15min.
+- `GET /api/v1/analytics/anomalies`: IsolationForest decision_function results (< -0.1 = flag).
  
-DuckDB query (two aggregations):
--- today
-SELECT ActionGeo_CountryCode, COUNT(*) AS today_count
-FROM read_parquet(...)
-WHERE SQLDATE = {today_int} AND ActionGeo_CountryCode IS NOT NULL
-GROUP BY ActionGeo_CountryCode
- 
--- 7-day baseline
-SELECT ActionGeo_CountryCode, COUNT(*) * 1.0 / 7 AS daily_avg
-FROM read_parquet(...)
-WHERE SQLDATE >= {seven_days_ago_int} AND SQLDATE < {today_int}
-  AND ActionGeo_CountryCode IS NOT NULL
-GROUP BY ActionGeo_CountryCode
- 
-Join in Python, filter where today_count / daily_avg >= 2.0, sort by ratio desc,
-return top 5 spikes. Cache 5 minutes.
- 
-Frontend: each alert is a small pulsing card with cyber-red border.
-Shows: "⚠ {CC} — {ratio:.1f}× normal activity"
-Clicking opens Regional Dossier for that country.
-Entire alert stack is collapsible. refetchInterval: 5min.
+**Frontend:** `SpikeAlertsCard` at top of sidebar.
+- Pulsing Zap icon + alert count.
+- Row per country: "⚡ Gaza Strip · 3.2x spike · 847 events vs 264 avg"
+- Anomaly entries: "◈ LE · Anomaly detected · Conflict ratio 3.2σ above mean"
+- [OPEN DOSSIER] integration.
  
 ### 17.5 UI Refactor — Settings Modal (All Priorities) ⬜ NOT YET BUILT
-The SystemControlPanel (Runtime Controls + System Health + Backend Runtime Settings)
-should move into a Settings modal triggered by a gear icon button in the header.
-The left sidebar should only contain: Mission Parameters, Top Threat Countries card,
-and the Spike Alerts stack.
- 
-Settings modal contents (same data, new location):
-- Map Auto-Refresh toggle + fetch interval
-- Health polling interval
-- System Health status
-- Backend Runtime Settings (all the BQ cap / cron / cutoff numbers)
- 
-The modal uses the same glass-panel / font-mono aesthetic.
-A single ⚙ SETTINGS button in the header (top-right area) opens it.
+Gear icon button in header opens a modal for system health and runtime settings.
+Moves `SystemControlPanel` from sidebar to modal.

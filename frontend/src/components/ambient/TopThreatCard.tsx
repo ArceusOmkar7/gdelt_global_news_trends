@@ -13,7 +13,7 @@ import { ChevronDown, ChevronUp, ShieldAlert } from 'lucide-react';
 
 import { apiService } from '../../services/api';
 import { useStore } from '../../store/useStore';
-import type { ThreatCountryEntry, CountryDelta } from '../../types';
+import type { ThreatCountryEntry, CountryDelta, AnomalyEntry } from '../../types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,11 +69,13 @@ const ThreatRow = ({
   entry,
   rank,
   delta,
+  anomaly,
   onClick,
 }: {
   entry: ThreatCountryEntry;
   rank: number;
   delta?: CountryDelta;
+  anomaly?: AnomalyEntry;
   onClick: () => void;
 }) => {
   const pct = Math.min(100, Math.max(0, entry.score));
@@ -94,9 +96,19 @@ const ThreatRow = ({
           #{rank}
         </span>
         {/* Country code / name */}
-        <span className="text-[11px] font-mono font-bold text-white/80 group-hover:text-white transition-colors flex-1 truncate">
-          {entry.country_display || entry.country_code}
-        </span>
+        <div className="flex flex-col flex-1 truncate">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono font-bold text-white/80 group-hover:text-white transition-colors truncate">
+              {entry.country_display || entry.country_code}
+            </span>
+            {anomaly?.is_anomaly && (
+              <span className="text-[7px] font-mono bg-amber-500/20 text-amber-400 px-1 rounded border border-amber-500/30 uppercase tracking-tighter">
+                ◈ ANOMALY
+              </span>
+            )}
+          </div>
+        </div>
+        
         {/* Delta */}
         {delta && delta.score_delta !== 0 && (
           <span className={`text-[9px] font-mono ${getDeltaColor(delta.score_delta)} shrink-0`}>
@@ -166,6 +178,14 @@ export const TopThreatCard = () => {
     refetchInterval: 3600_000,
   });
 
+  const anomalyQuery = useQuery({
+    queryKey: ['anomalies'],
+    queryFn: () => apiService.getAnomalies(),
+    refetchInterval: 300_000,
+  });
+
+  const anomalies = anomalyQuery.data?.data || {};
+
   useEffect(() => {
     if (threatQuery.data?.data) {
       setTopThreats(threatQuery.data.data);
@@ -233,6 +253,7 @@ export const TopThreatCard = () => {
                   entry={entry}
                   rank={i + 1}
                   delta={deltasQuery.data?.data[entry.country_code]}
+                  anomaly={anomalies[entry.country_code]}
                   onClick={() => handleRowClick(entry.country_code)}
                 />
               ))}

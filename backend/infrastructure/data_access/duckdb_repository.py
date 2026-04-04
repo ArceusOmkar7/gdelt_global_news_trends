@@ -7,6 +7,7 @@ BigQuery repository.
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 import threading
