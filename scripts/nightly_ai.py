@@ -520,7 +520,7 @@ def run_anomaly_detection(settings: Settings) -> dict[str, dict]:
     feature_cols = ["event_count", "conflict_ratio", "avg_goldstein", "avg_tone", "num_mentions_sum"]
     
     for cc, group in df.groupby("country_code"):
-        if len(group) < 30:
+        if len(group) < 14:
             continue
         
         # Fill NaNs

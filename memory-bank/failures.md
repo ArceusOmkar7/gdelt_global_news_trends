@@ -27,3 +27,7 @@
 ### Risk Score Threshold Duplication
 - **Symptom:** Color thresholds (Green/Amber/Red) were inconsistent between Python backend and TypeScript frontend.
 - **Resolution:** Hardcoded shared thresholds: LOW 0-30 (Green), MODERATE 31-50 (Amber), ELEVATED 51-70 (Orange), CRITICAL 71-100 (Red).
+
+### GDELT 2.1 Export Index Misalignment
+- **Symptom:** Realtime fetcher produced corrupted country codes (single digits) and incorrect coordinates.
+- **Resolution:** Updated `scripts/realtime_fetcher.py` with exact zero-based indices from GDELT 2.1 schema (ActionGeo_CountryCode=53, etc). Cleared `realtime_buffer.parquet`.

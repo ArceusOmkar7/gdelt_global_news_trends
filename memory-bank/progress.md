@@ -20,6 +20,7 @@
 - [x] IsolationForest Anomaly Detection
 
 ## In Progress
+- [x] UI Phase 4.3 (Anomaly Detection Backend Fixes)
 - [ ] UI Phase 4.3 (Country Choropleth Layer)
 
 ## Pending
