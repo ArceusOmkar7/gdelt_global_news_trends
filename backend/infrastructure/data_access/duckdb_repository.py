@@ -786,3 +786,90 @@ class DuckDbRepository(IEventRepository):
             }
 
         return deltas
+
+    # ------------------------------------------------------------------
+    # PHASE 4 — Activity Spikes & Anomalies
+    # ------------------------------------------------------------------
+
+    def get_activity_spikes(self) -> list[dict[str, Any]]:
+        """Identifies countries with >= 2.0x event spike vs 7-day average."""
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        seven_days_ago = today - timedelta(days=8) # 7 days prior to yesterday
+
+        today_int = int(today.strftime("%Y%m%d"))
+        yesterday_int = int(yesterday.strftime("%Y%m%d"))
+        baseline_start_int = int(seven_days_ago.strftime("%Y%m%d"))
+
+        # 1. Get current (last 24h) counts
+        # We check both today (realtime) and yesterday (last full day)
+        sql_current = f"""
+            SELECT ActionGeo_CountryCode, COUNT(*) as cnt
+            FROM read_parquet('{self._parquet_glob}')
+            WHERE SQLDATE IN (?, ?)
+              AND ActionGeo_CountryCode IS NOT NULL
+              AND ActionGeo_CountryCode != ''
+            GROUP BY ActionGeo_CountryCode
+        """
+        current_rows = self._query(sql_current, [yesterday_int, today_int])
+        current_map = {row["ActionGeo_CountryCode"]: row["cnt"] for row in current_rows}
+
+        if not current_map:
+            return []
+
+        # 2. Get baseline (avg per day over prior 7 days)
+        sql_baseline = f"""
+            SELECT 
+                ActionGeo_CountryCode, 
+                COUNT(*) * 1.0 / 7.0 as avg_daily
+            FROM read_parquet('{self._parquet_glob}')
+            WHERE SQLDATE >= ? AND SQLDATE < ?
+              AND ActionGeo_CountryCode IS NOT NULL
+              AND ActionGeo_CountryCode != ''
+            GROUP BY ActionGeo_CountryCode
+        """
+        baseline_rows = self._query(sql_baseline, [baseline_start_int, yesterday_int])
+        baseline_map = {row["ActionGeo_CountryCode"]: row["avg_daily"] for row in baseline_rows}
+
+        # 3. Identify spikes
+        spikes = []
+        for cc, count in current_map.items():
+            baseline = baseline_map.get(cc, 0)
+            if baseline > 0:
+                ratio = count / baseline
+                if ratio >= 2.0 and count >= 10:
+                    # Find top CAMEO root code for this country in the spike period
+                    sql_top = f"""
+                        SELECT EventRootCode, COUNT(*) as c
+                        FROM read_parquet('{self._parquet_glob}')
+                        WHERE SQLDATE IN (?, ?) AND ActionGeo_CountryCode = ?
+                        GROUP BY EventRootCode
+                        ORDER BY c DESC
+                        LIMIT 1
+                    """
+                    top_rows = self._query(sql_top, [yesterday_int, today_int, cc])
+                    top_code = top_rows[0]["EventRootCode"] if top_rows else None
+
+                    spikes.append({
+                        "country_code": cc,
+                        "events_24h": count,
+                        "baseline_avg": round(baseline, 1),
+                        "spike_ratio": round(ratio, 2),
+                        "top_cameo_root": top_code
+                    })
+
+        spikes.sort(key=lambda x: x["spike_ratio"], reverse=True)
+        return spikes
+
+    def get_anomalies(self) -> dict[str, Any]:
+        """Returns pre-computed anomaly detection results from cache."""
+        cache_path = Path(self._settings.cache_path) / "anomalies.json"
+        if not cache_path.exists():
+            return {}
+        
+        try:
+            with cache_path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error("failed_to_load_anomalies_cache", error=str(e))
+            return {}

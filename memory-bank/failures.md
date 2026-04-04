@@ -31,3 +31,7 @@
 ### GDELT 2.1 Export Index Misalignment
 - **Symptom:** Realtime fetcher produced corrupted country codes (single digits) and incorrect coordinates.
 - **Resolution:** Updated `scripts/realtime_fetcher.py` with exact zero-based indices from GDELT 2.1 schema (ActionGeo_CountryCode=53, etc). Cleared `realtime_buffer.parquet`.
+
+### Missing Repository Methods causing 500 + CORS Errors
+- **Symptom:** Frontend console showed CORS blocks on `/analytics/spikes` and `/analytics/anomalies`. Backend logs showed `AttributeError: 'DuckDbRepository' object has no attribute 'get_activity_spikes'`.
+- **Resolution:** Implemented `get_activity_spikes` and `get_anomalies` in `DuckDbRepository`. Corrected the 500 error, which allowed the CORS middleware to function normally.
