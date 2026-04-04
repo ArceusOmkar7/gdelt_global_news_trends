@@ -9,7 +9,7 @@
 
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, ShieldAlert } from 'lucide-react';
+import { ChevronDown, ChevronUp, ShieldAlert, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 
 import { apiService } from '../../services/api';
 import { useStore } from '../../store/useStore';
@@ -102,8 +102,8 @@ const ThreatRow = ({
               {entry.country_display || entry.country_code}
             </span>
             {anomaly?.is_anomaly && (
-              <span className="text-[7px] font-mono bg-amber-500/20 text-amber-400 px-1 rounded border border-amber-500/30 uppercase tracking-tighter">
-                ◈ ANOMALY
+              <span className="flex items-center gap-0.5 text-[7px] font-mono bg-amber-500/20 text-amber-400 px-1 rounded border border-amber-500/30 uppercase tracking-tighter">
+                <AlertCircle size={7} /> ANOMALY
               </span>
             )}
           </div>
@@ -111,9 +111,10 @@ const ThreatRow = ({
         
         {/* Delta */}
         {delta && delta.score_delta !== 0 && (
-          <span className={`text-[9px] font-mono ${getDeltaColor(delta.score_delta)} shrink-0`}>
-            {delta.score_delta > 0 ? '▲' : '▼'} {Math.abs(delta.score_delta)}
-          </span>
+          <div className={`flex items-center gap-0.5 text-[9px] font-mono ${getDeltaColor(delta.score_delta)} shrink-0`}>
+            {delta.score_delta > 0 ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+            {Math.abs(delta.score_delta)}
+          </div>
         )}
         {/* Score number */}
         <div className="flex flex-col items-end shrink-0">

@@ -7,6 +7,11 @@
 - **Map:** Mapbox GL JS only. No other map libraries (Leaflet, OpenLayers).
 - **Styling:** Vanilla CSS / CSS Modules preferred for custom aesthetics.
 
+## UI & Aesthetics
+- **No Emojis:** Never use emojis in the UI (e.g., no ⚡, ◈, ▲, ▼). Use Lucide icons instead.
+- **Country Naming:** Always display countries in "Country Name (CC)" format (e.g., "India (IN)").
+- **Scrollable Components:** Sidebar cards with dynamic lists must be scrollable (max-height) rather than expanding the full page.
+
 ## Critical Rules
 - **Label Mapping:** Always use `lib/gdelt-lookups.ts` for CAMEO codes, QuadClass, and actor types. NEVER hardcode labels in components.
 - **Color System:**

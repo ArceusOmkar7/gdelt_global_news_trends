@@ -25,6 +25,7 @@ from backend.domain.models.event import (
 )
 from backend.domain.ports.ports import IEventRepository
 from backend.infrastructure.config.settings import Settings
+from backend.infrastructure.services.lookup_service import lookup_service
 
 logger = structlog.get_logger(__name__)
 
@@ -586,15 +587,7 @@ class DuckDbRepository(IEventRepository):
         start_date: date,
         end_date: date,
     ) -> dict[str, Any]:
-        """Return global aggregate stats for the stats ticker.
- 
-        Two queries are run:
-          1. Single-pass aggregation for totals, most-active country, avg tone,
-             conflict ratio.
-          2. Grouped per-country to find the most hostile country (lowest avg tone).
- 
-        Both use fresh in-process DuckDB connections (no shared lock).
-        """
+        """Return global aggregate stats for the stats ticker."""
         start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
  
         # Query 1 — global aggregates + most-active country
@@ -612,7 +605,7 @@ class DuckDbRepository(IEventRepository):
         global_rows = self._query(sql_global, [start_int, end_exclusive_int])
         g = global_rows[0] if global_rows else {}
  
-        # Query 2 — most-active country event count (for most_active_count field)
+        # Query 2 — most-active country event count
         most_active_cc = g.get("most_active_country")
         most_active_count = 0
         if most_active_cc:
@@ -625,7 +618,7 @@ class DuckDbRepository(IEventRepository):
             count_rows = self._query(sql_count, [start_int, end_exclusive_int, most_active_cc])
             most_active_count = int(count_rows[0]["cnt"]) if count_rows else 0
  
-        # Query 3 — most hostile country (lowest avg AvgTone, min 10 events for stability)
+        # Query 3 — most hostile country (lowest avg AvgTone, min 10 events)
         sql_hostile = f"""
             SELECT ActionGeo_CountryCode AS country_code
             FROM read_parquet('{self._parquet_glob}')
@@ -647,8 +640,10 @@ class DuckDbRepository(IEventRepository):
         return {
             "total_events_today": int(g.get("total_events") or 0),
             "most_active_country": most_active_cc,
+            "most_active_display": lookup_service.get_country_display(most_active_cc) if most_active_cc else None,
             "most_active_count": most_active_count,
             "most_hostile_country": most_hostile_cc,
+            "most_hostile_display": lookup_service.get_country_display(most_hostile_cc) if most_hostile_cc else None,
             "avg_global_tone": float(avg_tone) if avg_tone is not None else None,
             "global_conflict_ratio": conflict_ratio,
         }
@@ -663,12 +658,7 @@ class DuckDbRepository(IEventRepository):
         end_date: date,
         limit: int = 5,
     ) -> list[dict[str, Any]]:
-        """Return the top-N countries ranked by computed risk score.
- 
-        Fetches the top 50 countries by raw event volume, computes the risk
-        score for each in Python using compute_risk_score(), sorts descending,
-        and returns the top `limit` entries.
-        """
+        """Return the top-N countries ranked by computed risk score."""
         start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
  
         sql = f"""
@@ -690,12 +680,15 @@ class DuckDbRepository(IEventRepository):
  
         scored: list[dict[str, Any]] = []
         for row in rows:
+            cc = row["country_code"]
             cr = float(row.get("conflict_ratio") or 0.0)
             gs = row.get("avg_goldstein")
             at = row.get("avg_tone")
             score = compute_risk_score(cr, gs, at)
             scored.append({
-                "country_code": row["country_code"],
+                "country_code": cc,
+                "country_name": lookup_service.get_country_name(cc),
+                "country_display": lookup_service.get_country_display(cc),
                 "score": score,
                 "conflict_ratio": cr,
                 "total_events": int(row.get("total_events") or 0),
@@ -717,7 +710,6 @@ class DuckDbRepository(IEventRepository):
         start_7d, end_7d = self._sql_date_bounds(seven_days_ago, today)
         start_prior, end_prior = self._sql_date_bounds(fourteen_days_ago, seven_days_ago - timedelta(days=1))
 
-        # 1. Identify top 20 countries in last 14 days
         sql_top_20 = f"""
             SELECT ActionGeo_CountryCode, COUNT(*) as cnt
             FROM read_parquet('{self._parquet_glob}')
@@ -734,7 +726,6 @@ class DuckDbRepository(IEventRepository):
         if not top_20_ccs:
             return {}
 
-        # 2. Get stats for both periods
         def get_stats(start_int: int, end_int: int):
             sql_stats = f"""
                 SELECT
@@ -758,22 +749,18 @@ class DuckDbRepository(IEventRepository):
             curr = stats_7d.get(cc, {"total_events": 0, "conflict_ratio": 0.0, "avg_goldstein": 0.0, "avg_tone": 0.0})
             prev = stats_prior.get(cc, {"total_events": 0, "conflict_ratio": 0.0, "avg_goldstein": 0.0, "avg_tone": 0.0})
 
-            # Event delta %
             e_curr = curr["total_events"]
             e_prev = prev["total_events"]
             event_delta_pct = ((e_curr - e_prev) / max(1, e_prev)) * 100
 
-            # Conflict delta
             c_curr = float(curr["conflict_ratio"] or 0.0)
             c_prev = float(prev["conflict_ratio"] or 0.0)
             conflict_delta = (c_curr - c_prev) * 100
 
-            # Tone delta
             t_curr = float(curr["avg_tone"] or 0.0)
             t_prev = float(prev["avg_tone"] or 0.0)
             tone_delta = t_curr - t_prev
 
-            # Score delta
             s_curr = compute_risk_score(c_curr, curr["avg_goldstein"], t_curr)
             s_prev = compute_risk_score(c_prev, prev["avg_goldstein"], t_prev)
             score_delta = s_curr - s_prev
@@ -795,14 +782,12 @@ class DuckDbRepository(IEventRepository):
         """Identifies countries with >= 2.0x event spike vs 7-day average."""
         today = date.today()
         yesterday = today - timedelta(days=1)
-        seven_days_ago = today - timedelta(days=8) # 7 days prior to yesterday
+        seven_days_ago = today - timedelta(days=8)
 
         today_int = int(today.strftime("%Y%m%d"))
         yesterday_int = int(yesterday.strftime("%Y%m%d"))
         baseline_start_int = int(seven_days_ago.strftime("%Y%m%d"))
 
-        # 1. Get current (last 24h) counts
-        # We check both today (realtime) and yesterday (last full day)
         sql_current = f"""
             SELECT ActionGeo_CountryCode, COUNT(*) as cnt
             FROM read_parquet('{self._parquet_glob}')
@@ -817,7 +802,6 @@ class DuckDbRepository(IEventRepository):
         if not current_map:
             return []
 
-        # 2. Get baseline (avg per day over prior 7 days)
         sql_baseline = f"""
             SELECT 
                 ActionGeo_CountryCode, 
@@ -831,14 +815,12 @@ class DuckDbRepository(IEventRepository):
         baseline_rows = self._query(sql_baseline, [baseline_start_int, yesterday_int])
         baseline_map = {row["ActionGeo_CountryCode"]: row["avg_daily"] for row in baseline_rows}
 
-        # 3. Identify spikes
         spikes = []
         for cc, count in current_map.items():
             baseline = baseline_map.get(cc, 0)
             if baseline > 0:
                 ratio = count / baseline
                 if ratio >= 2.0 and count >= 10:
-                    # Find top CAMEO root code for this country in the spike period
                     sql_top = f"""
                         SELECT EventRootCode, COUNT(*) as c
                         FROM read_parquet('{self._parquet_glob}')
@@ -852,6 +834,8 @@ class DuckDbRepository(IEventRepository):
 
                     spikes.append({
                         "country_code": cc,
+                        "country_name": lookup_service.get_country_name(cc),
+                        "country_display": lookup_service.get_country_display(cc),
                         "events_24h": count,
                         "baseline_avg": round(baseline, 1),
                         "spike_ratio": round(ratio, 2),

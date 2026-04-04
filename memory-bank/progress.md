@@ -16,7 +16,7 @@
 - [x] UI Phase 2 (Contextual labels + delta indicators)
 - [x] UI Phase 4.1 (GlobalStatsTicker)
 - [x] UI Phase 4.2 (TopThreatCard)
-- [x] UI Phase 4.4 (Activity Spike Alerts)
+- [x] UI Phase 4.4 (Activity Spike Alerts + UI Refactor)
 - [x] IsolationForest Anomaly Detection
 
 ## In Progress
