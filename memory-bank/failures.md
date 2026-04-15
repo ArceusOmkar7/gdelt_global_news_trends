@@ -35,3 +35,23 @@
 ### Missing Repository Methods causing 500 + CORS Errors
 - **Symptom:** Frontend console showed CORS blocks on `/analytics/spikes` and `/analytics/anomalies`. Backend logs showed `AttributeError: 'DuckDbRepository' object has no attribute 'get_activity_spikes'`.
 - **Resolution:** Implemented `get_activity_spikes` and `get_anomalies` in `DuckDbRepository`. Corrected the 500 error, which allowed the CORS middleware to function normally.
+
+### Timeline Slider Infinite Update Loop
+- **Symptom:** Frontend crashed/reloaded with `Maximum update depth exceeded` in `DateRangeSlider`.
+- **Root Cause:** Effect-based bidirectional sync (`local slider state -> global dateRange -> effect -> local slider state`) created recursive updates.
+- **Resolution:** Removed effect-driven writeback; only commit date-range updates from explicit user actions (handle drag/preset click) with equality guards.
+
+### Duplicate Initial Query Burst on Startup
+- **Symptom:** Non-anomaly cards felt slow relative to anomalies, especially on first paint.
+- **Root Cause:** Date-dependent queries fired once with default range and again after hot-tier date alignment.
+- **Resolution:** Added global `dateWindowReady` gate so date-dependent queries wait until alignment/fallback is complete.
+
+### Briefings Generated But Not Visible in UI
+- **Symptom:** `briefings.json` had entries, but frontend did not display them.
+- **Root Cause:** No backend briefing endpoint and no frontend query/render path.
+- **Resolution:** Added `GET /api/v1/analytics/briefings`, frontend API/types integration, and Nightly Briefing section in Regional Dossier.
+
+### Anomaly Country Names Missing in Card Rows
+- **Symptom:** Anomaly rows showed raw country codes only.
+- **Root Cause:** Backend `AnomalyEntry` schema omitted `country_name/country_display`, stripping fields from response model.
+- **Resolution:** Added display/name fields to schema and standardized frontend formatting as `Country Name (CC)`.

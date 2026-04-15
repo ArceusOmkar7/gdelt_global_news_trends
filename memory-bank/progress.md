@@ -7,6 +7,9 @@
 - **AI Analytics:** KMeans/TF-IDF clustering and Prophet forecasting are integrated.
 - **Ambient Intelligence:** GlobalStatsTicker, TopThreatCard, and SpikeAlertsCard are functional.
 - **Anomaly Detection:** IsolationForest nightly pre-compute and visual integration complete.
+- **Timeline Control:** Global dual-handle date slider with quick ranges and collapse behavior is live.
+- **Briefings Integration:** Nightly briefing cache is now exposed and rendered in Regional Dossier.
+- **Load Stabilization:** Startup date-window gating prevents duplicate stale+aligned request burst.
 
 ## Done
 - [x] Backend Foundation (FastAPI, DuckDB, BigQuery Routing)
@@ -18,6 +21,10 @@
 - [x] UI Phase 4.2 (TopThreatCard)
 - [x] UI Phase 4.4 (Activity Spike Alerts + UI Refactor)
 - [x] IsolationForest Anomaly Detection
+- [x] Timeline Window Slider (dual handle + presets + collapse)
+- [x] Nightly Briefings API + Regional Dossier rendering
+- [x] Anomaly response metadata expansion (`country_name`, `country_display`)
+- [x] Date-window readiness gating for startup fetch stabilization
 
 ## In Progress
 - [x] UI Phase 4.3 (Anomaly Detection Backend Fixes)

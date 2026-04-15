@@ -18,8 +18,19 @@
 - **GKG Table:** 3.6 TB. Never query without a date partition. Full scan costs ~$17.50.
 
 ## DuckDB Patterns
-- **Concurrency:** Use per-query fresh `:memory:` connections. Never share a single `self._conn` object across threads (it serializes parallel queries).
+- **Concurrency (current implementation):** Use fresh per-query DuckDB `:memory:` connections to avoid shared-connection contention under concurrent requests.
+- **Latency behavior:** First uncached requests are parquet-scan bound; warm responses are primarily API/cache bound.
 - **Data Source:** Querying local Parquet files in `/data/hot_tier/`.
+
+## Frontend Query Flow
+- **Date alignment:** On app bootstrap, date range is aligned to latest hot-tier `last_updated_at` when local data lags behind current date.
+- **Readiness gate:** `dateWindowReady` gates date-dependent queries (`map`, `global-pulse`, `top-threat`, regional dossier queries) to avoid duplicate stale+aligned fetch cycles.
+- **Timeline control:** Bottom `Timeline Window` slider drives global `dateRange` in Zustand.
+
+## Analytics Cache Endpoints
+- `GET /api/v1/analytics/anomalies` -> serves `data/cache/anomalies.json`.
+- `GET /api/v1/analytics/briefings` -> serves `data/cache/briefings.json`.
+- `GET /api/v1/analytics/spikes` -> computed from hot-tier parquet with in-process TTL cache.
 
 ## Tier Model & Routing
 - **Hot Tier:** Data within last 90 days (DuckDB + Parquet).
