@@ -31,6 +31,31 @@ def sql_date_int(d: date) -> int:
     return int(d.strftime("%Y%m%d"))
 
 
+def sql_date_to_date(value: int) -> date:
+    """Convert SQLDATE integer format (YYYYMMDD) to date."""
+    raw = str(int(value))
+    return date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
+
+
+def latest_available_sql_date(
+    conn: duckdb.DuckDBPyConnection,
+    parquet_glob: str,
+) -> date:
+    """Return latest SQLDATE available in hot-tier parquet files."""
+    row = conn.execute(
+        f"""
+        SELECT MAX(SQLDATE) AS max_sql_date
+        FROM read_parquet('{parquet_glob}')
+        WHERE SQLDATE IS NOT NULL
+        """
+    ).fetchone()
+
+    if not row or row[0] is None:
+        raise ValueError("Could not resolve latest SQLDATE from hot-tier parquet files.")
+
+    return sql_date_to_date(int(row[0]))
+
+
 def top_countries_by_volume(
     conn: duckdb.DuckDBPyConnection,
     parquet_glob: str,
@@ -348,11 +373,11 @@ def build_forecasts_dataframe(settings: Settings) -> pd.DataFrame:
     conn = duckdb.connect(database=":memory:")
     parquet_glob = str(hot_dir / "*.parquet")
 
-    today = date.today()
+    anchor_date = latest_available_sql_date(conn, parquet_glob)
     forecast_horizon = 30
-    training_start = today - timedelta(days=90)
+    training_start = anchor_date - timedelta(days=90)
     training_start_int = sql_date_int(training_start)
-    end_exclusive_int = sql_date_int(today + timedelta(days=1))
+    end_exclusive_int = sql_date_int(anchor_date + timedelta(days=1))
 
     top_countries = top_countries_by_volume(
         conn,
@@ -408,10 +433,10 @@ async def build_briefings_payload(settings: Settings) -> dict[str, dict[str, str
     conn = duckdb.connect(database=":memory:")
     parquet_glob = str(hot_dir / "*.parquet")
 
-    today = date.today()
-    lookback_start = today - timedelta(days=7)
+    anchor_date = latest_available_sql_date(conn, parquet_glob)
+    lookback_start = anchor_date - timedelta(days=7)
     start_int = sql_date_int(lookback_start)
-    end_exclusive_int = sql_date_int(today + timedelta(days=1))
+    end_exclusive_int = sql_date_int(anchor_date + timedelta(days=1))
 
     top_countries = top_countries_by_volume(
         conn,
@@ -488,9 +513,9 @@ def run_anomaly_detection(settings: Settings) -> dict[str, dict]:
     parquet_glob = str(hot_dir / "*.parquet")
     conn = duckdb.connect(database=":memory:")
 
-    today = date.today()
-    today_int = sql_date_int(today)
-    lookback_90d = today - timedelta(days=90)
+    anchor_date = latest_available_sql_date(conn, parquet_glob)
+    anchor_int = sql_date_int(anchor_date)
+    lookback_90d = anchor_date - timedelta(days=90)
     lookback_90d_int = sql_date_int(lookback_90d)
 
     # 1. Fetch daily features for all countries
@@ -510,7 +535,7 @@ def run_anomaly_detection(settings: Settings) -> dict[str, dict]:
         GROUP BY country_code, SQLDATE
         ORDER BY country_code, SQLDATE ASC
     """
-    df = conn.execute(sql, [lookback_90d_int, today_int]).df()
+    df = conn.execute(sql, [lookback_90d_int, anchor_int]).df()
     conn.close()
 
     if df.empty:
@@ -528,9 +553,9 @@ def run_anomaly_detection(settings: Settings) -> dict[str, dict]:
         # Fill NaNs
         group = group.fillna(0)
         
-        # Check if today is in the group
-        today_row = group[group["SQLDATE"] == today_int]
-        if today_row.empty:
+        # Score the most recent available day in the hot tier.
+        anchor_row = group[group["SQLDATE"] == anchor_int]
+        if anchor_row.empty:
             continue
             
         X = group[feature_cols].values
@@ -540,8 +565,8 @@ def run_anomaly_detection(settings: Settings) -> dict[str, dict]:
         clf.fit(X)
         
         # Score today
-        today_X = today_row[feature_cols].values
-        score = float(clf.decision_function(today_X)[0])
+        anchor_X = anchor_row[feature_cols].values
+        score = float(clf.decision_function(anchor_X)[0])
         is_anomaly = score < -0.1
         
         reason = None
@@ -549,7 +574,7 @@ def run_anomaly_detection(settings: Settings) -> dict[str, dict]:
             # Compare features to historical mean/std
             means = group[feature_cols].mean()
             stds = group[feature_cols].std().replace(0, 1) # avoid div by zero
-            z_scores = (today_row[feature_cols].iloc[0] - means) / stds
+            z_scores = (anchor_row[feature_cols].iloc[0] - means) / stds
             
             # Find most deviant feature
             z_abs = np.abs(z_scores.values)
