@@ -16,7 +16,9 @@ from fastapi import APIRouter, Depends, Query
 from backend.api.schemas.schemas import (
     AnalyticsDeltaResponse,
     AnomalyResponse,
+    BriefingsResponse,
     ClusterListResponse,
+    CountryBriefingEntry,
     EventClusterResponse,
     EventFilterRequest,
     ForecastPointResponse,
@@ -174,3 +176,20 @@ def get_regional_anomalies(
 ) -> AnomalyResponse:
     anomalies = hot_repo.get_anomalies()
     return AnomalyResponse(data=anomalies)
+
+
+@router.get(
+    "/briefings",
+    response_model=BriefingsResponse,
+    summary="Nightly country briefings",
+    description="Returns pre-computed nightly briefing cache keyed by country code.",
+)
+def get_nightly_briefings(
+    hot_repo: Annotated[DuckDbRepository, Depends(_get_hot_repository)],
+) -> BriefingsResponse:
+    briefings = hot_repo.get_briefings()
+    data = {
+        code: CountryBriefingEntry.model_validate(payload)
+        for code, payload in briefings.items()
+    }
+    return BriefingsResponse(count=len(data), data=data)

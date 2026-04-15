@@ -43,7 +43,8 @@ export const IntelligencePanel: React.FC = () => {
     selectedCountry,
     setSelectedCountry,
     topThreats,
-    dateRange
+    dateRange,
+    dateWindowReady,
   } = useStore();
 
   const regionalMedian = useMemo(() => {
@@ -56,19 +57,19 @@ export const IntelligencePanel: React.FC = () => {
   const regionalStatsQuery = useQuery({
     queryKey: ['regional-stats', selectedCountry, dateRange],
     queryFn: () => apiService.getRegionalStats(selectedCountry!, dateRange[0], dateRange[1]),
-    enabled: !!selectedCountry && !selectedEvent,
+    enabled: !!selectedCountry && !selectedEvent && dateWindowReady,
   });
 
   const regionalEventsQuery = useQuery({
     queryKey: ['regional-events', selectedCountry, dateRange],
     queryFn: () => apiService.getEventsByRegion(selectedCountry!, dateRange[0], dateRange[1], 10),
-    enabled: !!selectedCountry && !selectedEvent,
+    enabled: !!selectedCountry && !selectedEvent && dateWindowReady,
   });
 
   const regionalRiskScoreQuery = useQuery({
     queryKey: ['regional-risk-score', selectedCountry, dateRange],
     queryFn: () => apiService.getRiskScore(selectedCountry!, dateRange[0], dateRange[1]),
-    enabled: !!selectedCountry && !selectedEvent,
+    enabled: !!selectedCountry && !selectedEvent && dateWindowReady,
   });
 
   const regionalCountsQuery = useQuery({
@@ -85,15 +86,28 @@ export const IntelligencePanel: React.FC = () => {
       }
       return response.json();
     },
-    enabled: !!selectedCountry && !selectedEvent,
+    enabled: !!selectedCountry && !selectedEvent && dateWindowReady,
   });
 
   const regionalForecastQuery = useQuery({
     queryKey: ['regional-forecast', selectedCountry],
     queryFn: () => apiService.getForecast(selectedCountry!),
-    enabled: !!selectedCountry && !selectedEvent,
+    enabled: !!selectedCountry && !selectedEvent && dateWindowReady,
     staleTime: 1000 * 60 * 30, // forecasts are pre-computed nightly, stable for 30 min
   });
+
+  const regionalBriefingsQuery = useQuery({
+    queryKey: ['regional-briefings'],
+    queryFn: () => apiService.getBriefings(),
+    enabled: !!selectedCountry && !selectedEvent,
+    staleTime: 1000 * 60 * 30,
+    refetchInterval: 1000 * 60 * 30,
+    retry: 1,
+  });
+
+  const selectedBriefing = selectedCountry
+    ? regionalBriefingsQuery.data?.data?.[selectedCountry.toUpperCase()]
+    : undefined;
 
   const analyzeMutation = useMutation({
     mutationFn: (eventId: number) => apiService.analyzeEvent(eventId),
@@ -516,6 +530,34 @@ export const IntelligencePanel: React.FC = () => {
                       })()
                     ) : (
                       <div className="text-[11px] font-mono text-white/40 uppercase">Unavailable</div>
+                    )}
+                  </div>
+                </section>
+
+                {/* Nightly AI Briefing */}
+                <section className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Brain size={14} className="text-cyber-blue" />
+                    <div className="data-ink text-cyber-blue uppercase tracking-wider text-xs">Nightly Briefing</div>
+                  </div>
+                  <div className="bg-surface-900/40 p-3 rounded panel-border space-y-2">
+                    {regionalBriefingsQuery.isLoading ? (
+                      <div className="text-[11px] font-mono text-white/40 uppercase animate-pulse">
+                        Loading briefing cache...
+                      </div>
+                    ) : selectedBriefing ? (
+                      <>
+                        <div className="text-[9px] font-mono uppercase tracking-widest text-white/35">
+                          Source: {selectedBriefing.source} · Generated: {selectedBriefing.generated_at.slice(0, 10)}
+                        </div>
+                        <p className="text-[12px] leading-relaxed text-white/88 font-sans">
+                          {selectedBriefing.briefing}
+                        </p>
+                      </>
+                    ) : (
+                      <div className="text-[11px] font-mono text-white/35 uppercase">
+                        No precomputed briefing for this region yet.
+                      </div>
                     )}
                   </div>
                 </section>

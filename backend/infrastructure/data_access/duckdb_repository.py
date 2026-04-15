@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
-import threading
 from typing import Any
 
 import duckdb
@@ -53,8 +52,6 @@ class DuckDbRepository(IEventRepository):
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._conn = duckdb.connect(database=":memory:")
-        self._conn_lock = threading.Lock()
         hot_tier_dir = Path(settings.hot_tier_path)
         self._parquet_glob = str(hot_tier_dir / "*.parquet")
 
@@ -457,13 +454,6 @@ class DuckDbRepository(IEventRepository):
     def _query(self, sql: str, params: list[Any]) -> list[dict[str, Any]]:
         """Execute a DuckDB query and return rows as dictionaries."""
         logger.debug("duckdb_query", sql_preview=sql[:200], params_count=len(params))
-        # # DuckDB connections are not safe for concurrent execute/fetch cycles.
-        # # FastAPI can process sync route handlers in parallel threads.
-        # with self._conn_lock:
-        #     result = self._conn.execute(sql, params)
-        #     columns = [col[0] for col in (result.description or [])]
-        #     values = result.fetchall()
-        # return [dict(zip(columns, row)) for row in values]
         conn = duckdb.connect(database=":memory:", read_only=False)
         try:
             result = conn.execute(sql, params)
@@ -856,4 +846,21 @@ class DuckDbRepository(IEventRepository):
                 return json.load(f)
         except Exception as e:
             logger.error("failed_to_load_anomalies_cache", error=str(e))
+            return {}
+
+    def get_briefings(self) -> dict[str, Any]:
+        """Returns pre-computed nightly country briefings from cache."""
+        cache_path = Path(self._settings.cache_path) / "briefings.json"
+        if not cache_path.exists():
+            return {}
+
+        try:
+            with cache_path.open("r", encoding="utf-8") as f:
+                payload = json.load(f)
+            if isinstance(payload, dict):
+                return payload
+            logger.warning("briefings_cache_invalid_shape", expected="dict", actual=type(payload).__name__)
+            return {}
+        except Exception as e:
+            logger.error("failed_to_load_briefings_cache", error=str(e))
             return {}

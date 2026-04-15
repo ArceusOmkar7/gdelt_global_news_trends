@@ -10,6 +10,7 @@ import type {
   AnalyticsDeltaResponse,
   SpikeAlertResponse,
   AnomalyResponse,
+  BriefingsResponse,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
@@ -175,6 +176,14 @@ export const apiService = {
     const response = await fetch(`${API_BASE_URL}/analytics/anomalies`);
     if (!response.ok) {
       throw new Error(`Failed to fetch anomalies: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getBriefings: async (): Promise<BriefingsResponse> => {
+    const response = await fetch(`${API_BASE_URL}/analytics/briefings`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch briefings: ${response.statusText}`);
     }
     return response.json();
   },

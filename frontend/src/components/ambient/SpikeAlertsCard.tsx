@@ -14,6 +14,13 @@ import { apiService } from '../../services/api';
 import { useStore } from '../../store/useStore';
 import { SpikeAlertEntry } from '../../types';
 
+function formatCountryLabel(display: string | undefined, code: string): string {
+  if (!display || display.trim().length === 0 || display.toUpperCase() === code.toUpperCase()) {
+    return code;
+  }
+  return `${display} (${code})`;
+}
+
 export const SpikeAlertsCard: React.FC = () => {
   const { setSelectedEvent, setSelectedCountry } = useStore();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -103,7 +110,7 @@ export const SpikeAlertsCard: React.FC = () => {
                 <div className="flex items-center gap-1.5 min-w-0">
                   <Activity size={11} className="text-cyber-red shrink-0" />
                   <span className="text-[11px] font-mono font-bold text-white/90 truncate">
-                    {s.country_display || s.country_code}
+                    {formatCountryLabel(s.country_display, s.country_code)}
                   </span>
                 </div>
                 <span className="text-[10px] font-mono text-cyber-red font-bold shrink-0">
@@ -143,7 +150,7 @@ export const SpikeAlertsCard: React.FC = () => {
                 <div className="flex items-center gap-1.5 min-w-0">
                   <Globe size={11} className="text-amber-400 shrink-0" />
                   <span className="text-[11px] font-mono font-bold text-white/90 truncate">
-                    {anomalies[cc].country_display || cc}
+                    {formatCountryLabel(anomalies[cc].country_display, cc)}
                   </span>
                 </div>
                 <span className="text-[10px] font-mono text-amber-400 font-bold uppercase shrink-0">

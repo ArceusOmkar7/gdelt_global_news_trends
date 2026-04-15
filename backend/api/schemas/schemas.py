@@ -325,6 +325,8 @@ class SpikeAlertResponse(BaseModel):
 
 class AnomalyEntry(BaseModel):
     """Anomaly detection result for a single country."""
+    country_name: str | None = None
+    country_display: str | None = None
     is_anomaly: bool
     score: float
     reason: str | None = None
@@ -332,3 +334,19 @@ class AnomalyEntry(BaseModel):
 class AnomalyResponse(BaseModel):
     """Cached anomaly detection results for all countries."""
     data: dict[str, AnomalyEntry]
+
+
+class CountryBriefingEntry(BaseModel):
+    """Nightly generated briefing entry for a single country/region code."""
+
+    briefing: str
+    generated_at: str
+    source: str
+    summary: str
+
+
+class BriefingsResponse(BaseModel):
+    """Cached nightly country briefings keyed by country code."""
+
+    count: int
+    data: dict[str, CountryBriefingEntry]

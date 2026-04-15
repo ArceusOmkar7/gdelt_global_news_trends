@@ -193,3 +193,15 @@ export interface AnomalyEntry {
 export interface AnomalyResponse {
   data: Record<string, AnomalyEntry>;
 }
+
+export interface CountryBriefingEntry {
+  briefing: string;
+  generated_at: string;
+  source: string;
+  summary: string;
+}
+
+export interface BriefingsResponse {
+  count: number;
+  data: Record<string, CountryBriefingEntry>;
+}
