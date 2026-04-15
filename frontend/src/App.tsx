@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GlobalEventMap } from './components/map/GlobalEventMap';
 import { IntelligencePanel } from './components/tables/IntelligencePanel';
 import { SystemControlPanel } from './components/tables/SystemControlPanel';
 import { GlobalStatsTicker } from './components/ambient/GlobalStatsTicker';
 import { TopThreatCard } from './components/ambient/TopThreatCard';
 import { SpikeAlertsCard } from './components/ambient/SpikeAlertsCard';
+import { DateRangeSlider } from './components/ambient/DateRangeSlider';
 import { useStore } from './store/useStore';
 import { apiService } from './services/api';
 import { useQuery } from '@tanstack/react-query';
@@ -22,9 +23,24 @@ function formatDistanceToNow(dateStr: string | null): string {
   return `${Math.floor(diffHours / 24)} DAYS AGO`;
 }
 
+function toIsoDateLocal(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function App() {
-  const { dateRange, mapMode, setMapMode } = useStore();
+  const {
+    dateRange,
+    mapMode,
+    setMapMode,
+    setDateRange,
+    dateWindowReady,
+    setDateWindowReady,
+  } = useStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const hasAlignedDateWindow = useRef(false);
 
   const healthQuery = useQuery({
     queryKey: ['health'],
@@ -36,7 +52,59 @@ function App() {
     queryKey: ['global-pulse', dateRange[0], dateRange[1]],
     queryFn: () => apiService.getGlobalPulse(dateRange[0], dateRange[1]),
     refetchInterval: 60000,
+    enabled: dateWindowReady,
   });
+
+  useEffect(() => {
+    if (hasAlignedDateWindow.current) return;
+
+    if (healthQuery.isError) {
+      hasAlignedDateWindow.current = true;
+      setDateWindowReady(true);
+      return;
+    }
+
+    const lastUpdatedAt = healthQuery.data?.hot_tier.last_updated_at;
+    if (!lastUpdatedAt) {
+      if (healthQuery.isSuccess) {
+        hasAlignedDateWindow.current = true;
+        setDateWindowReady(true);
+      }
+      return;
+    }
+
+    const hotTierLastDate = new Date(lastUpdatedAt);
+    if (Number.isNaN(hotTierLastDate.getTime())) {
+      hasAlignedDateWindow.current = true;
+      setDateWindowReady(true);
+      return;
+    }
+
+    const currentEnd = new Date(`${dateRange[1]}T00:00:00`);
+    const hotTierEnd = new Date(
+      hotTierLastDate.getFullYear(),
+      hotTierLastDate.getMonth(),
+      hotTierLastDate.getDate()
+    );
+
+    // If selected window is ahead of available local data, shift it back.
+    if (currentEnd > hotTierEnd) {
+      const alignedEnd = hotTierEnd;
+      const alignedStart = new Date(alignedEnd);
+      alignedStart.setDate(alignedEnd.getDate() - 7);
+      setDateRange([toIsoDateLocal(alignedStart), toIsoDateLocal(alignedEnd)]);
+    }
+
+    hasAlignedDateWindow.current = true;
+    setDateWindowReady(true);
+  }, [
+    dateRange,
+    healthQuery.data?.hot_tier.last_updated_at,
+    healthQuery.isError,
+    healthQuery.isSuccess,
+    setDateRange,
+    setDateWindowReady,
+  ]);
 
   return (
     <div className="flex flex-col h-screen w-screen bg-surface-900 overflow-hidden">
@@ -173,6 +241,7 @@ function App() {
         </div>
 
         {/* 15.1 Global Stats Ticker — fixed to bottom of viewport */}
+        <DateRangeSlider />
         <GlobalStatsTicker />
 
       </main>

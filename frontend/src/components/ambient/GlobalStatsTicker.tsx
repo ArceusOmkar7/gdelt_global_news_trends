@@ -93,13 +93,14 @@ function buildItems(data: {
 // ---------------------------------------------------------------------------
 
 export const GlobalStatsTicker = () => {
-  const { tickerCollapsed, setTickerCollapsed, dateRange } = useStore();
+  const { tickerCollapsed, setTickerCollapsed, dateRange, dateWindowReady } = useStore();
   const [activeIdx, setActiveIdx] = useState(0);
   const cycleRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const pulseQuery = useQuery({
     queryKey: ['global-pulse', dateRange[0], dateRange[1]],
     queryFn: () => apiService.getGlobalPulse(dateRange[0], dateRange[1]),
+    enabled: dateWindowReady,
     staleTime: 60_000,
     refetchInterval: 60_000,
     retry: 1,

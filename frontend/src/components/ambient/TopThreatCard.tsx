@@ -161,12 +161,14 @@ export const TopThreatCard = () => {
     selectedCountry,
     setTopThreats,
     dateRange,
+    dateWindowReady,
   } = useStore();
 
   const threatQuery = useQuery({
     queryKey: ['top-threat-countries', dateRange[0], dateRange[1]],
     queryFn: () =>
       apiService.getTopThreatCountries(5, dateRange[0], dateRange[1]),
+    enabled: dateWindowReady,
     staleTime: 120_000,
     refetchInterval: 120_000,
     retry: 1,

@@ -22,6 +22,8 @@ interface DashboardState {
   // Filter State
   dateRange: [string, string];
   setDateRange: (range: [string, string]) => void;
+  dateWindowReady: boolean;
+  setDateWindowReady: (ready: boolean) => void;
   eventRootCode: string | null;
   setEventRootCode: (code: string | null) => void;
 
@@ -38,6 +40,8 @@ interface DashboardState {
   setMapMode: (mode: 'heatmap' | 'clusters') => void;
   tickerCollapsed: boolean;
   setTickerCollapsed: (v: boolean) => void;
+  dateSliderCollapsed: boolean;
+  setDateSliderCollapsed: (v: boolean) => void;
   threatCardCollapsed: boolean;
   setThreatCardCollapsed: (v: boolean) => void;
   topThreats: ThreatCountryEntry[];
@@ -88,6 +92,8 @@ export const useStore = create<DashboardState>((set) => ({
   
   dateRange: [getSevenDaysAgo(), getToday()],
   setDateRange: (dateRange) => set({ dateRange }),
+  dateWindowReady: false,
+  setDateWindowReady: (dateWindowReady) => set({ dateWindowReady }),
   eventRootCode: null,
   setEventRootCode: (eventRootCode) => set({ eventRootCode }),
 
@@ -104,6 +110,8 @@ export const useStore = create<DashboardState>((set) => ({
   setMapMode: (mapMode) => set({ mapMode }),
   tickerCollapsed: false,
   setTickerCollapsed: (tickerCollapsed) => set({ tickerCollapsed }),
+  dateSliderCollapsed: false,
+  setDateSliderCollapsed: (dateSliderCollapsed) => set({ dateSliderCollapsed }),
   threatCardCollapsed: false,
   setThreatCardCollapsed: (threatCardCollapsed) => set({ threatCardCollapsed }),
   topThreats: [],

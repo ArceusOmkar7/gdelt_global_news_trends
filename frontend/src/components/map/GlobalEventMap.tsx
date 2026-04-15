@@ -49,6 +49,7 @@ export const GlobalEventMap: React.FC = () => {
     setSelectedCountry,
     selectedEventId,
     mapMode,
+    dateWindowReady,
   } = useStore();
 
   const mapRef = useRef<MapRef>(null);
@@ -91,6 +92,7 @@ export const GlobalEventMap: React.FC = () => {
         signal
       );
     },
+    enabled: dateWindowReady,
     staleTime: 1000 * 60 * 2,   // 2 minutes — aggregated data doesn't change mid-session
     gcTime:   1000 * 60 * 10,   // keep in memory for 10 minutes so back-navigation is free
     placeholderData: (prev) => prev,  // keep showing last result while new one loads
