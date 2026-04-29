@@ -55,3 +55,8 @@
 - **Symptom:** Anomaly rows showed raw country codes only.
 - **Root Cause:** Backend `AnomalyEntry` schema omitted `country_name/country_display`, stripping fields from response model.
 - **Resolution:** Added display/name fields to schema and standardized frontend formatting as `Country Name (CC)`.
+
+### Apify Scraper Parameter TypeError
+- **Symptom:** The backend failed when calling the Apify API due to an invalid parameter for wait duration, causing scraping to fail.
+- **Root Cause:** Apify client expected `wait_secs` but was passed `wait_duration` which was removed or unsupported.
+- **Resolution:** Changed `wait_duration=timedelta(...)` to `wait_secs=self._slow_timeout_seconds` in `scraper_service.py`. Added `waitForFinish: 5000` parameter in the payload.

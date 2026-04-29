@@ -25,6 +25,9 @@
 - [x] Nightly Briefings API + Regional Dossier rendering
 - [x] Anomaly response metadata expansion (`country_name`, `country_display`)
 - [x] Date-window readiness gating for startup fetch stabilization
+- [x] Media extraction (images & embeds) integration in article scraper and Intelligence Panel UI
+- [x] Cold tier and routing enhancements (max window limits, date resolution, relative paths)
+- [x] Local debugging scripts for Parquet and GDELT index verification
 
 ## In Progress
 - [x] UI Phase 4.3 (Anomaly Detection Backend Fixes)

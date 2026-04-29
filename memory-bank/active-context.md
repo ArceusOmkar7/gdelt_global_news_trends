@@ -3,18 +3,18 @@
 ## Current Status
 - **Phase 4 (Ambient Intelligence)**: COMPLETED with post-phase stabilization updates.
   - Added bottom **Timeline Window** dual-handle date slider with quick presets (`1D/3D/7D/14D/FULL`) and collapsible panel behavior.
-  - Fixed slider infinite-render issue (`Maximum update depth exceeded`) by moving date writes to user actions (event-driven updates) and guarded state sync.
   - Added automatic date alignment to latest hot-tier sync date for stale ingestion scenarios.
-  - Added `dateWindowReady` gating to prevent duplicate initial fetches before date alignment.
-  - Added backend endpoint `GET /api/v1/analytics/briefings` and integrated nightly briefing rendering in Regional Dossier.
   - Expanded anomaly API schema to include `country_name` and `country_display`; anomaly/spike labels now render in `Country Name (CC)` format.
+  - Added media extraction support (images and embeds) to the Apify scraper and Groq LLM analysis pipeline, with UI updates in `IntelligencePanel`.
+  - Upgraded cold tier limits (increased max window days and monthly query limit) and improved date resolution in routed repository using hot tier data.
+  - Added relative path support for hot tier data access in DuckDB repository and enhanced ingestion stats.
 
 ## Last Session Summary
-- Traced missing events/anomalies cause to stale date windows vs available hot-tier dates.
-- Implemented timeline UI + query wiring + collapse UX.
-- Fixed frontend crash loop in `DateRangeSlider`.
-- Added briefings endpoint, frontend API/types, and panel display block.
-- Reduced first-load perceived latency by preventing stale-window duplicate requests.
+- Implemented full media extraction support (images and video embeds) from articles, updating the backend scraper, LLM service, and frontend UI components.
+- Adjusted backend settings and `gdelt_repository` to properly use cold tier max window days.
+- Refactored `routed_repository` to improve date resolution logic.
+- Fixed `scraper_service` wait duration parameter (`wait_secs` instead of `wait_duration`) for Apify crawling requests to prevent crash/timeouts.
+- Added debugging scripts for table inspection and index verification.
 
 ## Next Task
 - UI Phase 4.3: Implement the Country Choropleth Layer (risk score Mapbox fill layer).
