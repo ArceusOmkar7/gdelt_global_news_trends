@@ -10,7 +10,7 @@ const FETCH_INTERVAL_OPTIONS = [15, 30, 60, 120];
 const HEALTH_INTERVAL_OPTIONS = [15, 30, 60, 120];
 
 export const SystemControlPanel = () => {
-  const [open, setOpen] = useState(false); // collapsed by default
+  const [open, setOpen] = useState(true); // expanded by default
 
   const {
     autoRefreshEnabled,

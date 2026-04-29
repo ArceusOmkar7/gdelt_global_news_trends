@@ -108,9 +108,6 @@ export const DateRangeSlider = () => {
   const {
     dateRange,
     setDateRange,
-    tickerCollapsed,
-    dateSliderCollapsed,
-    setDateSliderCollapsed,
   } = useStore();
   const [startIdx, setStartIdx] = useState(0);
   const [endIdx, setEndIdx] = useState(0);
@@ -149,8 +146,6 @@ export const DateRangeSlider = () => {
     left: `${trackStartPct}%`,
     width: `${Math.max(0, trackEndPct - trackStartPct)}%`,
   };
-
-  const bottomClass = tickerCollapsed ? 'bottom-8' : 'bottom-10';
 
   const commitDateRange = (nextStartIdx: number, nextEndIdx: number) => {
     if (!availableWindow) return;
@@ -205,131 +200,110 @@ export const DateRangeSlider = () => {
   };
 
   return (
-    <div
-      className={`
-        fixed left-1/2 -translate-x-1/2 ${bottomClass} z-40
-        w-[min(92vw,860px)] px-3
-      `}
-    >
-      <div className="glass-panel rounded-md overflow-hidden shadow-[0_0_22px_rgba(0,243,255,0.08)]">
-        <button
-          onClick={() => setDateSliderCollapsed(!dateSliderCollapsed)}
-          className="
-            w-full flex items-center justify-between
-            px-4 py-3 border-b border-white/5
-            hover:bg-white/5 transition-colors
-          "
-        >
+    <div className="w-full">
+      <div className="glass-panel rounded-md overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-cyber-blue/30 bg-surface-900/95 backdrop-blur-xl">
+        <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between bg-surface-800/50">
           <div className="flex items-center gap-2 text-cyber-blue">
             <CalendarRange size={14} />
             <span className="data-ink">Timeline Window</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[9px] md:text-[10px] font-mono uppercase tracking-widest text-white/45">
-              {selectedStart && selectedEnd
-                ? `${formatDateLabel(selectedStart)} to ${formatDateLabel(selectedEnd)}`
-                : 'window unavailable'}
+          <div className="text-[9px] md:text-[10px] font-mono uppercase tracking-widest text-white/45">
+            {selectedStart && selectedEnd
+              ? `${formatDateLabel(selectedStart)} to ${formatDateLabel(selectedEnd)}`
+              : 'window unavailable'}
+          </div>
+        </div>
+
+        <div className="p-4 flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-white/75">
+              From <span className="text-cyber-blue font-bold">{selectedStart ? formatDateLabel(selectedStart) : '--'}</span>
+            </div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-white/75">
+              To <span className="text-cyber-blue font-bold">{selectedEnd ? formatDateLabel(selectedEnd) : '--'}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-4">
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-mono text-white/60">
+              <Clock3 size={12} className="text-cyber-blue" />
+              {availableWindow ? `${availableWindow.totalDays} days available` : 'waiting for data'}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[9px] uppercase tracking-[0.16em] font-mono text-white/45 mr-2">
+                Quick Range
+              </span>
+              {PRESET_WINDOWS.map((preset) => {
+                const active = isPresetActive(preset);
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => applyPreset(preset)}
+                    className={`
+                      px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.14em]
+                      border rounded transition-colors
+                      ${active
+                        ? 'bg-cyber-blue/20 text-cyber-blue border-cyber-blue/65'
+                        : 'bg-surface-900/55 text-white/60 border-white/15 hover:border-cyber-blue/40 hover:text-cyber-blue'}
+                      disabled:opacity-40 disabled:cursor-not-allowed
+                    `}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="relative h-12 select-none mt-2">
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[4px] rounded-full bg-white/10" />
+            <div
+              className="absolute top-1/2 -translate-y-1/2 h-[4px] rounded-full bg-cyber-blue shadow-[0_0_15px_rgba(0,243,255,0.6)]"
+              style={activeTrackStyle}
+            />
+
+            <input
+              type="range"
+              min={minIdx}
+              max={maxIdx}
+              value={startIdx}
+              onChange={(e) => onStartChange(Number(e.target.value))}
+              disabled={disabled}
+              aria-label="Start date"
+              className="absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-auto slider-thumb cursor-pointer"
+            />
+            <input
+              type="range"
+              min={minIdx}
+              max={maxIdx}
+              value={endIdx}
+              onChange={(e) => onEndChange(Number(e.target.value))}
+              disabled={disabled}
+              aria-label="End date"
+              className="absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-auto slider-thumb cursor-pointer"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3 text-[10px] uppercase font-mono tracking-[0.12em] mt-1">
+            <span className="text-white/40">
+              {availableWindow ? formatDateLabel(availableWindow.min) : 'no coverage'}
             </span>
-            {dateSliderCollapsed ? (
-              <ChevronDown size={13} className="text-white/30" />
-            ) : (
-              <ChevronUp size={13} className="text-white/30" />
-            )}
+            <span className="text-cyber-blue font-bold">
+              {selectedSpan > 0 ? `${selectedSpan} day window` : 'window unavailable'}
+            </span>
+            <span className="text-white/40">
+              {availableWindow ? formatDateLabel(availableWindow.max) : '--'}
+            </span>
           </div>
-        </button>
 
-        {!dateSliderCollapsed && (
-          <div className="p-3 md:p-4 flex flex-col gap-2 md:gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[10px] md:text-[11px] font-mono uppercase tracking-wider text-white/75">
-                From <span className="text-cyber-blue font-bold">{selectedStart ? formatDateLabel(selectedStart) : '--'}</span>
-              </div>
-              <div className="text-[10px] md:text-[11px] font-mono uppercase tracking-wider text-white/75">
-                To <span className="text-cyber-blue font-bold">{selectedEnd ? formatDateLabel(selectedEnd) : '--'}</span>
-              </div>
+          {!availableWindow && (
+            <div className="text-[10px] uppercase tracking-wider font-mono text-cyber-red/80 mt-2">
+              Timeline unavailable: hot-tier coverage metadata is missing.
             </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-mono text-white/60">
-                <Clock3 size={12} className="text-cyber-blue" />
-                {availableWindow ? `${availableWindow.totalDays} days available` : 'waiting for data'}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[9px] uppercase tracking-[0.16em] font-mono text-white/45">
-                  Quick Range
-                </span>
-                {PRESET_WINDOWS.map((preset) => {
-                  const active = isPresetActive(preset);
-                  return (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => applyPreset(preset)}
-                      className={`
-                        px-2 py-1 text-[9px] md:text-[10px] font-mono uppercase tracking-[0.14em]
-                        border rounded-sm transition-colors
-                        ${active
-                          ? 'bg-cyber-blue/20 text-cyber-blue border-cyber-blue/65'
-                          : 'bg-surface-900/55 text-white/60 border-white/15 hover:border-cyber-blue/40 hover:text-cyber-blue'}
-                        disabled:opacity-40 disabled:cursor-not-allowed
-                      `}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="relative h-9 select-none">
-              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[3px] rounded-full bg-white/15" />
-              <div
-                className="absolute top-1/2 -translate-y-1/2 h-[4px] rounded-full bg-cyber-blue shadow-[0_0_14px_rgba(0,243,255,0.55)]"
-                style={activeTrackStyle}
-              />
-
-              <input
-                type="range"
-                min={minIdx}
-                max={maxIdx}
-                value={startIdx}
-                onChange={(e) => onStartChange(Number(e.target.value))}
-                disabled={disabled}
-                aria-label="Start date"
-                className="absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-auto slider-thumb"
-              />
-              <input
-                type="range"
-                min={minIdx}
-                max={maxIdx}
-                value={endIdx}
-                onChange={(e) => onEndChange(Number(e.target.value))}
-                disabled={disabled}
-                aria-label="End date"
-                className="absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-auto slider-thumb"
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-3 text-[9px] md:text-[10px] uppercase font-mono tracking-[0.12em]">
-              <span className="text-white/40">
-                {availableWindow ? formatDateLabel(availableWindow.min) : 'no coverage'}
-              </span>
-              <span className="text-cyber-blue font-semibold">
-                {selectedSpan > 0 ? `${selectedSpan} day window` : 'window unavailable'}
-              </span>
-              <span className="text-white/40">
-                {availableWindow ? formatDateLabel(availableWindow.max) : '--'}
-              </span>
-            </div>
-
-            {!availableWindow && (
-              <div className="text-[10px] uppercase tracking-wider font-mono text-cyber-red/80">
-                Timeline unavailable: hot-tier coverage metadata is missing.
-              </div>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
