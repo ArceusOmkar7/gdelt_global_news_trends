@@ -53,6 +53,12 @@ class DuckDbRepository(IEventRepository):
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         hot_tier_dir = Path(settings.hot_tier_path)
+        # Use relative path if the absolute path doesn't exist (helpful for Dev container vs local Windows)
+        if not hot_tier_dir.exists():
+            rel_path = Path("gdelt_global_news_trends") / settings.hot_tier_path.lstrip("/\\")
+            if rel_path.exists():
+                hot_tier_dir = rel_path
+
         self._parquet_glob = str(hot_tier_dir / "*.parquet")
 
         if not hot_tier_dir.exists() or not hot_tier_dir.is_dir():
@@ -65,9 +71,19 @@ class DuckDbRepository(IEventRepository):
                 f"No parquet files found in hot-tier path: {hot_tier_dir}"
             )
 
+    def _get_con(self):
+        """Standardized connection for DuckDB queries."""
+        return duckdb.connect(database=":memory:")
+
     def get_ingestion_stats(self) -> dict[str, Any]:
-        """Returns row count, coverage days, and last modified time for the hot tier."""
+        """Returns row count, coverage days, and last data date time for the hot tier."""
         hot_tier_dir = Path(self._settings.hot_tier_path)
+        # Handle the same relative path workaround for stats
+        if not hot_tier_dir.exists():
+            rel_path = Path("gdelt_global_news_trends") / self._settings.hot_tier_path.lstrip("/\\")
+            if rel_path.exists():
+                hot_tier_dir = rel_path
+
         if not hot_tier_dir.exists() or not any(hot_tier_dir.glob("*.parquet")):
             return {"total_rows": 0, "coverage_days": 0, "last_updated_at": None}
  
@@ -75,23 +91,28 @@ class DuckDbRepository(IEventRepository):
             sql = f"""
                 SELECT 
                     COUNT(*) AS cnt,
-                    COUNT(DISTINCT SQLDATE) AS days
+                    COUNT(DISTINCT SQLDATE) AS days,
+                    MAX(SQLDATE) AS max_date
                 FROM read_parquet('{self._parquet_glob}')
             """
-            rows = self._query(sql, [])
-            total_rows = int(rows[0]["cnt"]) if rows else 0
-            coverage_days = int(rows[0]["days"]) if rows else 0
- 
-            files = list(hot_tier_dir.glob("*.parquet"))
-            if not files:
-                return {
-                    "total_rows": total_rows, 
-                    "coverage_days": coverage_days,
-                    "last_updated_at": None
-                }
- 
-            latest_mtime = max(f.stat().st_mtime for f in files)
-            last_updated = datetime.fromtimestamp(latest_mtime).isoformat()
+            rows = self._get_con().execute(sql).fetchall()
+            if not rows or not rows[0]:
+                return {"total_rows": 0, "coverage_days": 0, "last_updated_at": None}
+            
+            total_rows = int(rows[0][0])
+            coverage_days = int(rows[0][1])
+            max_date_val = rows[0][2]
+            
+            if max_date_val:
+                # Format SQLDATE (e.g. 20260331) back into a proper isoformat datetime string
+                d_str = str(max_date_val)
+                if len(d_str) == 8:
+                    y, m, d = int(d_str[:4]), int(d_str[4:6]), int(d_str[6:8])
+                    last_updated = datetime(y, m, d).isoformat()
+                else:
+                    last_updated = datetime.now().isoformat()
+            else:
+                last_updated = datetime.now().isoformat()
  
             return {
                 "total_rows": total_rows, 
@@ -366,11 +387,6 @@ class DuckDbRepository(IEventRepository):
         return [self._row_to_map_detail(row) for row in rows]
 
     def get_event_by_id(self, event_id: int) -> Event | None:
-        # Keep event lookup partition-pruned to the default lookback window.
-        end_date = date.today()
-        start_date = end_date - timedelta(days=self._settings.default_lookback_days)
-        start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
-
         sql = f"""
             SELECT
                 GLOBALEVENTID,
@@ -393,15 +409,15 @@ class DuckDbRepository(IEventRepository):
                 ActionGeo_Long,
                 SOURCEURL
             FROM read_parquet('{self._parquet_glob}')
-            WHERE SQLDATE >= ?
-              AND SQLDATE < ?
-              AND GLOBALEVENTID = ?
+            WHERE GLOBALEVENTID = ?
             LIMIT 1
         """
 
-        rows = self._query(sql, [start_int, end_exclusive_int, event_id])
+        rows = self._query(sql, [event_id])
         if not rows:
             return None
+        
+        return self._row_to_event(rows[0])
         return self._row_to_event(rows[0])
 
     def get_risk_score(
@@ -464,8 +480,30 @@ class DuckDbRepository(IEventRepository):
         return [dict(zip(columns, row)) for row in values]
 
     def _resolve_dates(self, filters: EventFilter) -> tuple[date, date]:
-        end = filters.end_date or date.today()
-        start = filters.start_date or (end - timedelta(days=self._settings.default_lookback_days))
+        """Fill in default start/end dates when not supplied by the caller.
+
+        If no dates are provided, we look back from the latest date present in
+        the local hot tier, rather than today, to avoid blank dashboards.
+        """
+        if filters.start_date and filters.end_date:
+            return filters.start_date, filters.end_date
+
+        end = filters.end_date
+        if not end:
+            try:
+                res = self._get_con().execute(f"SELECT MAX(SQLDATE) FROM read_parquet('{self._parquet_glob}')").fetchone()
+                if res and res[0]:
+                    latest_raw = str(res[0])
+                    end = date(int(latest_raw[:4]), int(latest_raw[4:6]), int(latest_raw[6:8]))
+                else:
+                    end = date.today()
+            except Exception as e:
+                logger.error("failed_to_resolve_max_date", error=str(e))
+                end = date.today()
+
+        start = filters.start_date or (
+            end - timedelta(days=self._settings.default_lookback_days)
+        )
         return start, end
 
     @staticmethod

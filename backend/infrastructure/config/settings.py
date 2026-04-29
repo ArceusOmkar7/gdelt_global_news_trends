@@ -62,13 +62,13 @@ class Settings(BaseSettings):
         description="Requests newer than this many days use hot-tier DuckDB.",
     )
     cold_tier_max_window_days: int = Field(
-        default=30,
+        default=90,
         ge=1,
-        le=180,
+        le=365,
         description="Maximum allowed cold-tier date window in days.",
     )
     cold_tier_monthly_query_limit: int = Field(
-        default=3,
+        default=10,
         ge=1,
         le=100,
         description="Maximum cold-tier queries allowed per user per month.",

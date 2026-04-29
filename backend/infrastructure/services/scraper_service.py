@@ -282,8 +282,9 @@ class ScraperService:
                     "startUrls": [{"url": url}],
                     "maxRequestsPerCrawl": 1,
                     "pageFunction": self._page_function(),
+                    "waitForFinish": 5000,
                 },
-                wait_duration=timedelta(seconds=self._slow_timeout_seconds),
+                wait_secs=self._slow_timeout_seconds,
             )
         except Exception as exc:
             logger.error("apify_slow_path_request_failed", url=url, error=str(exc))

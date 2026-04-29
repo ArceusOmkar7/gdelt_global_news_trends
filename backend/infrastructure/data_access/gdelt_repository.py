@@ -265,9 +265,9 @@ class GdeltRepository(IEventRepository):
 
     def get_event_by_id(self, event_id: int) -> Event | None:
         """Retrieve a single event by its unique GLOBALEVENTID."""
-        # Keep this lookup partition-pruned by constraining to the configured default window.
+        # Use a wider window for the cold tier to increase lookup success.
         end_date = date.today()
-        start_date = end_date - timedelta(days=self._settings.default_lookback_days)
+        start_date = end_date - timedelta(days=self._settings.cold_tier_max_window_days)
 
         where_clauses = self._date_where_clauses()
         where_clauses.append("GLOBALEVENTID = @event_id")
@@ -338,7 +338,11 @@ class GdeltRepository(IEventRepository):
     # ------------------------------------------------------------------
 
     def _resolve_dates(self, filters: EventFilter) -> tuple[date, date]:
-        """Fill in default start/end dates when not supplied by the caller."""
+        """Fill in default start/end dates when not supplied by the caller.
+
+        As the cold tier, we default to today if no dates are provided,
+        but typically the RoutedRepository handles the default logic.
+        """
         end = filters.end_date or date.today()
         start = filters.start_date or (
             end - timedelta(days=self._settings.default_lookback_days)

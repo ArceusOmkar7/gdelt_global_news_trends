@@ -281,8 +281,18 @@ class RoutedRepository(IEventRepository):
     # ------------------------------------------------------------------
 
     def _resolve_dates(self, filters: EventFilter) -> tuple[date, date]:
-        end_date = filters.end_date or date.today()
-        start_date = filters.start_date or (end_date - timedelta(days=self._settings.default_lookback_days))
+        """Fill in default start/end dates when not supplied by the caller.
+
+        Uses the hot-tier repository to potentially anchor defaults to the 
+        latest available data if the user didn't specify a range.
+        """
+        if filters.start_date and filters.end_date:
+            return filters.start_date, filters.end_date
+
+        # Ask the hot repository to resolve dates (it has logic to find max available date)
+        # This ensures consistency across the dashboard.
+        start_date, end_date = self._hot._resolve_dates(filters)
+
         if start_date > end_date:
             raise ColdTierPolicyError("Invalid date range: start_date cannot be after end_date.")
         return start_date, end_date
