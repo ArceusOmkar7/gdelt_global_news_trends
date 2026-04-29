@@ -5,6 +5,7 @@ import { SystemControlPanel } from './components/tables/SystemControlPanel';
 import { GlobalStatsTicker } from './components/ambient/GlobalStatsTicker';
 import { TopThreatCard } from './components/ambient/TopThreatCard';
 import { SpikeAlertsCard } from './components/ambient/SpikeAlertsCard';
+import { TrendingNewsFeed } from './components/tables/TrendingNewsFeed';
 import { DateRangeSlider } from './components/ambient/DateRangeSlider';
 import { useStore } from './store/useStore';
 import { apiService } from './services/api';
@@ -263,7 +264,8 @@ function App() {
               </div>
 
               {/* Bento Grid layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {activeCategory === 'ALL' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 
                 {/* Main Middle Column - Top Threats & Map */}
                 <div className="lg:col-span-8 flex flex-col gap-6">
@@ -300,20 +302,52 @@ function App() {
                   </div>
                 </div>
 
-                {/* Right Column - Spikes & Systems */}
+                {/* Right Column - Spikes & Controls */}
                 <div className="lg:col-span-4 flex flex-col gap-6">
-                  {/* Spike Alerts */}
-                  <div className="rounded-xl overflow-hidden shadow-lg border border-white/5">
-                    <SpikeAlertsCard />
-                  </div>
-
-                  {/* System Health / Controls */}
-                  <div className="rounded-xl overflow-hidden shadow-lg border border-white/5 bg-surface-800/80 backdrop-blur">
+                  {/* System Control Panel */}
+                  <div className="rounded-xl overflow-hidden shadow-lg border border-white/5 glass-panel h-[350px]">
                     <SystemControlPanel />
                   </div>
-                </div>
 
-              </div>
+                  {/* Spike Alerts */}
+                  <div className="flex-1 rounded-xl overflow-hidden shadow-lg border border-white/5 min-h-[300px]">
+                    <SpikeAlertsCard />
+                  </div>
+                </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-6">
+                  {/* Map Launch Hero Card (Condensed) */}
+                  <div 
+                    onClick={() => setViewMode('map')}
+                    className="w-full h-32 glass-panel rounded-xl overflow-hidden relative group cursor-pointer border-cyber-blue/30 hover:border-cyber-blue transition-all duration-500 shadow-lg hover:shadow-[0_0_30px_rgba(0,243,255,0.15)] flex items-center px-8 justify-between"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-cyber-blue/5 to-transparent group-hover:from-cyber-blue/10 transition-colors duration-500" />
+                    <div className="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/e/ec/World_map_blank_without_borders.svg')] bg-right bg-cover opacity-10 group-hover:opacity-20 transition-opacity duration-700 pointer-events-none" />
+                    
+                    <div className="relative z-10 flex items-center gap-6">
+                      <div className="w-14 h-14 rounded-full bg-cyber-blue/10 border border-cyber-blue/50 flex items-center justify-center group-hover:scale-110 group-hover:bg-cyber-blue/20 transition-all duration-500">
+                        <MapIcon size={28} className="text-cyber-blue" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl md:text-2xl font-mono font-bold uppercase tracking-widest text-white glowing-text">
+                          {activeCategory} INTELLIGENCE MAP
+                        </h2>
+                        <p className="text-xs font-mono text-white/50 tracking-wide mt-1">
+                          View interactive geospatial clusters and intel filtered for {activeCategory}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="relative z-10 hidden md:flex items-center gap-2 text-cyber-blue/80 group-hover:text-cyber-blue transition-colors font-mono text-xs uppercase tracking-widest font-bold bg-cyber-blue/10 px-4 py-2 rounded-full border border-cyber-blue/20">
+                      Open View <ArrowLeft size={14} className="rotate-180 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                  
+                  {/* The Trending News Feed for this category */}
+                  <TrendingNewsFeed category={activeCategory} eventRootCode={eventRootCode} />
+                </div>
+              )}
               
               {/* Padding at the bottom so the ticker doesn't overlap */}
               <div className="h-24"></div>

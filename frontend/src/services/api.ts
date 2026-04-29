@@ -45,6 +45,26 @@ export const apiService = {
     return response.json();
   },
 
+  getGlobalEvents: async (
+    startDate: string,
+    endDate: string,
+    eventRootCode?: string | null,
+    limit: number = 50
+  ) => {
+    const params = new URLSearchParams({
+      start_date: startDate,
+      end_date: endDate,
+      limit: limit.toString(),
+    });
+    if (eventRootCode) params.append('event_root_code', eventRootCode);
+
+    const response = await fetch(`${API_BASE_URL}/events?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch global events: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
   getEventsByRegion: async (
     countryCode: string,
     startDate: string,
