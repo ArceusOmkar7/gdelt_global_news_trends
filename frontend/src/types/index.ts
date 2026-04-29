@@ -49,6 +49,8 @@ export interface EventAnalysis {
   entities: string[];
   themes: string[];
   confidence: number;
+  images: string[];
+  embeds: string[];
 }
 
 export interface ViewState {

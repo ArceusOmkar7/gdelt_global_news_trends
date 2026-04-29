@@ -35,21 +35,11 @@ class AnalyzeEventUseCase:
             event_id: The GLOBALEVENTID of the event to analyze.
 
         Returns:
-            An EventAnalysis object containing summary, entities, sentiment, etc.
+            An EventAnalysis object containing summary, entities, sentiment, and media.
         """
         logger.info("analyze_event_execute_start", event_id=event_id)
         
         # 1. Fetch event from repository to get source_url
-        # We need a way to get a single event by ID.
-        # Let's add that to IEventRepository if not already present.
-        # For now, we'll use get_events with a mock filter if we add event_id filter
-        # but let's assume we implement get_event_by_id in the repository.
-        
-        # Implementation detail: GDELT GLOBALEVENTID is unique.
-        # We will assume GetEventsUseCase has a method for this or we call repository directly.
-        # Let's check IEventRepository again.
-        
-        # Since I'm in charge of the repository too, I'll add get_event_by_id.
         event = self._repository.get_event_by_id(event_id)
         
         if not event or not event.source_url:
@@ -59,12 +49,14 @@ class AnalyzeEventUseCase:
                 sentiment="Neutral",
                 entities=[],
                 themes=[],
-                confidence=0.0
+                confidence=0.0,
+                images=[],
+                embeds=[],
             )
 
-        # 2. Scrape article content
+        # 2. Scrape article content and media
         try:
-            content = await self._scraper.scrape_article(event.source_url)
+            extracted = await self._scraper.scrape_article(event.source_url)
         except Exception as e:
             logger.error("analyze_event_scrape_failed", event_id=event_id, error=str(e))
             return EventAnalysis(
@@ -72,11 +64,26 @@ class AnalyzeEventUseCase:
                 sentiment="Neutral",
                 entities=[],
                 themes=[],
-                confidence=0.0
+                confidence=0.0,
+                images=[],
+                embeds=[],
             )
 
-        # 3. Perform LLM analysis
-        analysis = await self._llm.analyze_event(content)
+        # 3. Perform LLM analysis on the extracted text
+        analysis = await self._llm.analyze_event(extracted.text)
+        
+        # 4. Inject media data from the scraper into the analysis
+        # This keeps media separate from LLM processing, avoiding hallucinations
+        analysis_with_media = EventAnalysis(
+            summary=analysis.summary,
+            sentiment=analysis.sentiment,
+            entities=analysis.entities,
+            themes=analysis.themes,
+            confidence=analysis.confidence,
+            images=extracted.images,
+            embeds=extracted.embeds,
+        )
         
         logger.info("analyze_event_execute_success", event_id=event_id)
-        return analysis
+        return analysis_with_media
+

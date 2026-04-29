@@ -189,6 +189,9 @@ class EventAnalysisResponse(BaseModel):
     entities: list[str] = Field(default_factory=list)
     themes: list[str] = Field(default_factory=list)
     confidence: float
+    images: list[str] = Field(default_factory=list, description="Related image URLs for the sidebar.")
+    embeds: list[str] = Field(default_factory=list, description="Related embedded media URLs.")
+
 
 
 class BigQueryHealthDetail(BaseModel):

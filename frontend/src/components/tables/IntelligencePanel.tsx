@@ -152,6 +152,9 @@ export const IntelligencePanel: React.FC = () => {
     return 'text-terminal-green';
   };
 
+  const analysisImages = currentAnalysis?.images ?? [];
+  const analysisEmbeds = currentAnalysis?.embeds ?? [];
+
   return (
     <div className="absolute right-0 top-0 h-full w-[450px] z-50 glass-panel shadow-2xl transition-transform duration-300 animate-in slide-in-from-right flex flex-col">
       {/* Header */}
@@ -459,6 +462,77 @@ export const IntelligencePanel: React.FC = () => {
                       </div>
                     </div>
                   </div>
+
+                  {(analysisImages.length > 0 || analysisEmbeds.length > 0) && (
+                    <section className="space-y-4 pt-4 border-t border-white/5">
+                      <div className="flex items-center gap-2">
+                        <ExternalLink size={16} className="text-cyber-blue" />
+                        <span className="data-ink text-cyber-blue">Media Evidence</span>
+                      </div>
+
+                      {analysisImages.length > 0 && (
+                        <div className="space-y-2">
+                          <span className="text-[10px] text-white/40 uppercase font-mono">Images</span>
+                          <div className="grid grid-cols-2 gap-2">
+                            {analysisImages.slice(0, 4).map((imageUrl, index) => (
+                              <a
+                                key={`${imageUrl}-${index}`}
+                                href={imageUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="group block overflow-hidden rounded border border-white/10 bg-surface-900/40"
+                              >
+                                <img
+                                  src={imageUrl}
+                                  alt={`Related media ${index + 1}`}
+                                  loading="lazy"
+                                  className="h-28 w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                  onError={(event) => {
+                                    event.currentTarget.closest('a')?.classList.add('hidden');
+                                  }}
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {analysisEmbeds.length > 0 && (
+                        <div className="space-y-2">
+                          <span className="text-[10px] text-white/40 uppercase font-mono">Embeds</span>
+                          <div className="space-y-3">
+                            {analysisEmbeds.slice(0, 2).map((embedUrl, index) => (
+                              <div key={`${embedUrl}-${index}`} className="rounded border border-white/10 bg-surface-900/40 overflow-hidden">
+                                <div className="aspect-video">
+                                  <iframe
+                                    src={embedUrl}
+                                    title={`Embedded media ${index + 1}`}
+                                    className="h-full w-full"
+                                    loading="lazy"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                    referrerPolicy="no-referrer"
+                                    sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+                                    allowFullScreen
+                                  />
+                                </div>
+                                <div className="px-3 py-2 border-t border-white/10 flex items-center justify-between gap-2">
+                                  <span className="text-[10px] font-mono text-white/50 truncate">{embedUrl}</span>
+                                  <a
+                                    href={embedUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-[10px] font-mono text-cyber-blue hover:text-cyber-blue/80 whitespace-nowrap"
+                                  >
+                                    Open
+                                  </a>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  )}
                 </div>
               )}
             </section>

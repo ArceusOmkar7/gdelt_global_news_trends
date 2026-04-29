@@ -75,13 +75,26 @@ class Settings(BaseSettings):
     )
 
     # --- AI / LLM ---
-    llm_model_name: str = Field(
-        default="gemini-2.5-flash",
-        description="Gemini model to use for analysis (e.g., gemini-2.5-flash, gemini-1.5-pro).",
-    )
     groq_api_key: str | None = Field(
         default=None,
-        description="Optional Groq API key used by nightly briefing precompute jobs.",
+        description="Groq API key used for on-demand event analysis and briefings.",
+    )
+    groq_model_name: str = Field(
+        default="llama3-70b-8192",
+        description="Groq model to use for analysis (e.g., llama3-70b-8192).",
+    )
+    apify_api_token: str | None = Field(
+        default=None,
+        description="Apify API token used to run article extraction actors.",
+    )
+    apify_actor_id: str = Field(
+        default="apify/web-scraper",
+        description="Apify actor used to extract source article text.",
+    )
+    scraper_timeout_seconds: int = Field(
+        default=120,
+        ge=1,
+        description="Maximum time in seconds to wait for Apify article extraction.",
     )
     action_geo_country_codes_path: str = Field(
         default="data/LOOKUP-COUNTRIES.txt",

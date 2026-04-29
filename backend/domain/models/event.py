@@ -259,6 +259,17 @@ class MapEventDetail(BaseModel):
     model_config = {"frozen": True}
 
 
+class ExtractedArticle(BaseModel):
+    """Structured article content extracted from a source URL."""
+    
+    title: str = Field(description="Article title.")
+    text: str = Field(description="Main article body text (truncated to ~10k chars if needed).")
+    images: list[str] = Field(default_factory=list, description="List of image URLs found in the article.")
+    embeds: list[str] = Field(default_factory=list, description="List of embedded media URLs (e.g., YouTube).")
+    
+    model_config = {"frozen": True}
+
+
 class EventAnalysis(BaseModel):
     """LLM-generated intelligence analysis for a news article."""
     
@@ -267,5 +278,7 @@ class EventAnalysis(BaseModel):
     entities: list[str] = Field(default_factory=list, description="Key entities mentioned (people, orgs, places).")
     themes: list[str] = Field(default_factory=list, description="Thematic categories detected.")
     confidence: float = Field(description="LLM's confidence in the analysis (0.0 to 1.0).")
+    images: list[str] = Field(default_factory=list, description="Related image URLs for the sidebar.")
+    embeds: list[str] = Field(default_factory=list, description="Related embedded media URLs (e.g., YouTube).")
 
     model_config = {"frozen": True}

@@ -37,12 +37,13 @@
 - **Cold Tier:** Data older than 90 days (BigQuery, Events table ONLY).
 - **Cold Tier Limits:** Max 30-day window per query, max 3 queries/user/month.
 - **AI Briefings:** Served from pre-computed JSON cache or live Groq API (fallback).
+- **On-demand article analysis:** Apify actor runs extract article text, then Groq summarizes and structures the findings.
 
 ## Environment Variables
 - `GCP_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS`
 - `GDELT_DATASET` (gdelt-bq.gdeltv2)
 - `HOT_TIER_PATH` (/data/hot_tier), `CACHE_PATH` (/data/cache)
-- `GROQ_API_KEY`, `MAPBOX_TOKEN`
+- `GROQ_API_KEY`, `APIFY_API_TOKEN`, `MAPBOX_TOKEN`
 - `BQ_MAX_SCAN_BYTES` (2,000,000,000)
 
 ## What NOT to use

@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -74,15 +74,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     cluster_use_case = ClusterEventsUseCase(repository, clustering_service)
     forecast_use_case = ForecastEventsUseCase(repository, forecasting_service)
 
-    # Phase 3
-    scraper_service = ScraperService()
-    llm_service = LLMAnalysisService(settings)
-    analyze_use_case = AnalyzeEventUseCase(repository, scraper_service, llm_service)
+    # Phase 3 (optional): keep core API available even if AI dependencies are absent.
+    analyze_use_case: AnalyzeEventUseCase | None = None
+    try:
+        scraper_service = ScraperService(settings)
+        llm_service = LLMAnalysisService(settings)
+        analyze_use_case = AnalyzeEventUseCase(repository, scraper_service, llm_service)
+    except Exception as exc:
+        logger.warning("analyze_use_case_disabled", reason=str(exc))
 
     # --- Wire dependencies into routers via overrides ---
     app.dependency_overrides[_get_use_case] = lambda: events_use_case
     app.dependency_overrides[_get_map_use_case] = lambda: events_use_case
-    app.dependency_overrides[_get_analyze_use_case] = lambda: analyze_use_case
+    def _provide_analyze_use_case() -> AnalyzeEventUseCase:
+        if analyze_use_case is None:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Analyze endpoint is unavailable. "
+                    "Configure APIFY_API_TOKEN, GROQ_API_KEY, and AI dependencies to enable it."
+                ),
+            )
+        return analyze_use_case
+
+    app.dependency_overrides[_get_analyze_use_case] = _provide_analyze_use_case
     app.dependency_overrides[_get_cluster_use_case] = lambda: cluster_use_case
     app.dependency_overrides[_get_forecast_use_case] = lambda: forecast_use_case
     app.dependency_overrides[_get_bq_client] = lambda: bq_client
