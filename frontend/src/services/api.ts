@@ -131,9 +131,11 @@ export const apiService = {
   },
   getGlobalPulse: async (
     startDate: string,
-    endDate: string
+    endDate: string,
+    eventRootCode?: string | null
   ): Promise<GlobalPulseResponse> => {
     const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+    if (eventRootCode) params.append('event_root_code', eventRootCode);
     const response = await fetch(`${API_BASE_URL}/events/global-pulse?${params}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch global pulse: ${response.statusText}`);

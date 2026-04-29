@@ -262,19 +262,20 @@ _THREAT_TTL = 120.0  # 2 min
 def global_pulse(
     start_date: date | None = Query(default=None, description="Inclusive start date (defaults to 7 days ago)"),
     end_date: date | None = Query(default=None, description="Inclusive end date (defaults to today)"),
+    event_root_code: str | None = Query(default=None, max_length=2, description="Optional CAMEO root code"),
 ) -> GlobalPulseResponse:
     now = _time.monotonic()
     end = end_date or date.today()
     start = start_date or (end - timedelta(days=7))
  
-    cache_key = f"{start}:{end}"
+    cache_key = f"{start}:{end}:{event_root_code}"
     with _pulse_cache_lock:
         entry = _pulse_cache.get(cache_key)
         if entry is not None and (now - entry["ts"]) < _PULSE_TTL:
             return entry["data"]
  
     repository = DuckDbRepository(settings)
-    metrics = repository.get_global_pulse(start_date=start, end_date=end)
+    metrics = repository.get_global_pulse(start_date=start, end_date=end, event_root_code=event_root_code)
  
     most_active = metrics["most_active_country"]
     most_hostile = metrics["most_hostile_country"]

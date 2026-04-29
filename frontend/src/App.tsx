@@ -30,7 +30,17 @@ function toIsoDateLocal(d: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-const CATEGORIES = ['ALL', 'CONFLICT', 'DIPLOMACY', 'CYBER', 'ECONOMICS'];
+const CATEGORIES = ['ALL', 'WAR', 'POLITICS', 'ECONOMY', 'SPORTS', 'TECH', 'HEALTH'];
+
+const CATEGORY_TO_ROOT_CODE: Record<string, string | null> = {
+  ALL: null,
+  WAR: '19',      // Fight
+  POLITICS: '11', // Disapprove / Politics
+  ECONOMY: '06',  // Engage in material cooperation
+  SPORTS: '02',   // Appeal (Closest placeholder)
+  TECH: '09',     // Investigate
+  HEALTH: '07'    // Provide Aid
+};
 
 function App() {
   const {
@@ -40,6 +50,8 @@ function App() {
     setDateRange,
     dateWindowReady,
     setDateWindowReady,
+    eventRootCode,
+    setEventRootCode,
   } = useStore();
   const [viewMode, setViewMode] = useState<'dashboard' | 'map'>('dashboard');
   const [activeCategory, setActiveCategory] = useState('ALL');
@@ -53,8 +65,8 @@ function App() {
   });
 
   const pulseQuery = useQuery({
-    queryKey: ['global-pulse', dateRange[0], dateRange[1]],
-    queryFn: () => apiService.getGlobalPulse(dateRange[0], dateRange[1]),
+    queryKey: ['global-pulse', dateRange[0], dateRange[1], eventRootCode],
+    queryFn: () => apiService.getGlobalPulse(dateRange[0], dateRange[1], eventRootCode),
     refetchInterval: 60000,
     enabled: dateWindowReady,
   });
@@ -178,7 +190,10 @@ function App() {
         {CATEGORIES.map((cat) => (
           <button
             key={cat}
-            onClick={() => setActiveCategory(cat)}
+            onClick={() => {
+              setActiveCategory(cat);
+              setEventRootCode(CATEGORY_TO_ROOT_CODE[cat] || null);
+            }}
             className={`px-4 py-1 rounded-full text-[10px] font-mono tracking-widest uppercase transition-all duration-300 ${
               activeCategory === cat 
                 ? 'bg-cyber-blue/20 text-cyber-blue border border-cyber-blue/50 shadow-[0_0_10px_rgba(0,243,255,0.2)]' 

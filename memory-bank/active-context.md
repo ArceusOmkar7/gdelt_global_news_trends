@@ -11,8 +11,7 @@
 
 ## Last Session Summary
 - Refactored the main frontend application layout to be Dashboard-first rather than Map-first.
-- Created a sleek, responsive CSS Grid dashboard displaying mission parameters, threat cards, spike alerts, and system controls.
-- Added a Category navigation row (All, Conflict, Diplomacy, Cyber, Economics).
+- Added a Category navigation row (All, War, Politics, Economy, Sports, Tech, Health) which directly filters both the dashboard KPIs and the interactive map by mapping to respective CAMEO event root codes.
 - Integrated a prominent "Launch Global Map" action to toggle into the global event map view.
 - Set the System Control Panel to be expanded by default for better dashboard visibility.
 - Converted Timeline Window from a bottom-fixed slider into a popover launched from the header's date tag.

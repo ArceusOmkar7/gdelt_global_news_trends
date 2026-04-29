@@ -614,9 +614,16 @@ class DuckDbRepository(IEventRepository):
         self,
         start_date: date,
         end_date: date,
+        event_root_code: str | None = None,
     ) -> dict[str, Any]:
         """Return global aggregate stats for the stats ticker."""
         start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
+        
+        where_clause = "SQLDATE >= ? AND SQLDATE < ? AND ActionGeo_CountryCode IS NOT NULL AND ActionGeo_CountryCode != ''"
+        params = [start_int, end_exclusive_int]
+        if event_root_code:
+            where_clause += " AND EventRootCode = ?"
+            params.append(event_root_code)
  
         # Query 1 — global aggregates + most-active country
         sql_global = f"""
@@ -626,11 +633,9 @@ class DuckDbRepository(IEventRepository):
                 AVG(AvgTone)                                                          AS avg_global_tone,
                 SUM(CASE WHEN QuadClass IN (3, 4) THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS conflict_ratio
             FROM read_parquet('{self._parquet_glob}')
-            WHERE SQLDATE >= ? AND SQLDATE < ?
-              AND ActionGeo_CountryCode IS NOT NULL
-              AND ActionGeo_CountryCode != ''
+            WHERE {where_clause}
         """
-        global_rows = self._query(sql_global, [start_int, end_exclusive_int])
+        global_rows = self._query(sql_global, params)
         g = global_rows[0] if global_rows else {}
  
         # Query 2 — most-active country event count
@@ -640,26 +645,22 @@ class DuckDbRepository(IEventRepository):
             sql_count = f"""
                 SELECT COUNT(*) AS cnt
                 FROM read_parquet('{self._parquet_glob}')
-                WHERE SQLDATE >= ? AND SQLDATE < ?
-                  AND ActionGeo_CountryCode = ?
+                WHERE {where_clause} AND ActionGeo_CountryCode = ?
             """
-            count_rows = self._query(sql_count, [start_int, end_exclusive_int, most_active_cc])
+            count_rows = self._query(sql_count, params + [most_active_cc])
             most_active_count = int(count_rows[0]["cnt"]) if count_rows else 0
  
         # Query 3 — most hostile country (lowest avg AvgTone, min 10 events)
         sql_hostile = f"""
             SELECT ActionGeo_CountryCode AS country_code
             FROM read_parquet('{self._parquet_glob}')
-            WHERE SQLDATE >= ? AND SQLDATE < ?
-              AND ActionGeo_CountryCode IS NOT NULL
-              AND ActionGeo_CountryCode != ''
-              AND AvgTone IS NOT NULL
+            WHERE {where_clause} AND AvgTone IS NOT NULL
             GROUP BY ActionGeo_CountryCode
             HAVING COUNT(*) >= 10
             ORDER BY AVG(AvgTone) ASC
             LIMIT 1
         """
-        hostile_rows = self._query(sql_hostile, [start_int, end_exclusive_int])
+        hostile_rows = self._query(sql_hostile, params)
         most_hostile_cc = hostile_rows[0]["country_code"] if hostile_rows else None
  
         avg_tone = g.get("avg_global_tone")
