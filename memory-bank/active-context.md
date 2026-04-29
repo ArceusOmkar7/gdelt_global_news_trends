@@ -10,6 +10,11 @@
   - Added relative path support for hot tier data access in DuckDB repository and enhanced ingestion stats.
 
 ## Last Session Summary
+- Refactored the main frontend application layout to be Dashboard-first rather than Map-first.
+- Created a sleek, responsive CSS Grid dashboard displaying mission parameters, threat cards, spike alerts, and system controls.
+- Added a Category navigation row (All, Conflict, Diplomacy, Cyber, Economics).
+- Integrated a prominent "Launch Global Map" action to toggle into the global event map view.
+- Set the System Control Panel to be expanded by default for better dashboard visibility.
 - Implemented full media extraction support (images and video embeds) from articles, updating the backend scraper, LLM service, and frontend UI components.
 - Adjusted backend settings and `gdelt_repository` to properly use cold tier max window days.
 - Refactored `routed_repository` to improve date resolution logic.
