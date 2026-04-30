@@ -73,7 +73,11 @@ class RoutedRepository(IEventRepository):
                 start_date=start_date,
                 end_date=end_date,
                 country_code=filters.country_code,
-                extra={"event_root_code": filters.event_root_code, "limit": filters.limit},
+                extra={
+                    "event_root_codes": filters.event_root_codes,
+                    "geo_country": filters.geo_country,
+                    "limit": filters.limit,
+                },
                 fetch=lambda: self._cold.get_events(filters),
                 parse=lambda payload: Event.model_validate(payload),
             )
@@ -96,7 +100,12 @@ class RoutedRepository(IEventRepository):
             start_date=cold_filters.start_date,
             end_date=cold_filters.end_date,
             country_code=filters.country_code,
-            extra={"event_root_code": filters.event_root_code, "limit": filters.limit, "span": True},
+            extra={
+                "event_root_codes": filters.event_root_codes,
+                "geo_country": filters.geo_country,
+                "limit": filters.limit,
+                "span": True,
+            },
             fetch=lambda: self._cold.get_events(cold_filters),
             parse=lambda payload: Event.model_validate(payload),
         )
@@ -127,7 +136,10 @@ class RoutedRepository(IEventRepository):
                 start_date=start_date,
                 end_date=end_date,
                 country_code=country_code,
-                extra={},
+                extra={
+                    "event_root_codes": filters.event_root_codes,
+                    "geo_country": filters.geo_country,
+                },
                 fetch=lambda: self._cold.get_event_counts_by_date(country_code, filters),
                 parse=lambda payload: EventCountByDate.model_validate(payload),
             )
@@ -141,7 +153,11 @@ class RoutedRepository(IEventRepository):
             start_date=cold_filters.start_date,
             end_date=cold_filters.end_date,
             country_code=country_code,
-            extra={"span": True},
+            extra={
+                "event_root_codes": filters.event_root_codes,
+                "geo_country": filters.geo_country,
+                "span": True,
+            },
             fetch=lambda: self._cold.get_event_counts_by_date(country_code, cold_filters),
             parse=lambda payload: EventCountByDate.model_validate(payload),
         )
@@ -172,7 +188,8 @@ class RoutedRepository(IEventRepository):
                 end_date=end_date,
                 country_code=filters.country_code,
                 extra={
-                    "event_root_code": filters.event_root_code,
+                    "event_root_codes": filters.event_root_codes,
+                    "geo_country": filters.geo_country,
                     "bbox": [bbox_n, bbox_s, bbox_e, bbox_w],
                     "grid_precision": grid_precision,
                     "limit": filters.limit,
@@ -193,7 +210,8 @@ class RoutedRepository(IEventRepository):
             end_date=cold_filters.end_date,
             country_code=filters.country_code,
             extra={
-                "event_root_code": filters.event_root_code,
+                "event_root_codes": filters.event_root_codes,
+                "geo_country": filters.geo_country,
                 "bbox": [bbox_n, bbox_s, bbox_e, bbox_w],
                 "grid_precision": grid_precision,
                 "limit": filters.limit,
@@ -231,7 +249,8 @@ class RoutedRepository(IEventRepository):
                 end_date=end_date,
                 country_code=filters.country_code,
                 extra={
-                    "event_root_code": filters.event_root_code,
+                    "event_root_codes": filters.event_root_codes,
+                    "geo_country": filters.geo_country,
                     "bbox": [bbox_n, bbox_s, bbox_e, bbox_w],
                     "limit": filters.limit,
                     "min_mentions": min_mentions,
@@ -252,7 +271,8 @@ class RoutedRepository(IEventRepository):
             end_date=cold_filters.end_date,
             country_code=filters.country_code,
             extra={
-                "event_root_code": filters.event_root_code,
+                "event_root_codes": filters.event_root_codes,
+                "geo_country": filters.geo_country,
                 "bbox": [bbox_n, bbox_s, bbox_e, bbox_w],
                 "limit": filters.limit,
                 "min_mentions": min_mentions,

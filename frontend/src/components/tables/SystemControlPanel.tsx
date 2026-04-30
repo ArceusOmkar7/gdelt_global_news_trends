@@ -20,7 +20,7 @@ export const SystemControlPanel = () => {
     healthPollIntervalSeconds,
     setHealthPollIntervalSeconds,
     dateRange,
-    eventRootCode,
+    eventRootCodes,
   } = useStore();
 
   const healthQuery = useQuery({
@@ -126,7 +126,9 @@ export const SystemControlPanel = () => {
                 <div className="col-span-2 text-white/55">Last Ingest: {health?.hot_tier.last_updated_at ?? '--'}</div>
                 <div className="col-span-2 text-white/55">Parquet files: {health?.hot_tier.parquet_files ?? '--'}</div>
                 <div className="col-span-2 text-white/55">Hot/cold cutoff: {health?.hot_tier.cutoff_days ?? '--'} days</div>
-                <div className="col-span-2 text-white/55">Filters: {dateRange[0]} to {dateRange[1]}{eventRootCode ? ` | ${eventRootCode}` : ''}</div>
+                <div className="col-span-2 text-white/55">
+                  Filters: {dateRange[0]} to {dateRange[1]}{eventRootCodes?.length ? ` | ${eventRootCodes.join(',')}` : ''}
+                </div>
               </div>
             )}
           </div>

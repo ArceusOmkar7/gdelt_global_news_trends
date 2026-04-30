@@ -22,7 +22,7 @@ router = APIRouter(prefix="/events/map", tags=["map"])
 # ---------------------------------------------------------------------------
 # Simple in-process response cache
 # ---------------------------------------------------------------------------
-# Keyed by a hash of (bbox, zoom, dates, event_root_code).
+# Keyed by a hash of (bbox, zoom, dates, event_root_codes, geo_country, theme_category).
 # TTL: 60s for aggregated view, 30s for detail view.
 # This is process-local and resets on restart — that's fine, it's only a
 # performance optimisation, not a correctness dependency.
@@ -35,12 +35,14 @@ _DETAIL_TTL = 120.0  # seconds — detailed event view
 def _cache_key(
     bbox_n: float, bbox_s: float, bbox_e: float, bbox_w: float,
     zoom: float, start_date: date | None, end_date: date | None,
-    event_root_code: str | None,
+    event_root_codes: list[str] | None,
+    geo_country: str | None,
+    theme_category: str | None,
 ) -> str:
     payload = json.dumps(
         [round(bbox_n, 2), round(bbox_s, 2), round(bbox_e, 2), round(bbox_w, 2),
          round(zoom, 1),
-         str(start_date), str(end_date), event_root_code],
+         str(start_date), str(end_date), event_root_codes, geo_country, theme_category],
         sort_keys=True,
     )
     return hashlib.md5(payload.encode()).hexdigest()
@@ -48,6 +50,13 @@ def _cache_key(
 
 def _get_use_case() -> GetEventsUseCase:
     raise NotImplementedError("GetEventsUseCase dependency not wired")
+
+
+def _parse_event_root_codes(event_root_codes: str | None) -> list[str] | None:
+    if not event_root_codes:
+        return None
+    codes = [c.strip() for c in event_root_codes.split(",") if c.strip()]
+    return codes or None
 
 
 @router.get("", response_model=MapDataResponse)
@@ -60,13 +69,19 @@ def get_map_data(
     zoom: float = Query(..., ge=0, le=22),
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
-    event_root_code: str | None = Query(default=None, max_length=2),
+    event_root_codes: str | None = Query(default=None),
+    geo_country: str | None = Query(default=None),
+    geo_state: str | None = Query(default=None),
+    geo_city: str | None = Query(default=None),
+    theme_category: str | None = Query(default=None),
     limit: int = Query(default=10000, ge=1, le=100_000),
 ) -> MapDataResponse:
     is_aggregated_mode = zoom < 9.0
     ttl = _AGG_TTL if is_aggregated_mode else _DETAIL_TTL
 
-    key = _cache_key(bbox_n, bbox_s, bbox_e, bbox_w, zoom, start_date, end_date, event_root_code)
+    codes = _parse_event_root_codes(event_root_codes)
+
+    key = _cache_key(bbox_n, bbox_s, bbox_e, bbox_w, zoom, start_date, end_date, codes, geo_country, theme_category)
     cached = _map_cache.get(key)
     if cached is not None:
         cached_at, response = cached
@@ -89,7 +104,9 @@ def get_map_data(
         aggregations = use_case.get_map_aggregations(
             bbox_n=bbox_n, bbox_s=bbox_s, bbox_e=bbox_e, bbox_w=bbox_w,
             start_date=start_date, end_date=end_date,
-            event_root_code=event_root_code,
+            event_root_codes=codes,
+            geo_country=geo_country,
+            theme_category=theme_category,
             grid_precision=grid_precision, limit=limit,
         )
         data = [MapAggregationResponse.model_validate(agg.model_dump()) for agg in aggregations]
@@ -107,7 +124,9 @@ def get_map_data(
             bbox_w=bbox_w,
             start_date=start_date,
             end_date=end_date,
-            event_root_code=event_root_code,
+            event_root_codes=codes,
+            geo_country=geo_country,
+            theme_category=theme_category,
             limit=detail_limit,
             min_mentions=min_mentions,
         )

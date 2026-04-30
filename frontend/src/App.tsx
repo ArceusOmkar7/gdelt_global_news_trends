@@ -8,6 +8,8 @@ import { SpikeAlertsCard } from './components/ambient/SpikeAlertsCard';
 import { TrendingNewsFeed } from './components/tables/TrendingNewsFeed';
 import { DateRangeSlider } from './components/ambient/DateRangeSlider';
 import { EventTrendChart } from './components/ambient/EventTrendChart';
+import { GeoFilterBar } from './components/ambient/GeoFilterBar';
+import { SearchableDropdown, type DropdownOption } from './components/ambient/SearchableDropdown';
 import { useStore } from './store/useStore';
 import { apiService } from './services/api';
 import { useQuery } from '@tanstack/react-query';
@@ -32,17 +34,25 @@ function toIsoDateLocal(d: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-const CATEGORIES = ['ALL', 'WAR', 'POLITICS', 'ECONOMY', 'SPORTS', 'TECH', 'HEALTH'];
+const CATEGORIES = ['ALL', 'CONFLICT', 'DIPLOMACY', 'COOPERATION', 'PRESSURE'];
 
-const CATEGORY_TO_ROOT_CODE: Record<string, string | null> = {
+const CATEGORY_TO_ROOT_CODES: Record<string, string[] | null> = {
   ALL: null,
-  WAR: '19',      // Fight
-  POLITICS: '11', // Disapprove / Politics
-  ECONOMY: '06',  // Engage in material cooperation
-  SPORTS: '02',   // Appeal (Closest placeholder)
-  TECH: '09',     // Investigate
-  HEALTH: '07'    // Provide Aid
+  CONFLICT: ['18', '19', '20'],
+  DIPLOMACY: ['01', '02', '03'],
+  COOPERATION: ['04', '05', '06', '07', '08'],
+  PRESSURE: ['09', '10', '11', '12', '13'],
 };
+
+const THEME_CATEGORIES = [
+  { key: 'POLITICS', label: 'POLITICS' },
+  { key: 'ECONOMY', label: 'ECONOMY' },
+  { key: 'HEALTH', label: 'HEALTH' },
+  { key: 'ENVIRONMENT', label: 'ENVIRONMENT' },
+  { key: 'TECHNOLOGY', label: 'TECHNOLOGY' },
+  { key: 'ENERGY', label: 'ENERGY' },
+  { key: 'HUMAN_RIGHTS', label: 'HUMAN RIGHTS' },
+];
 
 function App() {
   const {
@@ -52,8 +62,9 @@ function App() {
     setDateRange,
     dateWindowReady,
     setDateWindowReady,
-    eventRootCode,
-    setEventRootCode,
+    eventRootCodes,
+    setEventRootCodes,
+    geoFilter,
     isDarkTheme,
     setIsDarkTheme,
   } = useStore();
@@ -64,6 +75,7 @@ function App() {
   }, [isDarkTheme]);
   const [viewMode, setViewMode] = useState<'dashboard' | 'map'>('dashboard');
   const [activeCategory, setActiveCategory] = useState('ALL');
+  const [activeThemeCategory, setActiveThemeCategory] = useState<string | null>(null);
   const [showDateSlider, setShowDateSlider] = useState(false);
   const [showSystemPanel, setShowSystemPanel] = useState(false);
   const hasAlignedDateWindow = useRef(false);
@@ -75,10 +87,17 @@ function App() {
   });
 
   const pulseQuery = useQuery({
-    queryKey: ['global-pulse', dateRange[0], dateRange[1], eventRootCode],
-    queryFn: () => apiService.getGlobalPulse(dateRange[0], dateRange[1], eventRootCode),
+    queryKey: ['global-pulse', dateRange[0], dateRange[1], eventRootCodes, geoFilter, activeThemeCategory],
+    queryFn: () => apiService.getGlobalPulse(dateRange[0], dateRange[1], eventRootCodes, geoFilter, activeThemeCategory),
     refetchInterval: 60000,
     enabled: dateWindowReady,
+  });
+
+  const themeCategoriesQuery = useQuery({
+    queryKey: ['theme-categories'],
+    queryFn: () => apiService.getThemeCategories(),
+    staleTime: 1000 * 60 * 30,
+    retry: 1,
   });
 
   useEffect(() => {
@@ -244,24 +263,41 @@ function App() {
         </div>
       </header>
 
-      {/* ── Categories Row ── */}
-      <div className="h-10 border-b border-white/5 bg-surface-800/50 flex items-center px-6 gap-2 shrink-0 overflow-x-auto custom-scrollbar">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => {
-              setActiveCategory(cat);
-              setEventRootCode(CATEGORY_TO_ROOT_CODE[cat] || null);
+      {/* ── Filters Row ── */}
+      <div className="border-b border-white/5 bg-surface-800/50 px-6 py-3">
+        <div className="flex flex-wrap items-end gap-4">
+          <SearchableDropdown
+            title="Category"
+            value={activeCategory}
+            options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+            placeholder="ALL"
+            onChange={(value) => {
+              const next = value || 'ALL';
+              setActiveCategory(next);
+              setEventRootCodes(CATEGORY_TO_ROOT_CODES[next] || null);
             }}
-            className={`px-4 py-1 rounded-full text-[10px] font-mono tracking-widest uppercase transition-all duration-300 ${activeCategory === cat
-                ? 'bg-cyber-blue/20 text-cyber-blue border border-cyber-blue/50 shadow-[0_0_10px_rgba(0,243,255,0.2)]'
-                : 'text-white/50 hover:text-white/80 border border-transparent hover:bg-white/5'
-              }`}
-          >
-            {cat}
-          </button>
-        ))}
+          />
+
+          <SearchableDropdown
+            title="Theme"
+            value={activeThemeCategory}
+            options={((): DropdownOption[] => {
+              const counts = themeCategoriesQuery.data?.data || {};
+              const base: DropdownOption = { value: null, label: 'ALL THEMES' };
+              const options = THEME_CATEGORIES.map((cat) => ({
+                value: cat.key,
+                label: cat.label,
+                count: counts[cat.key],
+              }));
+              return [base, ...options];
+            })()}
+            placeholder="ALL THEMES"
+            onChange={(value) => setActiveThemeCategory(value)}
+          />
+        </div>
       </div>
+
+      <GeoFilterBar />
 
       {/* ── Main Layout ── */}
       <main className="flex-1 relative overflow-hidden flex flex-col">
@@ -321,7 +357,11 @@ function App() {
               </div>
 
               {/* Event Volume Trend Chart */}
-              <EventTrendChart eventRootCode={eventRootCode} />
+              <EventTrendChart
+                eventRootCodes={eventRootCodes}
+                geoFilter={geoFilter}
+                themeCategory={activeThemeCategory}
+              />
 
               {/* Bento Grid layout */}
               {activeCategory === 'ALL' ? (
@@ -399,7 +439,12 @@ function App() {
                   </div>
 
                   {/* The Trending News Feed for this category */}
-                  <TrendingNewsFeed category={activeCategory} eventRootCode={eventRootCode} />
+                  <TrendingNewsFeed
+                    category={activeCategory}
+                    eventRootCodes={eventRootCodes}
+                    geoFilter={geoFilter}
+                    themeCategory={activeThemeCategory}
+                  />
                 </div>
               )}
 
@@ -409,7 +454,7 @@ function App() {
           </div>
         ) : (
           <div className="flex-1 relative overflow-hidden bg-black">
-            <GlobalEventMap />
+            <GlobalEventMap themeCategory={activeThemeCategory} />
 
             {/* Map overlay controls */}
             <div className="absolute top-6 left-6 z-10">
@@ -429,7 +474,11 @@ function App() {
 
         {/* Ambient controls stuck to bottom */}
         <div className="absolute bottom-0 w-full z-20">
-          <GlobalStatsTicker />
+          <GlobalStatsTicker
+            eventRootCodes={eventRootCodes}
+            geoFilter={geoFilter}
+            themeCategory={activeThemeCategory}
+          />
         </div>
 
         {/* ── System Panel Drawer ── */}

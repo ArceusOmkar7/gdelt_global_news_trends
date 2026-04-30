@@ -39,12 +39,13 @@ function snapBBox(
   };
 }
 
-export const GlobalEventMap: React.FC = () => {
+export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ themeCategory }) => {
   const {
     viewState,
     setViewState,
     dateRange,
-    eventRootCode,
+    eventRootCodes,
+    geoFilter,
     setSelectedEvent,
     setSelectedCountry,
     selectedEventId,
@@ -79,7 +80,7 @@ export const GlobalEventMap: React.FC = () => {
   const queryBBox = snapBBox(mapBBox, queryZoom);
 
   const { data: mapResponse, isLoading, isFetching, isError, error } = useQuery({
-    queryKey: ['map-data', queryBBox, queryZoom, dateRange, eventRootCode],
+    queryKey: ['map-data', queryBBox, queryZoom, dateRange, eventRootCodes, geoFilter, themeCategory],
     queryFn: async ({ signal }) => {
       if (!isValidBBox(queryBBox))
         return { zoom: queryZoom, is_aggregated: true, count: 0, data: [] };
@@ -88,7 +89,9 @@ export const GlobalEventMap: React.FC = () => {
         queryZoom,
         dateRange[0],
         dateRange[1],
-        eventRootCode,
+        eventRootCodes,
+        geoFilter,
+        themeCategory,
         signal
       );
     },

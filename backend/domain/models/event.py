@@ -180,10 +180,26 @@ class EventFilter(BaseModel):
         max_length=3,
         description="Filter by actor1 or action-geo country code.",
     )
-    event_root_code: str | None = Field(
+    event_root_codes: list[str] | None = Field(
         default=None,
-        max_length=2,
-        description="Filter by CAMEO root event code.",
+        description="Filter by CAMEO root event codes.",
+    )
+    geo_country: str | None = Field(
+        default=None,
+        max_length=3,
+        description="Filter by ActionGeo country code.",
+    )
+    geo_state: str | None = Field(
+        default=None,
+        description="Filter by reverse-geocoded state/province name.",
+    )
+    geo_city: str | None = Field(
+        default=None,
+        description="Filter by reverse-geocoded city name.",
+    )
+    theme_category: str | None = Field(
+        default=None,
+        description="Filter by pre-defined GKG theme category.",
     )
     limit: int = Field(
         default=1000,

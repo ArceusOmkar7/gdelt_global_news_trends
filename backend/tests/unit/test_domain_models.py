@@ -68,7 +68,7 @@ class TestEventFilter:
         assert f.start_date is None
         assert f.end_date is None
         assert f.country_code is None
-        assert f.event_root_code is None
+        assert f.event_root_codes is None
         assert f.limit == 1000
 
     def test_limit_min_constraint(self) -> None:
@@ -84,7 +84,7 @@ class TestEventFilter:
             start_date=date(2024, 1, 1),
             end_date=date(2024, 1, 31),
             country_code="US",
-            event_root_code="14",
+            event_root_codes=["14"],
             limit=500,
         )
         assert f.country_code == "US"

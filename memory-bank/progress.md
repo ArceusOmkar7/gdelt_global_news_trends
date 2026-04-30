@@ -32,6 +32,11 @@
 - [x] Local debugging scripts for Parquet and GDELT index verification
 - [x] Dashboard-first UI with categories row and responsive bento grid
 - [x] Category system mapped to CAMEO root codes (ALL/WAR/POLITICS/ECONOMY/SPORTS/TECH/HEALTH)
+- [x] Category tabs updated to CAMEO groups (ALL/CONFLICT/DIPLOMACY/COOPERATION/PRESSURE)
+- [x] Geo filter bar + drill-down panel (country/state/city) with reverse geocoding
+- [x] Geo drill hot-tier endpoint (`/events/geo-drill`) and offline reverse geocoder service
+- [x] Theme category nightly cache + analytics endpoint (`/analytics/theme-categories`)
+- [x] Theme category pills as secondary filter in dashboard
 - [x] Conditional bento grid: category view replaces widgets with TrendingNewsFeed
 - [x] TrendingNewsFeed component (Goldstein/tone sentiment, source, "Launch Map" per event)
 - [x] `getGlobalEvents` API service + category-filtered event endpoint
@@ -51,7 +56,6 @@
 - [ ] UI Phase 4.3 (Country Choropleth Layer)
 
 ## Pending
-- [ ] Fix SPORTS/TECH/HEALTH category filters to use `themes` column text-pattern matching
 - [ ] Linting sprint: resolve ~10 remaining ESLint `any` type warnings
 - [ ] UI Phase 4.5 (Settings Modal Refactor)
 - [ ] GCP VM Deployment (Systemd, Nginx, SSL)

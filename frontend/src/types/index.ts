@@ -207,3 +207,21 @@ export interface BriefingsResponse {
   count: number;
   data: Record<string, CountryBriefingEntry>;
 }
+
+export interface GeoDrillItem {
+  name: string;
+  count: number;
+  code?: string;
+  display?: string;
+}
+
+export interface GeoDrillResponse {
+  level: 'country' | 'state' | 'city';
+  items: GeoDrillItem[];
+  state_available?: boolean;
+  state_reason?: string;
+}
+
+export interface ThemeCategoriesResponse {
+  data: Record<string, number>;
+}

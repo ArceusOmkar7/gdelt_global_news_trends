@@ -8,17 +8,27 @@ import { Event } from '../../types';
 
 interface TrendingNewsFeedProps {
   category: string;
-  eventRootCode: string | null;
+  eventRootCodes: string[] | null;
+  geoFilter: { countryCode: string | null; stateName: string | null; cityName: string | null };
+  themeCategory: string | null;
 }
 
-export function TrendingNewsFeed({ category, eventRootCode }: TrendingNewsFeedProps) {
+export function TrendingNewsFeed({ category, eventRootCodes, geoFilter, themeCategory }: TrendingNewsFeedProps) {
   const { dateRange, setSelectedEvent } = useStore();
   const [limit] = useState(50);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['global-events', dateRange[0], dateRange[1], eventRootCode, limit],
-    queryFn: () => apiService.getGlobalEvents(dateRange[0], dateRange[1], eventRootCode, limit),
-    enabled: !!eventRootCode, // Only fetch if we have a category mapped
+    queryKey: ['global-events', dateRange[0], dateRange[1], eventRootCodes, geoFilter, themeCategory, limit],
+    queryFn: () =>
+      apiService.getGlobalEvents(
+        dateRange[0],
+        dateRange[1],
+        eventRootCodes,
+        limit,
+        geoFilter,
+        themeCategory
+      ),
+    enabled: true,
     staleTime: 60000,
   });
 

@@ -51,6 +51,31 @@ EVENTS_COLUMNS: list[str] = [
     "avg_confidence",
 ]
 
+EVENTS_TABLE_COLUMNS: list[str] = [
+    "GLOBALEVENTID",
+    "SQLDATE",
+    "MonthYear",
+    "Year",
+    "Actor1CountryCode",
+    "Actor2CountryCode",
+    "Actor1Type1Code",
+    "Actor2Type1Code",
+    "EventCode",
+    "EventBaseCode",
+    "EventRootCode",
+    "QuadClass",
+    "GoldsteinScale",
+    "NumMentions",
+    "NumSources",
+    "AvgTone",
+    "Actor1Geo_CountryCode",
+    "Actor2Geo_CountryCode",
+    "ActionGeo_CountryCode",
+    "ActionGeo_Lat",
+    "ActionGeo_Long",
+    "SOURCEURL",
+]
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -86,6 +111,51 @@ def parse_args() -> argparse.Namespace:
         help="Number of parallel workers (default: 3).",
     )
     return parser.parse_args()
+
+
+def clean_v2_split(value: str | None) -> list[str]:
+    """Split GKG V2 fields on ';' and return the first token before ',' per entry."""
+    if not isinstance(value, str):
+        return []
+    parts = []
+    for raw_item in value.split(";"):
+        item = raw_item.strip()
+        if not item:
+            continue
+        parts.append(item.split(",", 1)[0])
+    return parts
+
+
+def sql_date_bounds_for_yesterday(today: date | None = None) -> tuple[int, int, date]:
+    """Return SQLDATE bounds and partition day for yesterday."""
+    anchor = today or date.today()
+    partition_day = anchor - timedelta(days=1)
+    sql_date = int(partition_day.strftime("%Y%m%d"))
+    return sql_date, sql_date, partition_day
+
+
+def fetch_events(
+    bq_client: BigQueryClient,
+    dataset: str,
+    partition_day: date,
+    sql_date: int,
+) -> pd.DataFrame:
+    """Fetch daily events data from BigQuery with explicit columns."""
+    columns = ", ".join(EVENTS_TABLE_COLUMNS)
+    sql = f"""
+        SELECT {columns}
+        FROM `{dataset}.events_partitioned`
+        WHERE _PARTITIONDATE = @partition_date
+          AND SQLDATE = @sql_date
+    """
+    params = {
+        "partition_date": bigquery.ScalarQueryParameter(
+            "partition_date", "DATE", partition_day.isoformat()
+        ),
+        "sql_date": bigquery.ScalarQueryParameter("sql_date", "INT64", sql_date),
+    }
+    rows = bq_client.execute_query(sql, params)
+    return pd.DataFrame(rows) if rows else pd.DataFrame()
 
 
 def fetch_enriched_data(

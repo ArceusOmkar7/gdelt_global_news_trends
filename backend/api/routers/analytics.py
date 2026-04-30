@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 import threading
+from pathlib import Path
 from datetime import date
 from typing import Annotated
 
@@ -30,6 +31,7 @@ from backend.application.use_cases.cluster_events import ClusterEventsUseCase
 from backend.application.use_cases.forecast_events import ForecastEventsUseCase
 from backend.domain.models.event import EventFilter
 from backend.infrastructure.data_access.duckdb_repository import DuckDbRepository
+from backend.infrastructure.config.settings import settings
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -67,14 +69,23 @@ def get_event_clusters(
     start_date: date | None = Query(default=None, description="Inclusive start date"),
     end_date: date | None = Query(default=None, description="Inclusive end date"),
     country_code: str | None = Query(default=None, max_length=3),
-    event_root_code: str | None = Query(default=None, max_length=2),
+    event_root_codes: str | None = Query(default=None),
+    geo_country: str | None = Query(default=None),
+    geo_state: str | None = Query(default=None),
+    geo_city: str | None = Query(default=None),
+    theme_category: str | None = Query(default=None),
     limit: int = Query(default=1000, ge=1, le=10000, description="Max rows to query"),
 ) -> ClusterListResponse:
+    codes = [c.strip() for c in event_root_codes.split(",") if c.strip()] if event_root_codes else None
     filters = EventFilter(
         start_date=start_date,
         end_date=end_date,
         country_code=country_code,
-        event_root_code=event_root_code,
+        event_root_codes=codes,
+        geo_country=geo_country,
+        geo_state=geo_state,
+        geo_city=geo_city,
+        theme_category=theme_category,
         limit=limit,
     )
     clusters = use_case.execute(filters=filters, n_clusters=n_clusters)
@@ -193,3 +204,15 @@ def get_nightly_briefings(
         for code, payload in briefings.items()
     }
     return BriefingsResponse(count=len(data), data=data)
+
+
+@router.get("/theme-categories")
+def get_theme_categories(
+    hot_repo: Annotated[DuckDbRepository, Depends(_get_hot_repository)],
+):
+    """Returns pre-computed theme category event counts from nightly cache."""
+    cache_path = Path(settings.cache_path) / "theme_categories.json"
+    if not cache_path.exists():
+        return {"data": {}}
+    import json
+    return {"data": json.loads(cache_path.read_text())}

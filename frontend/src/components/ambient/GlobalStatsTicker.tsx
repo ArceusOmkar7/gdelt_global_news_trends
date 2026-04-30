@@ -13,6 +13,8 @@ import { ChevronDown, ChevronUp, Radio } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { useStore } from '../../store/useStore';
 
+type GeoFilter = { countryCode: string | null; stateName: string | null; cityName: string | null };
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -92,14 +94,18 @@ function buildItems(data: {
 // Component
 // ---------------------------------------------------------------------------
 
-export const GlobalStatsTicker = () => {
+export const GlobalStatsTicker: React.FC<{
+  eventRootCodes?: string[] | null;
+  geoFilter?: GeoFilter;
+  themeCategory?: string | null;
+}> = ({ eventRootCodes, geoFilter, themeCategory }) => {
   const { tickerCollapsed, setTickerCollapsed, dateRange, dateWindowReady } = useStore();
   const [activeIdx, setActiveIdx] = useState(0);
   const cycleRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const pulseQuery = useQuery({
-    queryKey: ['global-pulse', dateRange[0], dateRange[1]],
-    queryFn: () => apiService.getGlobalPulse(dateRange[0], dateRange[1]),
+    queryKey: ['global-pulse', dateRange[0], dateRange[1], eventRootCodes, geoFilter, themeCategory],
+    queryFn: () => apiService.getGlobalPulse(dateRange[0], dateRange[1], eventRootCodes, geoFilter, themeCategory),
     enabled: dateWindowReady,
     staleTime: 60_000,
     refetchInterval: 60_000,

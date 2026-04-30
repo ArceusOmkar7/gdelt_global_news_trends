@@ -63,10 +63,16 @@ class GdeltRepository(IEventRepository):
                 "country_code", "STRING", filters.country_code.upper()
             )
 
-        if filters.event_root_code:
-            where_clauses.append("EventRootCode = @event_root_code")
-            params["event_root_code"] = bigquery.ScalarQueryParameter(
-                "event_root_code", "STRING", filters.event_root_code
+        if filters.event_root_codes:
+            where_clauses.append("EventRootCode IN UNNEST(@event_root_codes)")
+            params["event_root_codes"] = bigquery.ArrayQueryParameter(
+                "event_root_codes", "STRING", filters.event_root_codes
+            )
+
+        if filters.geo_country:
+            where_clauses.append("ActionGeo_CountryCode = @geo_country")
+            params["geo_country"] = bigquery.ScalarQueryParameter(
+                "geo_country", "STRING", filters.geo_country.upper()
             )
 
         sql = f"""
@@ -127,6 +133,18 @@ class GdeltRepository(IEventRepository):
                 "country_code", "STRING", country_code.upper()
             )
 
+        if filters.event_root_codes:
+            where_clauses.append("EventRootCode IN UNNEST(@event_root_codes)")
+            params["event_root_codes"] = bigquery.ArrayQueryParameter(
+                "event_root_codes", "STRING", filters.event_root_codes
+            )
+
+        if filters.geo_country:
+            where_clauses.append("ActionGeo_CountryCode = @geo_country")
+            params["geo_country"] = bigquery.ScalarQueryParameter(
+                "geo_country", "STRING", filters.geo_country.upper()
+            )
+
         sql = f"""
             SELECT
                 SQLDATE,
@@ -173,10 +191,16 @@ class GdeltRepository(IEventRepository):
         }
         params.update(self._build_date_params(start_date, end_date))
 
-        if filters.event_root_code:
-            where_clauses.append("EventRootCode = @event_root_code")
-            params["event_root_code"] = bigquery.ScalarQueryParameter(
-                "event_root_code", "STRING", filters.event_root_code
+        if filters.event_root_codes:
+            where_clauses.append("EventRootCode IN UNNEST(@event_root_codes)")
+            params["event_root_codes"] = bigquery.ArrayQueryParameter(
+                "event_root_codes", "STRING", filters.event_root_codes
+            )
+
+        if filters.geo_country:
+            where_clauses.append("ActionGeo_CountryCode = @geo_country")
+            params["geo_country"] = bigquery.ScalarQueryParameter(
+                "geo_country", "STRING", filters.geo_country.upper()
             )
 
         sql = f"""
@@ -231,10 +255,16 @@ class GdeltRepository(IEventRepository):
         }
         params.update(self._build_date_params(start_date, end_date))
 
-        if filters.event_root_code:
-            where_clauses.append("EventRootCode = @event_root_code")
-            params["event_root_code"] = bigquery.ScalarQueryParameter(
-                "event_root_code", "STRING", filters.event_root_code
+        if filters.event_root_codes:
+            where_clauses.append("EventRootCode IN UNNEST(@event_root_codes)")
+            params["event_root_codes"] = bigquery.ArrayQueryParameter(
+                "event_root_codes", "STRING", filters.event_root_codes
+            )
+
+        if filters.geo_country:
+            where_clauses.append("ActionGeo_CountryCode = @geo_country")
+            params["geo_country"] = bigquery.ScalarQueryParameter(
+                "geo_country", "STRING", filters.geo_country.upper()
             )
 
         # Simple query for now, joining with GKG could be added if needed for specific IDs.

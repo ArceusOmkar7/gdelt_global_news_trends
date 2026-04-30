@@ -8,13 +8,17 @@
   - Intelligence Panel auto-scrolls to top on every event selection.
   - `EventTrendChart` added to the dashboard showing per-day total vs conflict event volumes.
   - Finalized light mode visibility for Map Launch cards by removing forced dark overrides and increasing text opacity.
+  - Geo filter system added (country/state/city drill-down) using offline reverse geocoding from hot-tier lat/long.
+  - Theme category pills added as a secondary filter (backed by nightly cache).
 
 ## Last Session Summary (2026-04-30)
 
 ### UI / Frontend Changes
-- **Category system revamped:** Categories row (`ALL | WAR | POLITICS | ECONOMY | SPORTS | TECH | HEALTH`) now maps to GDELT CAMEO root codes. Selecting a category filters both the KPI global-pulse metrics and the trending news feed.
+- **Category system revamped:** Categories row now uses `ALL | CONFLICT | DIPLOMACY | COOPERATION | PRESSURE`, mapped to CAMEO root code groups (multi-code filters).
 - **Conditional bento grid:** When any category other than ALL is selected, the standard bento grid (TopThreat + SpikeAlerts) is replaced by a full-width `TrendingNewsFeed` component showing live-filtered event intel.
 - **`TrendingNewsFeed` component:** Created `frontend/src/components/tables/TrendingNewsFeed.tsx` — renders category-filtered events with Goldstein/tone sentiment, source extraction, and "Launch Map" buttons.
+- **Geo filter UI:** Added `GeoFilterBar` (country/state pill rows) and `GeoDrillPanel` (city pills when state selected). Geo selections live in Zustand.
+- **Theme category pills:** Added secondary theme category row (POLITICS, ECONOMY, HEALTH, ENVIRONMENT, TECHNOLOGY, ENERGY, HUMAN RIGHTS) and wired to API query params.
 - **System Panel Drawer:** Removed `SystemControlPanel` from the main bento grid. Replaced with a `[ ⌘ System ]` button in the header that opens a right-side slide-in drawer (blurred backdrop, `×` dismiss). Uses `showSystemPanel` local state.
 - **Date Slider popover:** Timeline control moved behind a header date button. Click to reveal; click outside or re-click to dismiss.
 - **Launch Interactive Map cards:** Both the ALL view and category view use the same premium dark/cyber hero card design (world-map SVG background, glassmorphism, cyan glow on hover). Uses `map-launch-card` CSS class.
@@ -36,20 +40,12 @@
   - Responds to active `eventRootCode` (category filter).
 
 ### Backend Changes
-- **`DuckDbRepository.get_daily_trend()`**: New method in `backend/infrastructure/data_access/duckdb_repository.py`.
-  - Groups by `SQLDATE`, counts total events and `SUM(CASE WHEN QuadClass >= 3 THEN 1 ELSE 0 END)` for conflict.
-  - Accepts `event_root_code` filter.
-  - Returns `[{date: "YYYY-MM-DD", total: int, conflict: int}]` sorted ascending.
-- **`GET /api/v1/events/daily-trend`**: New FastAPI endpoint in `backend/api/routers/events.py`.
-  - Params: `start_date`, `end_date`, optional `event_root_code`.
-  - Returns `{"data": [...]}`.
-- **`apiService.getDailyTrend()`**: New frontend service method in `frontend/src/services/api.ts`.
-- **`apiService.getGlobalEvents()`**: Added for category-filtered event feed retrieval.
-- **Cold-tier query limit raised:** `cold_tier_monthly_query_limit` `le` raised to `999999` (was `100`).
-- **CAMEO category accuracy audit:** Confirmed that GDELT's CAMEO taxonomy is actor-action based, not topic-based. Sports/Tech/Health have no native CAMEO mapping — documented as known limitation.
+- **Reverse geocoding:** Added `reverse_geocoder` dependency and `ReverseGeocodeService` (offline). DuckDB adds `get_geo_drill` for country/state/city drill-down.
+- **Geo drill endpoint:** New `GET /api/v1/events/geo-drill` (hot tier only) for drill-down options.
+- **Theme categories cache:** Nightly job writes `theme_categories.json`; new `GET /api/v1/analytics/theme-categories` endpoint serves it.
+- **Filter upgrades:** Event filters now use `event_root_codes` (list), plus geo and theme category filters across hot-tier queries.
 
 ## Known Issues / Technical Debt
-- `SPORTS`, `TECH`, `HEALTH` category filters map to approximate CAMEO codes that don't accurately represent the topic. A `themes` text-pattern approach is needed for proper topic filtering.
 - ~10 ESLint `any` type warnings remain across the codebase (cleanup sprint needed).
 - The CAMEO `most_active_country` KPI always returns `US` for most categories because GDELT's English-language news coverage is US-heavy. Consider excluding US from this metric or using a secondary metric.
 

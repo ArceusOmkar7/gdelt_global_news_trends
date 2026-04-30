@@ -24,8 +24,10 @@ interface DashboardState {
   setDateRange: (range: [string, string]) => void;
   dateWindowReady: boolean;
   setDateWindowReady: (ready: boolean) => void;
-  eventRootCode: string | null;
-  setEventRootCode: (code: string | null) => void;
+  eventRootCodes: string[] | null;
+  setEventRootCodes: (codes: string[] | null) => void;
+  geoFilter: { countryCode: string | null; stateName: string | null; cityName: string | null };
+  setGeoFilter: (filter: { countryCode: string | null; stateName: string | null; cityName: string | null }) => void;
 
   // Runtime UI Settings
   autoRefreshEnabled: boolean;
@@ -98,8 +100,10 @@ export const useStore = create<DashboardState>((set) => ({
   setDateRange: (dateRange) => set({ dateRange }),
   dateWindowReady: false,
   setDateWindowReady: (dateWindowReady) => set({ dateWindowReady }),
-  eventRootCode: null,
-  setEventRootCode: (eventRootCode) => set({ eventRootCode }),
+  eventRootCodes: null,
+  setEventRootCodes: (eventRootCodes) => set({ eventRootCodes }),
+  geoFilter: { countryCode: null, stateName: null, cityName: null },
+  setGeoFilter: (geoFilter) => set({ geoFilter }),
 
   autoRefreshEnabled: true,
   setAutoRefreshEnabled: (autoRefreshEnabled) => set({ autoRefreshEnabled }),

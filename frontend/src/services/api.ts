@@ -11,9 +11,25 @@ import type {
   SpikeAlertResponse,
   AnomalyResponse,
   BriefingsResponse,
+  GeoDrillResponse,
+  ThemeCategoriesResponse,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+
+type GeoFilter = { countryCode: string | null; stateName: string | null; cityName: string | null };
+
+const appendGeoFilters = (
+  params: URLSearchParams,
+  geoFilter?: GeoFilter,
+  includeStateCity: boolean = true
+) => {
+  if (geoFilter?.countryCode) params.append('geo_country', geoFilter.countryCode);
+  if (includeStateCity) {
+    if (geoFilter?.stateName) params.append('geo_state', geoFilter.stateName);
+    if (geoFilter?.cityName) params.append('geo_city', geoFilter.cityName);
+  }
+};
 
 export const apiService = {
   getMapData: async (
@@ -21,7 +37,9 @@ export const apiService = {
     zoom: number,
     startDate: string,
     endDate: string,
-    eventRootCode?: string | null,
+    eventRootCodes?: string[] | null,
+    geoFilter?: GeoFilter,
+    themeCategory?: string | null,
     signal?: AbortSignal
   ): Promise<MapDataResponse> => {
     const params = new URLSearchParams({
@@ -34,9 +52,9 @@ export const apiService = {
       end_date: endDate,
     });
 
-    if (eventRootCode) {
-      params.append('event_root_code', eventRootCode);
-    }
+    if (eventRootCodes?.length) params.append('event_root_codes', eventRootCodes.join(','));
+    if (themeCategory) params.append('theme_category', themeCategory);
+    appendGeoFilters(params, geoFilter, false);
 
     const response = await fetch(`${API_BASE_URL}/events/map?${params}`, { signal });
     if (!response.ok) {
@@ -48,15 +66,19 @@ export const apiService = {
   getGlobalEvents: async (
     startDate: string,
     endDate: string,
-    eventRootCode?: string | null,
-    limit: number = 50
+    eventRootCodes?: string[] | null,
+    limit: number = 50,
+    geoFilter?: GeoFilter,
+    themeCategory?: string | null
   ) => {
     const params = new URLSearchParams({
       start_date: startDate,
       end_date: endDate,
       limit: limit.toString(),
     });
-    if (eventRootCode) params.append('event_root_code', eventRootCode);
+    if (eventRootCodes?.length) params.append('event_root_codes', eventRootCodes.join(','));
+    if (themeCategory) params.append('theme_category', themeCategory);
+    appendGeoFilters(params, geoFilter);
 
     const response = await fetch(`${API_BASE_URL}/events?${params}`);
     if (!response.ok) {
@@ -69,13 +91,15 @@ export const apiService = {
     countryCode: string,
     startDate: string,
     endDate: string,
-    limit: number = 10
+    limit: number = 10,
+    geoFilter?: GeoFilter
   ) => {
     const params = new URLSearchParams({
       start_date: startDate,
       end_date: endDate,
       limit: limit.toString(),
     });
+    appendGeoFilters(params, geoFilter);
 
     const response = await fetch(`${API_BASE_URL}/events/region/${countryCode}?${params}`);
     if (!response.ok) {
@@ -87,12 +111,14 @@ export const apiService = {
   getRegionalStats: async (
     countryCode: string,
     startDate: string,
-    endDate: string
+    endDate: string,
+    geoFilter?: GeoFilter
   ) => {
     const params = new URLSearchParams({
       start_date: startDate,
       end_date: endDate,
     });
+    appendGeoFilters(params, geoFilter);
 
     const response = await fetch(`${API_BASE_URL}/events/region/${countryCode}/stats?${params}`);
     if (!response.ok) {
@@ -104,12 +130,14 @@ export const apiService = {
   getRiskScore: async (
     countryCode: string,
     startDate: string,
-    endDate: string
+    endDate: string,
+    geoFilter?: GeoFilter
   ): Promise<RiskScoreResponse> => {
     const params = new URLSearchParams({
       start_date: startDate,
       end_date: endDate,
     });
+    appendGeoFilters(params, geoFilter);
 
     const response = await fetch(`${API_BASE_URL}/events/region/${countryCode}/risk-score?${params}`);
     if (!response.ok) {
@@ -152,10 +180,14 @@ export const apiService = {
   getGlobalPulse: async (
     startDate: string,
     endDate: string,
-    eventRootCode?: string | null
+    eventRootCodes?: string[] | null,
+    geoFilter?: GeoFilter,
+    themeCategory?: string | null
   ): Promise<GlobalPulseResponse> => {
     const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
-    if (eventRootCode) params.append('event_root_code', eventRootCode);
+    if (eventRootCodes?.length) params.append('event_root_codes', eventRootCodes.join(','));
+    if (themeCategory) params.append('theme_category', themeCategory);
+    appendGeoFilters(params, geoFilter);
     const response = await fetch(`${API_BASE_URL}/events/global-pulse?${params}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch global pulse: ${response.statusText}`);
@@ -166,11 +198,13 @@ export const apiService = {
   getTopThreatCountries: async (
     limit: number = 5,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    geoFilter?: GeoFilter
   ): Promise<TopThreatCountriesResponse> => {
     const params = new URLSearchParams({ limit: limit.toString() });
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
+    appendGeoFilters(params, geoFilter);
     const response = await fetch(`${API_BASE_URL}/events/top-threat-countries?${params}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch top threat countries: ${response.statusText}`);
@@ -213,12 +247,40 @@ export const apiService = {
   getDailyTrend: async (
     startDate: string,
     endDate: string,
-    eventRootCode?: string | null
+    eventRootCodes?: string[] | null,
+    geoFilter?: GeoFilter,
+    themeCategory?: string | null
   ): Promise<{ data: { date: string; total: number; conflict: number }[] }> => {
     const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
-    if (eventRootCode) params.append('event_root_code', eventRootCode);
+    if (eventRootCodes?.length) params.append('event_root_codes', eventRootCodes.join(','));
+    if (themeCategory) params.append('theme_category', themeCategory);
+    appendGeoFilters(params, geoFilter);
     const response = await fetch(`${API_BASE_URL}/events/daily-trend?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch daily trend: ${response.statusText}`);
+    return response.json();
+  },
+
+  getGeoDrill: async (
+    startDate: string,
+    endDate: string,
+    countryCode?: string | null,
+    stateName?: string | null
+  ): Promise<GeoDrillResponse> => {
+    const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+    if (countryCode) params.append('country_code', countryCode);
+    if (stateName) params.append('state_name', stateName);
+    const response = await fetch(`${API_BASE_URL}/events/geo-drill?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch geo drill: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getThemeCategories: async (): Promise<ThemeCategoriesResponse> => {
+    const response = await fetch(`${API_BASE_URL}/analytics/theme-categories`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch theme categories: ${response.statusText}`);
+    }
     return response.json();
   },
 };

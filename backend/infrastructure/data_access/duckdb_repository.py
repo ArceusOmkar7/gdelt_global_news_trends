@@ -28,6 +28,17 @@ from backend.infrastructure.services.lookup_service import lookup_service
 
 logger = structlog.get_logger(__name__)
 
+THEME_CATEGORY_MAP = {
+    "POLITICS": ["ELECTIONS", "GOVERNMENT", "LEGISLATION", "POLITICAL"],
+    "ECONOMY": ["ECON_", "TRADE", "MARKET", "SANCTIONS", "WB_ECONOMY"],
+    "HEALTH": ["HEALTH_", "PANDEMIC", "DISEASE", "WB_HEALTH"],
+    "ENVIRONMENT": ["ENV_", "CLIMATE", "NATURAL_DISASTER", "FLOOD", "DROUGHT"],
+    "TECHNOLOGY": ["CYBER_", "ARTIFICIAL_INTEL", "INTERNET"],
+    "ENERGY": ["ENERGY_", "OIL", "NUCLEAR", "SOLAR"],
+    "HUMAN_RIGHTS": ["HUMAN_RIGHTS", "REFUGEES", "DISCRIMINATION"],
+    "SECURITY": ["TERROR", "WEAPONS", "TAX_MILITARY"],
+}
+
 
 def compute_risk_score(conflict_ratio, avg_goldstein, avg_tone) -> int:
     # conflict_ratio: 0.0–1.0, higher = more conflict
@@ -143,9 +154,21 @@ class DuckDbRepository(IEventRepository):
             cc = filters.country_code.upper()
             params.extend([cc, cc])
 
-        if filters.event_root_code:
-            where_clauses.append("EventRootCode = ?")
-            params.append(filters.event_root_code)
+        if filters.event_root_codes:
+            placeholders = ", ".join(["?" for _ in filters.event_root_codes])
+            where_clauses.append(f"EventRootCode IN ({placeholders})")
+            params.extend(filters.event_root_codes)
+
+        if filters.geo_country:
+            where_clauses.append("ActionGeo_CountryCode = ?")
+            params.append(filters.geo_country.upper())
+
+        if filters.theme_category:
+            prefixes = THEME_CATEGORY_MAP.get(filters.theme_category.upper())
+            if prefixes:
+                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
+                where_clauses.append(f"({clauses})")
+                params.extend([f"%{p}%" for p in prefixes])
 
         sql = f"""
             SELECT
@@ -203,6 +226,22 @@ class DuckDbRepository(IEventRepository):
             )
             cc = country_code.upper()
             params.extend([cc, cc])
+
+        if filters.event_root_codes:
+            placeholders = ", ".join(["?" for _ in filters.event_root_codes])
+            where_clauses.append(f"EventRootCode IN ({placeholders})")
+            params.extend(filters.event_root_codes)
+
+        if filters.geo_country:
+            where_clauses.append("ActionGeo_CountryCode = ?")
+            params.append(filters.geo_country.upper())
+
+        if filters.theme_category:
+            prefixes = THEME_CATEGORY_MAP.get(filters.theme_category.upper())
+            if prefixes:
+                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
+                where_clauses.append(f"({clauses})")
+                params.extend([f"%{p}%" for p in prefixes])
 
         sql = f"""
             SELECT
@@ -269,9 +308,21 @@ class DuckDbRepository(IEventRepository):
                 where_clauses.append("(ActionGeo_Long <= ? OR ActionGeo_Long >= ?)")
                 params.extend([norm_e, norm_w])
 
-        if filters.event_root_code:
-            where_clauses.append("EventRootCode = ?")
-            params.append(filters.event_root_code)
+        if filters.event_root_codes:
+            placeholders = ", ".join(["?" for _ in filters.event_root_codes])
+            where_clauses.append(f"EventRootCode IN ({placeholders})")
+            params.extend(filters.event_root_codes)
+
+        if filters.geo_country:
+            where_clauses.append("ActionGeo_CountryCode = ?")
+            params.append(filters.geo_country.upper())
+
+        if filters.theme_category:
+            prefixes = THEME_CATEGORY_MAP.get(filters.theme_category.upper())
+            if prefixes:
+                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
+                where_clauses.append(f"({clauses})")
+                params.extend([f"%{p}%" for p in prefixes])
 
         sql = f"""
             SELECT
@@ -348,9 +399,21 @@ class DuckDbRepository(IEventRepository):
                 where_clauses.append("(ActionGeo_Long <= ? OR ActionGeo_Long >= ?)")
                 params.extend([norm_e, norm_w])
 
-        if filters.event_root_code:
-            where_clauses.append("EventRootCode = ?")
-            params.append(filters.event_root_code)
+        if filters.event_root_codes:
+            placeholders = ", ".join(["?" for _ in filters.event_root_codes])
+            where_clauses.append(f"EventRootCode IN ({placeholders})")
+            params.extend(filters.event_root_codes)
+
+        if filters.geo_country:
+            where_clauses.append("ActionGeo_CountryCode = ?")
+            params.append(filters.geo_country.upper())
+
+        if filters.theme_category:
+            prefixes = THEME_CATEGORY_MAP.get(filters.theme_category.upper())
+            if prefixes:
+                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
+                where_clauses.append(f"({clauses})")
+                params.extend([f"%{p}%" for p in prefixes])
 
         sql = f"""
             SELECT
@@ -614,16 +677,30 @@ class DuckDbRepository(IEventRepository):
         self,
         start_date: date,
         end_date: date,
-        event_root_code: str | None = None,
+        event_root_codes: list[str] | None = None,
+        geo_country: str | None = None,
+        theme_category: str | None = None,
     ) -> dict[str, Any]:
         """Return global aggregate stats for the stats ticker."""
         start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
         
         where_clause = "SQLDATE >= ? AND SQLDATE < ? AND ActionGeo_CountryCode IS NOT NULL AND ActionGeo_CountryCode != ''"
         params = [start_int, end_exclusive_int]
-        if event_root_code:
-            where_clause += " AND EventRootCode = ?"
-            params.append(event_root_code)
+        if event_root_codes:
+            placeholders = ", ".join(["?" for _ in event_root_codes])
+            where_clause += f" AND EventRootCode IN ({placeholders})"
+            params.extend(event_root_codes)
+
+        if geo_country:
+            where_clause += " AND ActionGeo_CountryCode = ?"
+            params.append(geo_country.upper())
+
+        if theme_category:
+            prefixes = THEME_CATEGORY_MAP.get(theme_category.upper())
+            if prefixes:
+                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
+                where_clause += f" AND ({clauses})"
+                params.extend([f"%{p}%" for p in prefixes])
  
         # Query 1 — global aggregates + most-active country
         sql_global = f"""
@@ -904,11 +981,132 @@ class DuckDbRepository(IEventRepository):
             logger.error("failed_to_load_briefings_cache", error=str(e))
             return {}
 
+    def get_geo_drill(
+        self,
+        start_date=None,
+        end_date=None,
+        country_code: str | None = None,
+        state_name: str | None = None,
+    ) -> dict:
+        from backend.infrastructure.services.reverse_geocode_service import reverse_geocode_service
+
+        start_date, end_date = self._resolve_dates(
+            EventFilter(start_date=start_date, end_date=end_date)
+        )
+        start_int, end_excl = self._sql_date_bounds(start_date, end_date)
+
+        if not country_code:
+            sql = f"""
+                SELECT ActionGeo_CountryCode, COUNT(*) as event_count
+                FROM read_parquet('{self._parquet_glob}')
+                WHERE SQLDATE >= ?
+                  AND SQLDATE < ?
+                  AND ActionGeo_CountryCode IS NOT NULL
+                  AND ActionGeo_CountryCode != ''
+                GROUP BY ActionGeo_CountryCode
+                ORDER BY event_count DESC
+                LIMIT 40
+            """
+            rows = self._query(sql, [start_int, end_excl])
+            items = [
+                {
+                    "name": lookup_service.get_country_name(row["ActionGeo_CountryCode"]) or row["ActionGeo_CountryCode"],
+                    "code": row["ActionGeo_CountryCode"],
+                    "display": lookup_service.get_country_display(row["ActionGeo_CountryCode"]) or row["ActionGeo_CountryCode"],
+                    "count": row["event_count"],
+                }
+                for row in rows
+            ]
+            return {
+                "level": "country",
+                "items": items,
+            }
+
+        where = [
+            "SQLDATE >= ?",
+            "SQLDATE < ?",
+            "ActionGeo_Lat IS NOT NULL",
+            "ActionGeo_Long IS NOT NULL",
+        ]
+        params: list[Any] = [start_int, end_excl]
+
+        if country_code:
+            where.append("ActionGeo_CountryCode = ?")
+            params.append(country_code.upper())
+
+        availability_sql = f"""
+            SELECT COUNT(*) AS available_count
+            FROM read_parquet('{self._parquet_glob}')
+            WHERE SQLDATE >= ?
+              AND SQLDATE < ?
+              AND ActionGeo_CountryCode = ?
+              AND ActionGeo_Lat IS NOT NULL
+              AND ActionGeo_Long IS NOT NULL
+        """
+        availability_rows = self._query(
+            availability_sql, [start_int, end_excl, country_code.upper()]
+        )
+        state_available = bool(availability_rows and availability_rows[0]["available_count"])
+        state_reason = None
+        if not state_available:
+            state_reason = (
+                "State drill requires ActionGeo lat/long; refresh hot-tier data (daily pull or realtime fetch)."
+            )
+
+        sql = f"""
+            SELECT ActionGeo_Lat, ActionGeo_Long, ActionGeo_CountryCode, COUNT(*) as event_count
+            FROM read_parquet('{self._parquet_glob}')
+            WHERE {' AND '.join(where)}
+            GROUP BY ActionGeo_Lat, ActionGeo_Long, ActionGeo_CountryCode
+            ORDER BY event_count DESC
+            LIMIT 2000
+        """
+        rows = self._query(sql, params) if state_available else []
+
+        coords = [(r["ActionGeo_Lat"], r["ActionGeo_Long"]) for r in rows]
+        geo_results = reverse_geocode_service.lookup_batch(coords)
+
+        from collections import defaultdict
+
+        counts: dict = defaultdict(int)
+
+        for row, geo in zip(rows, geo_results):
+            count = row["event_count"]
+            if not country_code:
+                key = geo["country_code"] or row.get("ActionGeo_CountryCode", "")
+                if key:
+                    counts[key] += count
+            elif not state_name:
+                key = geo["state"]
+                if key:
+                    counts[key] += count
+            else:
+                if geo["state"] == state_name:
+                    key = geo["city"]
+                    if key:
+                        counts[key] += count
+
+        limit = 20 if not state_name else 15
+        sorted_items = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:limit]
+
+        items = [{"name": k, "count": v} for k, v in sorted_items]
+
+        payload = {
+            "level": "state" if not state_name else "city",
+            "items": items,
+            "state_available": state_available,
+        }
+        if state_reason:
+            payload["state_reason"] = state_reason
+        return payload
+
     def get_daily_trend(
         self,
         start_date: date,
         end_date: date,
-        event_root_code: str | None = None,
+        event_root_codes: list[str] | None = None,
+        geo_country: str | None = None,
+        theme_category: str | None = None,
     ) -> list[dict]:
         """Return per-day total events vs conflict events for the given window.
 
@@ -919,7 +1117,24 @@ class DuckDbRepository(IEventRepository):
         end_excl = end_date + timedelta(days=1)
         end_int = int(end_excl.strftime("%Y%m%d"))
 
-        root_filter = f"AND EventRootCode = '{event_root_code}'" if event_root_code else ""
+        where_clauses = ["SQLDATE >= ?", "SQLDATE < ?"]
+        params: list[Any] = [start_int, end_int]
+
+        if event_root_codes:
+            placeholders = ", ".join(["?" for _ in event_root_codes])
+            where_clauses.append(f"EventRootCode IN ({placeholders})")
+            params.extend(event_root_codes)
+
+        if geo_country:
+            where_clauses.append("ActionGeo_CountryCode = ?")
+            params.append(geo_country.upper())
+
+        if theme_category:
+            prefixes = THEME_CATEGORY_MAP.get(theme_category.upper())
+            if prefixes:
+                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
+                where_clauses.append(f"({clauses})")
+                params.extend([f"%{p}%" for p in prefixes])
 
         sql = f"""
             SELECT
@@ -927,22 +1142,24 @@ class DuckDbRepository(IEventRepository):
                 COUNT(*)                 AS total,
                 SUM(CASE WHEN QuadClass >= 3 THEN 1 ELSE 0 END) AS conflict
             FROM read_parquet('{self._parquet_glob}')
-            WHERE SQLDATE >= {start_int}
-              AND SQLDATE <  {end_int}
-              {root_filter}
+            WHERE {' AND '.join(where_clauses)}
             GROUP BY SQLDATE
             ORDER BY SQLDATE ASC
         """
         try:
-            rows = self._get_con().execute(sql).fetchall()
+            rows = self._query(sql, params)
         except Exception as exc:
             logger.error("get_daily_trend_failed", error=str(exc))
             return []
 
         result = []
-        for day_raw, total, conflict in rows:
-            day_str = str(day_raw)
+        for row in rows:
+            day_str = str(row.get("day"))
             formatted = f"{day_str[:4]}-{day_str[4:6]}-{day_str[6:8]}" if len(day_str) == 8 else day_str
-            result.append({"date": formatted, "total": int(total or 0), "conflict": int(conflict or 0)})
+            result.append({
+                "date": formatted,
+                "total": int(row.get("total") or 0),
+                "conflict": int(row.get("conflict") or 0),
+            })
         return result
 

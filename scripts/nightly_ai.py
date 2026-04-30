@@ -25,6 +25,17 @@ from backend.domain.models.event import EventCountByDate
 from backend.domain.services.forecasting_service import ForecastingService
 from backend.infrastructure.config.settings import Settings
 
+THEME_CATEGORY_MAP = {
+    "POLITICS": ["ELECTIONS", "GOVERNMENT", "LEGISLATION", "POLITICAL"],
+    "ECONOMY": ["ECON_", "TRADE", "MARKET", "SANCTIONS", "WB_ECONOMY"],
+    "HEALTH": ["HEALTH_", "PANDEMIC", "DISEASE", "WB_HEALTH"],
+    "ENVIRONMENT": ["ENV_", "CLIMATE", "NATURAL_DISASTER", "FLOOD", "DROUGHT"],
+    "TECHNOLOGY": ["CYBER_", "ARTIFICIAL_INTEL", "INTERNET"],
+    "ENERGY": ["ENERGY_", "OIL", "NUCLEAR", "SOLAR"],
+    "HUMAN_RIGHTS": ["HUMAN_RIGHTS", "REFUGEES", "DISCRIMINATION"],
+    "SECURITY": ["TERROR", "WEAPONS", "TAX_MILITARY"],
+}
+
 
 def sql_date_int(d: date) -> int:
     """Convert date to SQLDATE integer format (YYYYMMDD)."""
@@ -596,6 +607,54 @@ def run_anomaly_detection(settings: Settings) -> dict[str, dict]:
     return results
 
 
+def build_theme_category_counts(settings: Settings) -> dict:
+    """
+    Count events per theme category by scanning the 'themes' column
+    in hot-tier parquet (already populated from GKG via realtime_fetcher).
+    Output: { "POLITICS": 12345, "ECONOMY": 8901, ... }
+    Written to: data/cache/theme_categories.json
+    """
+    parquet_glob = str(Path(settings.hot_tier_path) / "*.parquet")
+    conn = duckdb.connect(database=":memory:")
+
+    try:
+        anchor_date = latest_available_sql_date(conn, parquet_glob)
+        start_date = anchor_date - timedelta(days=7)
+        start_int = sql_date_int(start_date)
+        end_int = sql_date_int(anchor_date + timedelta(days=1))
+
+        rows = conn.execute(
+            f"""
+            SELECT themes
+            FROM read_parquet('{parquet_glob}')
+            WHERE SQLDATE >= ? AND SQLDATE < ?
+              AND themes IS NOT NULL
+            """,
+            [start_int, end_int],
+        ).fetchall()
+    finally:
+        conn.close()
+
+    category_counts = {cat: 0 for cat in THEME_CATEGORY_MAP}
+
+    for (themes_val,) in rows:
+        if not themes_val:
+            continue
+        if isinstance(themes_val, str):
+            theme_list = [t.strip() for t in themes_val.split(';') if t.strip()]
+        else:
+            theme_list = list(themes_val)
+
+        for theme in theme_list:
+            theme_upper = theme.upper()
+            for category, prefixes in THEME_CATEGORY_MAP.items():
+                if any(theme_upper.startswith(p) or p in theme_upper for p in prefixes):
+                    category_counts[category] += 1
+                    break
+
+    return category_counts
+
+
 def run_nightly_ai() -> tuple[Path, Path, Path]:
     """Run nightly forecast, briefing, and anomaly precompute and write cache outputs."""
     settings = Settings()
@@ -616,9 +675,14 @@ def run_nightly_ai() -> tuple[Path, Path, Path]:
     with anomalies_path.open("w", encoding="utf-8") as handle:
         json.dump(anomalies, handle, indent=2)
 
+    theme_categories = build_theme_category_counts(settings)
+    theme_categories_path = cache_dir / "theme_categories.json"
+    with theme_categories_path.open("w", encoding="utf-8") as handle:
+        json.dump(theme_categories, handle, indent=2)
+
     print(
         f"Nightly AI success: forecasts={forecasts_path}, briefings={briefings_path}, "
-        f"anomalies={anomalies_path}, countries={len(briefings)}"
+        f"anomalies={anomalies_path}, theme_categories={theme_categories_path}, countries={len(briefings)}"
     )
     return forecasts_path, briefings_path, anomalies_path
 

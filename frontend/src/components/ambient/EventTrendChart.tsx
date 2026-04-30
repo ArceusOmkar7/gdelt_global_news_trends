@@ -15,7 +15,9 @@ import { apiService } from '../../services/api';
 import { Activity } from 'lucide-react';
 
 interface EventTrendChartProps {
-  eventRootCode?: string | null;
+  eventRootCodes?: string[] | null;
+  geoFilter?: { countryCode: string | null; stateName: string | null; cityName: string | null };
+  themeCategory?: string | null;
 }
 
 function formatYAxis(value: number): string {
@@ -61,12 +63,12 @@ const CustomTooltip = ({ active, payload, label, isDark }: any) => {
   );
 };
 
-export const EventTrendChart: React.FC<EventTrendChartProps> = ({ eventRootCode }) => {
+export const EventTrendChart: React.FC<EventTrendChartProps> = ({ eventRootCodes, geoFilter, themeCategory }) => {
   const { dateRange, dateWindowReady, isDarkTheme } = useStore();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['daily-trend', dateRange, eventRootCode],
-    queryFn: () => apiService.getDailyTrend(dateRange[0], dateRange[1], eventRootCode),
+    queryKey: ['daily-trend', dateRange, eventRootCodes, geoFilter, themeCategory],
+    queryFn: () => apiService.getDailyTrend(dateRange[0], dateRange[1], eventRootCodes, geoFilter, themeCategory),
     enabled: dateWindowReady,
     staleTime: 60_000,
   });

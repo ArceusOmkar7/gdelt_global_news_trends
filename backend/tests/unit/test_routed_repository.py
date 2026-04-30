@@ -114,7 +114,7 @@ def test_uses_cache_for_identical_cold_request(
         start_date=old_date - timedelta(days=5),
         end_date=old_date,
         country_code="US",
-        event_root_code="19",
+        event_root_codes=["19"],
         limit=50,
     )
 

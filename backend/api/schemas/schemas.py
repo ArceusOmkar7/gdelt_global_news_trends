@@ -34,10 +34,26 @@ class EventFilterRequest(BaseModel):
         max_length=3,
         description="ISO country code filter (e.g., US, IRQ).",
     )
-    event_root_code: str | None = Field(
+    event_root_codes: list[str] | None = Field(
         default=None,
-        max_length=2,
-        description="CAMEO root event code filter.",
+        description="CAMEO root event code filters.",
+    )
+    geo_country: str | None = Field(
+        default=None,
+        max_length=3,
+        description="ActionGeo country code filter.",
+    )
+    geo_state: str | None = Field(
+        default=None,
+        description="Reverse-geocoded state/province filter.",
+    )
+    geo_city: str | None = Field(
+        default=None,
+        description="Reverse-geocoded city filter.",
+    )
+    theme_category: str | None = Field(
+        default=None,
+        description="GKG theme category filter.",
     )
     limit: int = Field(
         default=1000,

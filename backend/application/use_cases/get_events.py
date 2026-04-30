@@ -47,7 +47,11 @@ class GetEventsUseCase:
             start_date=str(filters.start_date),
             end_date=str(filters.end_date),
             country_code=filters.country_code,
-            event_root_code=filters.event_root_code,
+            event_root_codes=filters.event_root_codes,
+            geo_country=filters.geo_country,
+            geo_state=filters.geo_state,
+            geo_city=filters.geo_city,
+            theme_category=filters.theme_category,
             limit=filters.limit,
         )
         return self._repository.get_events(filters)
@@ -58,6 +62,11 @@ class GetEventsUseCase:
         start_date: date | None = None,
         end_date: date | None = None,
         limit: int = 1000,
+        event_root_codes: list[str] | None = None,
+        geo_country: str | None = None,
+        geo_state: str | None = None,
+        geo_city: str | None = None,
+        theme_category: str | None = None,
     ) -> list[Event]:
         """Retrieve events for a specific country/region.
 
@@ -74,6 +83,11 @@ class GetEventsUseCase:
             start_date=start_date,
             end_date=end_date,
             limit=limit,
+            event_root_codes=event_root_codes,
+            geo_country=geo_country,
+            geo_state=geo_state,
+            geo_city=geo_city,
+            theme_category=theme_category,
         )
         logger.info(
             "get_events_by_region",
@@ -89,6 +103,11 @@ class GetEventsUseCase:
         country_code: str | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
+        event_root_codes: list[str] | None = None,
+        geo_country: str | None = None,
+        geo_state: str | None = None,
+        geo_city: str | None = None,
+        theme_category: str | None = None,
     ) -> list[EventCountByDate]:
         """Get daily-aggregated event counts for charting.
 
@@ -103,12 +122,22 @@ class GetEventsUseCase:
         filters = EventFilter(
             start_date=start_date,
             end_date=end_date,
+            event_root_codes=event_root_codes,
+            geo_country=geo_country,
+            geo_state=geo_state,
+            geo_city=geo_city,
+            theme_category=theme_category,
         )
         logger.info(
             "get_daily_counts",
             country_code=country_code,
             start_date=str(start_date),
             end_date=str(end_date),
+            event_root_codes=event_root_codes,
+            geo_country=geo_country,
+            geo_state=geo_state,
+            geo_city=geo_city,
+            theme_category=theme_category,
         )
         return self._repository.get_event_counts_by_date(country_code, filters)
 
@@ -120,7 +149,9 @@ class GetEventsUseCase:
         bbox_w: float,
         start_date: date | None = None,
         end_date: date | None = None,
-        event_root_code: str | None = None,
+        event_root_codes: list[str] | None = None,
+        geo_country: str | None = None,
+        theme_category: str | None = None,
         grid_precision: int = 2,
         limit: int = 10000,
     ) -> list[MapAggregation]:
@@ -128,7 +159,9 @@ class GetEventsUseCase:
         filters = EventFilter(
             start_date=start_date,
             end_date=end_date,
-            event_root_code=event_root_code,
+            event_root_codes=event_root_codes,
+            geo_country=geo_country,
+            theme_category=theme_category,
             limit=limit,
         )
         logger.info(
@@ -150,7 +183,9 @@ class GetEventsUseCase:
         bbox_w: float,
         start_date: date | None = None,
         end_date: date | None = None,
-        event_root_code: str | None = None,
+        event_root_codes: list[str] | None = None,
+        geo_country: str | None = None,
+        theme_category: str | None = None,
         limit: int = 5000,
         min_mentions: int = 1,
     ) -> list[MapEventDetail]:
@@ -158,7 +193,9 @@ class GetEventsUseCase:
         filters = EventFilter(
             start_date=start_date,
             end_date=end_date,
-            event_root_code=event_root_code,
+            event_root_codes=event_root_codes,
+            geo_country=geo_country,
+            theme_category=theme_category,
             limit=limit,
         )
         logger.info(

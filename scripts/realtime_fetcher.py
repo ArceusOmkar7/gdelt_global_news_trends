@@ -66,11 +66,11 @@ EVENT_COLUMN_INDEX: dict[str, int] = {
     "NumSources": 32,
     "AvgTone": 34,
     "Actor1Geo_CountryCode": 37,
-    "Actor2Geo_CountryCode": 45,
-    "ActionGeo_CountryCode": 53,
-    "ActionGeo_Lat": 56,
-    "ActionGeo_Long": 57,
-    "SOURCEURL": 60,
+    "Actor2Geo_CountryCode": 44,
+    "ActionGeo_CountryCode": 51,
+    "ActionGeo_Lat": 53,
+    "ActionGeo_Long": 54,
+    "SOURCEURL": 57,
 }
 
 # GKG 2.1 CSV positional indexes.
@@ -119,6 +119,14 @@ def parse_lastupdate_urls(lastupdate_text: str) -> dict[str, str]:
     return urls
 
 
+def parse_lastupdate_events_url(lastupdate_text: str) -> str:
+    """Extract the Events export URL from lastupdate.txt."""
+    urls = parse_lastupdate_urls(lastupdate_text)
+    if "events" not in urls:
+        raise ValueError("Events export URL not found in lastupdate.txt")
+    return urls["events"]
+
+
 def fetch_csv_zip_to_df(url: str, col_map: dict[str, int], sep: str = "\t") -> pd.DataFrame:
     """Download, unzip, and parse a GDELT CSV into a projected DataFrame."""
     try:
@@ -138,6 +146,24 @@ def fetch_csv_zip_to_df(url: str, col_map: dict[str, int], sep: str = "\t") -> p
         return pd.DataFrame(projected)
     except Exception as e:
         print(f"Failed to fetch/parse {url}: {e}")
+        return pd.DataFrame()
+
+
+def parse_events_zip_to_dataframe(zipped_bytes: bytes) -> pd.DataFrame:
+    """Parse a zipped GDELT Events TSV payload into a projected DataFrame."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(zipped_bytes)) as archive:
+            with archive.open(archive.namelist()[0]) as handle:
+                raw_df = pd.read_csv(handle, sep="\t", header=None, dtype=str, low_memory=False)
+        projected = {}
+        for col, idx in EVENT_COLUMN_INDEX.items():
+            if idx < raw_df.shape[1]:
+                projected[col] = raw_df.iloc[:, idx]
+            else:
+                projected[col] = None
+        return pd.DataFrame(projected)
+    except Exception as e:
+        print(f"Failed to parse events zip payload: {e}")
         return pd.DataFrame()
 
 

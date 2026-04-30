@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import { apiService } from '../../services/api';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { GeoDrillPanel } from './GeoDrillPanel';
 import {
   QUAD_CLASS_LABELS,
   CAMEO_ROOT_LABELS,
@@ -46,6 +47,7 @@ export const IntelligencePanel: React.FC = () => {
     dateRange,
     dateWindowReady,
     isDarkTheme,
+    geoFilter,
   } = useStore();
 
   // Chart colour tokens that flip with the theme
@@ -91,19 +93,19 @@ export const IntelligencePanel: React.FC = () => {
 
   const regionalStatsQuery = useQuery({
     queryKey: ['regional-stats', selectedCountry, dateRange],
-    queryFn: () => apiService.getRegionalStats(selectedCountry!, dateRange[0], dateRange[1]),
+    queryFn: () => apiService.getRegionalStats(selectedCountry!, dateRange[0], dateRange[1], geoFilter),
     enabled: !!selectedCountry && !selectedEvent && dateWindowReady,
   });
 
   const regionalEventsQuery = useQuery({
     queryKey: ['regional-events', selectedCountry, dateRange],
-    queryFn: () => apiService.getEventsByRegion(selectedCountry!, dateRange[0], dateRange[1], 10),
+    queryFn: () => apiService.getEventsByRegion(selectedCountry!, dateRange[0], dateRange[1], 10, geoFilter),
     enabled: !!selectedCountry && !selectedEvent && dateWindowReady,
   });
 
   const regionalRiskScoreQuery = useQuery({
     queryKey: ['regional-risk-score', selectedCountry, dateRange],
-    queryFn: () => apiService.getRiskScore(selectedCountry!, dateRange[0], dateRange[1]),
+    queryFn: () => apiService.getRiskScore(selectedCountry!, dateRange[0], dateRange[1], geoFilter),
     enabled: !!selectedCountry && !selectedEvent && dateWindowReady,
   });
 
@@ -115,6 +117,9 @@ export const IntelligencePanel: React.FC = () => {
         start_date: dateRange[0],
         end_date: dateRange[1],
       });
+      if (geoFilter.countryCode) params.append('geo_country', geoFilter.countryCode);
+      if (geoFilter.stateName) params.append('geo_state', geoFilter.stateName);
+      if (geoFilter.cityName) params.append('geo_city', geoFilter.cityName);
       const response = await fetch(`${baseUrl}/events/counts/${selectedCountry}?${params}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch event counts: ${response.statusText}`);
@@ -150,8 +155,6 @@ export const IntelligencePanel: React.FC = () => {
       setCurrentAnalysis(data);
     },
   });
-
-  if (!selectedEvent && !selectedCountry) return null;
 
   const handleAnalyze = () => {
     if (selectedEvent) {
@@ -190,24 +193,40 @@ export const IntelligencePanel: React.FC = () => {
   const analysisImages = currentAnalysis?.images ?? [];
   const analysisEmbeds = currentAnalysis?.embeds ?? [];
 
+  const showGeoOnly = !selectedEvent && !selectedCountry && !!geoFilter.stateName;
+  const headerTitle = showGeoOnly
+    ? 'Location Filter'
+    : selectedEvent
+    ? 'Event Intelligence'
+    : `Regional Dossier: ${regionalRiskScoreQuery.data?.country_display || selectedCountry}`;
+  const headerSubtitle = showGeoOnly
+    ? `${geoFilter.countryCode || 'GLOBAL'} / ${geoFilter.stateName}`
+    : selectedEvent
+    ? `EID-${selectedEvent.global_event_id}`
+    : 'Sector Analysis';
+
+  if (!selectedEvent && !selectedCountry && !geoFilter.stateName) return null;
+
   return (
     <div className="absolute right-0 top-0 h-full w-[450px] z-50 glass-panel shadow-2xl transition-transform duration-300 animate-in slide-in-from-right flex flex-col">
       {/* Header */}
       <div className="p-6 border-b border-white/10 flex justify-between items-center bg-surface-900/50">
         <div>
           <span className="data-ink text-cyber-blue">
-            {selectedEvent ? 'Event Intelligence' : `Regional Dossier: ${regionalRiskScoreQuery.data?.country_display || selectedCountry}`}
+            {headerTitle}
           </span>
           <h2 className="text-xl font-bold font-mono glowing-text mt-1 uppercase">
-            {selectedEvent ? `EID-${selectedEvent.global_event_id}` : 'Sector Analysis'}
+            {headerSubtitle}
           </h2>
         </div>
         <button 
           onClick={() => {
             if (selectedEvent) {
               setSelectedEvent(null);
-            } else {
+            } else if (selectedCountry) {
               setSelectedCountry(null);
+            } else {
+              setGeoFilter({ countryCode: null, stateName: null, cityName: null });
             }
           }}
           className="p-2 hover:bg-white/10 rounded transition-colors text-white/50 hover:text-white"
@@ -217,7 +236,8 @@ export const IntelligencePanel: React.FC = () => {
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-        {selectedEvent ? (
+        <GeoDrillPanel />
+        {showGeoOnly ? null : selectedEvent ? (
           <>
             {selectedEvent.quad_class != null && QUAD_CLASS_LABELS[selectedEvent.quad_class] && (
               <section className="pt-1">

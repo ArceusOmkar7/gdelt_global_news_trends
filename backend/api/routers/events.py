@@ -45,6 +45,18 @@ def _get_analyze_use_case() -> AnalyzeEventUseCase:
     raise NotImplementedError("AnalyzeEventUseCase dependency not wired")
 
 
+def _get_hot_repository() -> DuckDbRepository:
+    """Dependency stub — overridden at app startup."""
+    raise NotImplementedError("DuckDbRepository dependency not wired")
+
+
+def _parse_event_root_codes(event_root_codes: str | None) -> list[str] | None:
+    if not event_root_codes:
+        return None
+    codes = [c.strip() for c in event_root_codes.split(",") if c.strip()]
+    return codes or None
+
+
 @router.get(
     "",
     response_model=EventListResponse,
@@ -59,19 +71,51 @@ def list_events(
     start_date: date | None = Query(default=None, description="Inclusive start date"),
     end_date: date | None = Query(default=None, description="Inclusive end date"),
     country_code: str | None = Query(default=None, max_length=3, description="Country code"),
-    event_root_code: str | None = Query(default=None, max_length=2, description="CAMEO root code"),
+    event_root_codes: str | None = Query(default=None, description="CAMEO root codes (comma-separated)"),
+    geo_country: str | None = Query(default=None, description="ActionGeo country code"),
+    geo_state: str | None = Query(default=None, description="Reverse-geocoded state/province"),
+    geo_city: str | None = Query(default=None, description="Reverse-geocoded city"),
+    theme_category: str | None = Query(default=None, description="GKG theme category"),
     limit: int = Query(default=1000, ge=1, le=100_000, description="Row limit"),
 ) -> EventListResponse:
+    codes = _parse_event_root_codes(event_root_codes)
     filters = EventFilter(
         start_date=start_date,
         end_date=end_date,
         country_code=country_code,
-        event_root_code=event_root_code,
+        event_root_codes=codes,
+        geo_country=geo_country,
+        geo_state=geo_state,
+        geo_city=geo_city,
+        theme_category=theme_category,
         limit=limit,
     )
     events = use_case.execute(filters)
     data = [EventResponse.model_validate(e.model_dump()) for e in events]
     return EventListResponse(count=len(data), data=data)
+
+
+@router.get("/geo-drill")
+def get_geo_drill(
+    hot_repo: Annotated[DuckDbRepository, Depends(_get_hot_repository)],
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    country_code: str | None = Query(default=None, description="Filter to get states for a country"),
+    state_name: str | None = Query(default=None, description="Filter to get cities for a state"),
+):
+    """
+    Geo drill-down options derived from reverse-geocoded lat/long.
+    - No params: returns top 40 countries by event count.
+    - country_code only: returns top 20 states for that country.
+    - country_code + state_name: returns top 15 cities for that state.
+    Always queries hot tier only. Never queries BigQuery.
+    """
+    return hot_repo.get_geo_drill(
+        start_date=start_date,
+        end_date=end_date,
+        country_code=country_code,
+        state_name=state_name,
+    )
 
 
 @router.get(
@@ -85,13 +129,24 @@ def events_by_region(
     use_case: Annotated[GetEventsUseCase, Depends(_get_use_case)],
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
+    event_root_codes: str | None = Query(default=None),
+    geo_country: str | None = Query(default=None),
+    geo_state: str | None = Query(default=None),
+    geo_city: str | None = Query(default=None),
+    theme_category: str | None = Query(default=None),
     limit: int = Query(default=1000, ge=1, le=100_000),
 ) -> EventListResponse:
+    codes = _parse_event_root_codes(event_root_codes)
     events = use_case.get_by_region(
         country_code=country_code,
         start_date=start_date,
         end_date=end_date,
         limit=limit,
+        event_root_codes=codes,
+        geo_country=geo_country,
+        geo_state=geo_state,
+        geo_city=geo_city,
+        theme_category=theme_category,
     )
     data = [EventResponse.model_validate(e.model_dump()) for e in events]
     return EventListResponse(count=len(data), data=data)
@@ -107,6 +162,10 @@ def country_risk_score(
     country_code: str,
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
+    geo_country: str | None = Query(default=None),
+    geo_state: str | None = Query(default=None),
+    geo_city: str | None = Query(default=None),
+    theme_category: str | None = Query(default=None),
 ) -> RiskScoreResponse:
     end = end_date or date.today()
     start = start_date or (end - timedelta(days=7))
@@ -146,15 +205,26 @@ def regional_stats(
     use_case: Annotated[GetEventsUseCase, Depends(_get_use_case)],
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
+    event_root_codes: str | None = Query(default=None),
+    geo_country: str | None = Query(default=None),
+    geo_state: str | None = Query(default=None),
+    geo_city: str | None = Query(default=None),
+    theme_category: str | None = Query(default=None),
 ):
     """Returns top themes, persons, and organizations for a country."""
     # This logic would ideally be in a service/use case, but for now we'll 
     # use the use_case to get events and aggregate them here for brevity.
+    codes = _parse_event_root_codes(event_root_codes)
     events = use_case.get_by_region(
         country_code=country_code,
         start_date=start_date,
         end_date=end_date,
         limit=2000, # Use a larger sample for better stats
+        event_root_codes=codes,
+        geo_country=geo_country,
+        geo_state=geo_state,
+        geo_city=geo_city,
+        theme_category=theme_category,
     )
     
     from collections import Counter
@@ -186,11 +256,22 @@ def event_counts_by_country(
     use_case: Annotated[GetEventsUseCase, Depends(_get_use_case)],
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
+    event_root_codes: str | None = Query(default=None),
+    geo_country: str | None = Query(default=None),
+    geo_state: str | None = Query(default=None),
+    geo_city: str | None = Query(default=None),
+    theme_category: str | None = Query(default=None),
 ) -> EventCountListResponse:
+    codes = _parse_event_root_codes(event_root_codes)
     counts = use_case.get_daily_counts(
         country_code=country_code,
         start_date=start_date,
         end_date=end_date,
+        event_root_codes=codes,
+        geo_country=geo_country,
+        geo_state=geo_state,
+        geo_city=geo_city,
+        theme_category=theme_category,
     )
     data = [EventCountResponse.model_validate(c.model_dump()) for c in counts]
     return EventCountListResponse(count=len(data), data=data)
@@ -206,11 +287,22 @@ def event_counts_global(
     use_case: Annotated[GetEventsUseCase, Depends(_get_use_case)],
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
+    event_root_codes: str | None = Query(default=None),
+    geo_country: str | None = Query(default=None),
+    geo_state: str | None = Query(default=None),
+    geo_city: str | None = Query(default=None),
+    theme_category: str | None = Query(default=None),
 ) -> EventCountListResponse:
+    codes = _parse_event_root_codes(event_root_codes)
     counts = use_case.get_daily_counts(
         country_code=None,
         start_date=start_date,
         end_date=end_date,
+        event_root_codes=codes,
+        geo_country=geo_country,
+        geo_state=geo_state,
+        geo_city=geo_city,
+        theme_category=theme_category,
     )
     data = [EventCountResponse.model_validate(c.model_dump()) for c in counts]
     return EventCountListResponse(count=len(data), data=data)
@@ -262,20 +354,31 @@ _THREAT_TTL = 120.0  # 2 min
 def global_pulse(
     start_date: date | None = Query(default=None, description="Inclusive start date (defaults to 7 days ago)"),
     end_date: date | None = Query(default=None, description="Inclusive end date (defaults to today)"),
-    event_root_code: str | None = Query(default=None, max_length=2, description="Optional CAMEO root code"),
+    event_root_codes: str | None = Query(default=None, description="CAMEO root codes (comma-separated)"),
+    geo_country: str | None = Query(default=None),
+    geo_state: str | None = Query(default=None),
+    geo_city: str | None = Query(default=None),
+    theme_category: str | None = Query(default=None),
 ) -> GlobalPulseResponse:
     now = _time.monotonic()
     end = end_date or date.today()
     start = start_date or (end - timedelta(days=7))
+    codes = _parse_event_root_codes(event_root_codes)
  
-    cache_key = f"{start}:{end}:{event_root_code}"
+    cache_key = f"{start}:{end}:{codes}:{geo_country}:{theme_category}"
     with _pulse_cache_lock:
         entry = _pulse_cache.get(cache_key)
         if entry is not None and (now - entry["ts"]) < _PULSE_TTL:
             return entry["data"]
  
     repository = DuckDbRepository(settings)
-    metrics = repository.get_global_pulse(start_date=start, end_date=end, event_root_code=event_root_code)
+    metrics = repository.get_global_pulse(
+        start_date=start,
+        end_date=end,
+        event_root_codes=codes,
+        geo_country=geo_country,
+        theme_category=theme_category,
+    )
  
     most_active = metrics["most_active_country"]
     most_hostile = metrics["most_hostile_country"]
@@ -321,12 +424,16 @@ def top_threat_countries(
     limit: int = Query(default=5, ge=1, le=50, description="Number of countries to return"),
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
+    geo_country: str | None = Query(default=None),
+    geo_state: str | None = Query(default=None),
+    geo_city: str | None = Query(default=None),
+    theme_category: str | None = Query(default=None),
 ) -> TopThreatCountriesResponse:
     now = _time.monotonic()
     end = end_date or date.today()
     start = start_date or (end - timedelta(days=7))
  
-    cache_key = f"{start}:{end}:{limit}"
+    cache_key = f"{start}:{end}:{limit}:{geo_country}:{theme_category}"
     with _threat_cache_lock:
         entry = _threat_cache.get(cache_key)
         if entry is not None and (now - entry["ts"]) < _THREAT_TTL:
@@ -369,10 +476,21 @@ def top_threat_countries(
 def daily_trend(
     start_date: date | None = Query(default=None, description="Inclusive start date"),
     end_date: date | None = Query(default=None, description="Inclusive end date"),
-    event_root_code: str | None = Query(default=None, max_length=2),
+    event_root_codes: str | None = Query(default=None),
+    geo_country: str | None = Query(default=None),
+    geo_state: str | None = Query(default=None),
+    geo_city: str | None = Query(default=None),
+    theme_category: str | None = Query(default=None),
 ) -> dict:
     end = end_date or date.today()
     start = start_date or (end - timedelta(days=30))
+    codes = _parse_event_root_codes(event_root_codes)
     repository = DuckDbRepository(settings)
-    rows = repository.get_daily_trend(start_date=start, end_date=end, event_root_code=event_root_code)
+    rows = repository.get_daily_trend(
+        start_date=start,
+        end_date=end,
+        event_root_codes=codes,
+        geo_country=geo_country,
+        theme_category=theme_category,
+    )
     return {"data": rows}
