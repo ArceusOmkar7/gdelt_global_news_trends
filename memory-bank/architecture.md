@@ -25,19 +25,31 @@
 ## Frontend Query Flow
 - **Date alignment:** On app bootstrap, date range is aligned to latest hot-tier `last_updated_at` when local data lags behind current date.
 - **Readiness gate:** `dateWindowReady` gates date-dependent queries (`map`, `global-pulse`, `top-threat`, regional dossier queries) to avoid duplicate stale+aligned fetch cycles.
-- **Timeline control:** Bottom `Timeline Window` slider drives global `dateRange` in Zustand.
+- **Timeline control:** Date range launched via a header popover button (not a bottom slider). Global `dateRange` in Zustand drives all queries.
+- **Category filtering:** `activeCategory` maps to `eventRootCode` via `CATEGORY_TO_ROOT_CODE` dict. ALL → null (no filter). Category → CAMEO root code sent as query param to `/global-pulse` and `/events` endpoints.
+- **Theme:** `isDarkTheme` boolean in Zustand. `useEffect` in `App.tsx` sets `document.documentElement.setAttribute('data-theme', ...)`. CSS variables in `index.css` remap surface/accent colours for light mode. Charts use a `ct` (chart-token) object derived from `isDarkTheme` for all axis/fill/tooltip colours.
 
 ## Analytics Cache Endpoints
-- `GET /api/v1/analytics/anomalies` -> serves `data/cache/anomalies.json`.
-- `GET /api/v1/analytics/briefings` -> serves `data/cache/briefings.json`.
-- `GET /api/v1/analytics/spikes` -> computed from hot-tier parquet with in-process TTL cache.
+- `GET /api/v1/analytics/anomalies` → serves `data/cache/anomalies.json`.
+- `GET /api/v1/analytics/briefings` → serves `data/cache/briefings.json`.
+- `GET /api/v1/analytics/spikes` → computed from hot-tier parquet with in-process TTL cache.
+- `GET /api/v1/events/daily-trend` → per-day `{date, total, conflict}` from DuckDB. `conflict = QuadClass >= 3`. Accepts `start_date`, `end_date`, `event_root_code`.
+- `GET /api/v1/events/global-pulse` → KPI aggregate (total events, most active/hostile country, avg tone, conflict ratio). Accepts `event_root_code` for category filtering.
 
 ## Tier Model & Routing
 - **Hot Tier:** Data within last 90 days (DuckDB + Parquet).
 - **Cold Tier:** Data older than 90 days (BigQuery, Events table ONLY).
-- **Cold Tier Limits:** Max 30-day window per query, max 3 queries/user/month.
+- **Cold Tier Limits:** Max 30-day window per query, max 999999 queries/user/month (effectively unlimited).
 - **AI Briefings:** Served from pre-computed JSON cache or live Groq API (fallback).
 - **On-demand article analysis:** Apify actor runs extract article text, then Groq summarizes and structures the findings.
+
+## Dashboard UI Architecture
+- **Main layout:** `App.tsx` controls view mode (`dashboard` | `map`) and active category.
+- **Category system:** `CATEGORIES = ['ALL','WAR','POLITICS','ECONOMY','SPORTS','TECH','HEALTH']`. Each maps to a CAMEO root code (or `null` for ALL) via `CATEGORY_TO_ROOT_CODE`.
+- **Bento grid:** ALL view → TopThreatCard (col-span 8) + SpikeAlertsCard (col-span 4). Category view → full-width TrendingNewsFeed.
+- **EventTrendChart:** Placed between KPI row and bento grid. Stacked Recharts AreaChart — outer area = total events, inner area = conflict events (QuadClass ≥ 3).
+- **System Panel:** Slide-in right drawer triggered by `[ ⌘ System ]` header button. `showSystemPanel` local state. Blurred backdrop dismisses on click.
+- **Map launch card:** `map-launch-card` CSS class. Always uses the same dark cyber card design in both light and dark themes.
 
 ## Environment Variables
 - `GCP_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS`

@@ -60,3 +60,24 @@
 - **Symptom:** The backend failed when calling the Apify API due to an invalid parameter for wait duration, causing scraping to fail.
 - **Root Cause:** Apify client expected `wait_secs` but was passed `wait_duration` which was removed or unsupported.
 - **Resolution:** Changed `wait_duration=timedelta(...)` to `wait_secs=self._slow_timeout_seconds` in `scraper_service.py`. Added `waitForFinish: 5000` parameter in the payload.
+
+### Conflict Forecast Chart — Black Band in Light Mode
+- **Symptom:** In light mode, the AreaChart conflict forecast displayed a large black rectangle covering the lower half of the chart.
+- **Root Cause:** Recharts stacked area uses a "clip" approach — the lower boundary area is filled with the background colour to mask the band. The hardcoded `fill="rgba(10,10,10,0.8)"` (near-black) was used as the clip colour, which is correct for dark mode but visible as a solid black band on a light background.
+- **Resolution:** Made the clip fill theme-aware via the `ct` (chart-token) object: `ct.clipFill` is `rgba(10,10,10,0.85)` in dark mode and `rgba(248,250,252,1)` (the light background colour) in light mode. Applied to `IntelligencePanel.tsx`.
+
+### Intelligence Panel Stays Scrolled to Bottom After Event Navigation
+- **Symptom:** When navigating from the country/regional view to an event detail view (clicking an event link in Top Events), the panel content appeared scrolled to the bottom, hiding the event header.
+- **Root Cause:** The `<div>` containing both the regional and event views shares a single scroll container. Switching from the (taller) regional view to the event view preserved the existing `scrollTop`, landing mid-page.
+- **Resolution:** Added `scrollRef = useRef<HTMLDivElement>()` on the scrollable container and a `useEffect` that resets `scrollRef.current.scrollTop = 0` whenever `selectedEvent` changes.
+
+### CAMEO Codes Don't Cover Sports / Tech / Health Topics
+- **Symptom:** The category filter for SPORTS, TECH, and HEALTH returns irrelevant events or low volumes because GDELT's CAMEO taxonomy is actor-action based (who does what to whom), not topic-based.
+- **Root Cause:** CAMEO root codes like `01` (public statement), `05` (diplomacy) describe *interaction types*, not news topics. No CAMEO root code means "sports" or "technology".
+- **Resolution (partial):** Approximate mappings used for now (e.g., `TECH` → code `03` Cooperation, `SPORTS` → code `01`). Full fix requires filtering on the GKG `themes` column using GCAM/GDELT theme codes (e.g., `HEALTH_*`, `SPORTS_*`). Documented as pending technical debt.
+
+### Cold-Tier Monthly Query Limit Too Restrictive for Development
+- **Symptom:** Development/testing sessions exhausted the cold-tier 100 query/month cap quickly, blocking further queries.
+- **Root Cause:** `cold_tier_monthly_query_limit` was set to `le=100` in settings, appropriate for production but not development.
+- **Resolution:** Raised `le` constraint to `999999` and `default` to `999999` in `settings.py` for development use. Production config should be adjusted separately.
+
