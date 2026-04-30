@@ -204,7 +204,7 @@ export const TopThreatCard = () => {
   };
 
   return (
-    <div className="glass-panel w-full overflow-hidden">
+    <div className="glass-panel w-full h-full overflow-hidden flex flex-col">
       {/* Header */}
       <button
         onClick={() => setThreatCardCollapsed(!threatCardCollapsed)}
@@ -213,6 +213,7 @@ export const TopThreatCard = () => {
           px-4 py-3
           border-b border-white/5
           hover:bg-white/5 transition-colors
+          shrink-0
         "
       >
         <div className="flex items-center gap-2">
@@ -235,7 +236,7 @@ export const TopThreatCard = () => {
 
       {/* Body */}
       {!threatCardCollapsed && (
-        <div className="p-3 space-y-1.5">
+        <div className="p-3 space-y-1.5 flex-1 overflow-y-auto custom-scrollbar">
           {threatQuery.isLoading ? (
             <div className="space-y-2">
               {[...Array(5)].map((_, i) => (

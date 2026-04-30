@@ -35,7 +35,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
-export const IntelligencePanel: React.FC = () => {
+export const IntelligencePanel: React.FC<{ dockToHeader?: boolean }> = ({ dockToHeader = false }) => {
   const { 
     selectedEvent, 
     setSelectedEvent, 
@@ -208,8 +208,12 @@ export const IntelligencePanel: React.FC = () => {
 
   if (!selectedEvent && !selectedCountry && !geoFilter.stateName) return null;
 
+  const panelClassName = dockToHeader
+    ? 'fixed right-0 top-14 h-[calc(100vh-3.5rem)] w-[450px] z-50 glass-panel shadow-2xl transition-transform duration-300 animate-in slide-in-from-right flex flex-col'
+    : 'absolute right-0 top-0 h-full w-[450px] z-50 glass-panel shadow-2xl transition-transform duration-300 animate-in slide-in-from-right flex flex-col';
+
   return (
-    <div className="absolute right-0 top-0 h-full w-[450px] z-50 glass-panel shadow-2xl transition-transform duration-300 animate-in slide-in-from-right flex flex-col">
+    <div className={panelClassName}>
       {/* Header */}
       <div className="p-6 border-b border-white/10 flex justify-between items-center bg-surface-900/50">
         <div>

@@ -211,8 +211,8 @@ function App() {
             {/* Animated background pill */}
             <span
               className={`absolute inset-0 rounded transition-all duration-500 ${isDarkTheme
-                  ? 'bg-transparent'
-                  : 'bg-gradient-to-r from-amber-100/30 to-sky-100/20'
+                ? 'bg-transparent'
+                : 'bg-gradient-to-r from-amber-100/30 to-sky-100/20'
                 }`}
             />
             <span className="relative flex items-center gap-2">
@@ -294,10 +294,10 @@ function App() {
             placeholder="ALL THEMES"
             onChange={(value) => setActiveThemeCategory(value)}
           />
+
+          <GeoFilterBar />
         </div>
       </div>
-
-      <GeoFilterBar />
 
       {/* ── Main Layout ── */}
       <main className="flex-1 relative overflow-hidden flex flex-col">
@@ -396,17 +396,16 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Top Threats */}
-                    <div className="flex-1 rounded-xl overflow-hidden shadow-lg border border-white/5 min-h-[400px]">
-                      <TopThreatCard />
-                    </div>
                   </div>
 
-                  {/* Right Column - Spike Alerts only now */}
+                    {/* Right Column - Spike Alerts + Threat Monitor */}
                   <div className="lg:col-span-4 flex flex-col gap-6">
-                    <div className="flex-1 rounded-xl overflow-hidden shadow-lg border border-white/5 min-h-[400px]">
+                      <div className="rounded-xl overflow-hidden shadow-lg border border-white/5 h-[400px]">
                       <SpikeAlertsCard />
                     </div>
+                      <div className="rounded-xl overflow-hidden shadow-lg border border-white/5 h-[400px]">
+                        <TopThreatCard />
+                      </div>
                   </div>
                 </div>
               ) : (
@@ -470,7 +469,7 @@ function App() {
         )}
 
         {/* Intelligence Panel floats over everything when an entity is selected */}
-        <IntelligencePanel />
+        <IntelligencePanel dockToHeader={viewMode === 'dashboard'} />
 
         {/* Ambient controls stuck to bottom */}
         <div className="absolute bottom-0 w-full z-20">

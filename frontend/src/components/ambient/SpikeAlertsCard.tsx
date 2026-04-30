@@ -60,7 +60,7 @@ export const SpikeAlertsCard: React.FC = () => {
   // Empty state if no spikes or anomalies
   if (!hasAlerts) {
     return (
-      <div className="glass-panel w-full p-3 flex items-center justify-center border-terminal-green/20">
+      <div className="glass-panel w-full h-full p-3 flex items-center justify-center border-terminal-green/20">
         <span className="text-[10px] font-mono text-terminal-green/50 uppercase tracking-widest">
           No anomalous activity detected
         </span>
@@ -69,7 +69,7 @@ export const SpikeAlertsCard: React.FC = () => {
   }
 
   return (
-    <div className="glass-panel w-full overflow-hidden border-cyber-red/20 flex flex-col">
+    <div className="glass-panel w-full h-full overflow-hidden border-cyber-red/20 flex flex-col">
       {/* Header with toggle */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
@@ -99,7 +99,7 @@ export const SpikeAlertsCard: React.FC = () => {
 
       {/* Body — Scrollable if many alerts */}
       {!isCollapsed && (
-        <div className="p-3 space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
+        <div className="p-3 space-y-2 flex-1 overflow-y-auto custom-scrollbar">
           {/* Spike Alerts */}
           {spikes.map((s: SpikeAlertEntry) => (
             <div 
