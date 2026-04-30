@@ -125,14 +125,14 @@ export function TrendingNewsFeed({ category, eventRootCodes, geoFilter, themeCat
                   </div>
                   
                   {/* Goldstein/Tone indicator if available */}
-                  {(event.goldstein_scale !== null || event.avg_tone !== null) && (
+                  {(event.goldstein_scale != null || event.avg_tone != null) && (
                     <div className="flex items-center gap-3 text-[10px] font-mono">
-                      {event.goldstein_scale !== null && (
+                      {event.goldstein_scale != null && (
                         <span className={event.goldstein_scale < 0 ? 'text-red-400' : 'text-emerald-400'}>
                           GS: {event.goldstein_scale > 0 ? '+' : ''}{event.goldstein_scale.toFixed(1)}
                         </span>
                       )}
-                      {event.avg_tone !== null && (
+                      {event.avg_tone != null && (
                         <span className={event.avg_tone < 0 ? 'text-orange-400' : 'text-cyber-blue'}>
                           TN: {event.avg_tone > 0 ? '+' : ''}{event.avg_tone.toFixed(1)}
                         </span>

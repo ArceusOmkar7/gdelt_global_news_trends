@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarRange, ChevronDown, ChevronUp, Clock3 } from 'lucide-react';
+import { CalendarRange, Clock3 } from 'lucide-react';
 
 import { apiService } from '../../services/api';
 import { useStore } from '../../store/useStore';

@@ -7,8 +7,6 @@ import { useStore } from '../../store/useStore';
 import type { GeoDrillItem } from '../../types';
 import { SearchableDropdown, type DropdownOption } from './SearchableDropdown';
 
-type GeoFilter = { countryCode: string | null; stateName: string | null; cityName: string | null };
-
 function getCountryCode(item: GeoDrillItem): string {
   return (item.code || item.name || '').toUpperCase();
 }
@@ -48,7 +46,7 @@ export const GeoFilterBar = () => {
   const countryOptions = useMemo<DropdownOption[]>(() => {
     const base: DropdownOption = { value: null, label: 'GLOBAL' };
     const options = countries
-      .map((item) => {
+      .map((item): DropdownOption | null => {
         const code = getCountryCode(item);
         if (!code) return null;
         return {
@@ -57,7 +55,7 @@ export const GeoFilterBar = () => {
           count: item.count,
         };
       })
-      .filter((opt): opt is DropdownOption => !!opt);
+      .filter((opt): opt is DropdownOption => opt !== null);
     return [base, ...options];
   }, [countries]);
 

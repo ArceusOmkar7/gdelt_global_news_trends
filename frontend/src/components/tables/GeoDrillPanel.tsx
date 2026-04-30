@@ -7,8 +7,6 @@ import { useStore } from '../../store/useStore';
 import type { GeoDrillItem } from '../../types';
 import { SearchableDropdown, type DropdownOption } from '../ambient/SearchableDropdown';
 
-type GeoFilter = { countryCode: string | null; stateName: string | null; cityName: string | null };
-
 function getCountryCode(item: GeoDrillItem): string {
   return (item.code || item.name || '').toUpperCase();
 }

@@ -48,6 +48,7 @@ export const IntelligencePanel: React.FC = () => {
     dateWindowReady,
     isDarkTheme,
     geoFilter,
+    setGeoFilter,
   } = useStore();
 
   // Chart colour tokens that flip with the theme
