@@ -10,7 +10,7 @@ import { DateRangeSlider } from './components/ambient/DateRangeSlider';
 import { useStore } from './store/useStore';
 import { apiService } from './services/api';
 import { useQuery } from '@tanstack/react-query';
-import { Globe, Calendar, Terminal, Database, Activity, Layers, Map as MapIcon, ArrowLeft, X } from 'lucide-react';
+import { Globe, Calendar, Terminal, Database, Activity, Layers, Map as MapIcon, ArrowLeft, X, Sun, Moon } from 'lucide-react';
 
 function formatDistanceToNow(dateStr: string | null): string {
   if (!dateStr) return 'NEVER';
@@ -53,7 +53,14 @@ function App() {
     setDateWindowReady,
     eventRootCode,
     setEventRootCode,
+    isDarkTheme,
+    setIsDarkTheme,
   } = useStore();
+
+  // Apply theme to root element whenever it changes
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDarkTheme ? 'dark' : 'light');
+  }, [isDarkTheme]);
   const [viewMode, setViewMode] = useState<'dashboard' | 'map'>('dashboard');
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [showDateSlider, setShowDateSlider] = useState(false);
@@ -125,7 +132,7 @@ function App() {
   ]);
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-surface-900 overflow-hidden text-white">
+    <div className="flex flex-col h-screen w-screen bg-surface-900 overflow-hidden" style={{ color: isDarkTheme ? 'white' : '#0F172A' }}>
 
       {/* ── Header ── */}
       <header className="h-14 border-b border-white/10 flex items-center justify-between px-6 bg-surface-800 z-50 shrink-0">
@@ -173,6 +180,45 @@ function App() {
           >
             <Terminal size={14} className="text-white/50 group-hover:text-terminal-green transition-colors" />
             <span className="text-[10px] font-mono uppercase tracking-widest text-white/50 group-hover:text-terminal-green transition-colors hidden sm:block">System</span>
+          </button>
+
+          {/* Theme Toggle */}
+          <button
+            onClick={() => setIsDarkTheme(!isDarkTheme)}
+            title={isDarkTheme ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            className="relative flex items-center gap-2 px-3 py-1.5 rounded border border-white/10 bg-surface-900 hover:border-cyber-blue/50 transition-colors group overflow-hidden"
+          >
+            {/* Animated background pill */}
+            <span
+              className={`absolute inset-0 rounded transition-all duration-500 ${
+                isDarkTheme
+                  ? 'bg-transparent'
+                  : 'bg-gradient-to-r from-amber-100/30 to-sky-100/20'
+              }`}
+            />
+            <span className="relative flex items-center gap-2">
+              {isDarkTheme ? (
+                <>
+                  <Sun
+                    size={14}
+                    className="text-amber-400 group-hover:rotate-90 transition-transform duration-500"
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-white/50 group-hover:text-amber-400 transition-colors hidden sm:block">
+                    Light
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Moon
+                    size={14}
+                    className="text-cyber-blue group-hover:-rotate-12 transition-transform duration-500"
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest hidden sm:block" style={{ color: '#0F6FBF' }}>
+                    Dark
+                  </span>
+                </>
+              )}
+            </span>
           </button>
           
           {/* Map Mode Toggle */}

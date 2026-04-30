@@ -15,9 +15,141 @@
   --color-surface-600: #2a2a2a;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   LIGHT THEME  — applied when <html data-theme="light">
+   ═══════════════════════════════════════════════════════════ */
+
+[data-theme="light"] {
+  --color-surface-900: #F1F5F9;
+  --color-surface-800: #FFFFFF;
+  --color-surface-700: #E2E8F0;
+  --color-surface-600: #CBD5E1;
+  --color-cyber-blue:  #0369A1;
+  --color-terminal-green: #15803D;
+  --color-cyber-red:   #DC2626;
+}
+
+/* ── Smooth theme switch ── */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color, box-shadow, fill, stroke;
+  transition-duration: 250ms;
+  transition-timing-function: ease;
+}
+
+/* ── Body ── */
+[data-theme="light"] body { color: #0F172A; background-color: #F1F5F9; }
+
+/* ── ALL white/opacity text → dark navy equivalents ── */
+[data-theme="light"] .text-white             { color: #0F172A !important; }
+[data-theme="light"] [class*="text-white\/"] { color: rgba(15,23,42,0.80) !important; }
+[data-theme="light"] .text-white\/90         { color: rgba(15,23,42,0.90) !important; }
+[data-theme="light"] .text-white\/80         { color: rgba(15,23,42,0.80) !important; }
+[data-theme="light"] .text-white\/70         { color: rgba(15,23,42,0.65) !important; }
+[data-theme="light"] .text-white\/60         { color: rgba(15,23,42,0.55) !important; }
+[data-theme="light"] .text-white\/50         { color: rgba(15,23,42,0.50) !important; }
+[data-theme="light"] .text-white\/40         { color: rgba(15,23,42,0.40) !important; }
+[data-theme="light"] .text-white\/35         { color: rgba(15,23,42,0.35) !important; }
+[data-theme="light"] .text-white\/30         { color: rgba(15,23,42,0.28) !important; }
+[data-theme="light"] .text-white\/20         { color: rgba(15,23,42,0.20) !important; }
+[data-theme="light"] .text-white\/10         { color: rgba(15,23,42,0.10) !important; }
+[data-theme="light"] .text-white\/88         { color: rgba(15,23,42,0.82) !important; }
+
+/* ── KPI numbers ── */
+[data-theme="light"] .font-mono.text-3xl,
+[data-theme="light"] .font-mono.text-2xl,
+[data-theme="light"] .font-mono.text-xl     { color: #0F172A !important; }
+
+/* ── Borders white → subtle slate ── */
+[data-theme="light"] [class*="border-white"]{ border-color: rgba(15,23,42,0.10) !important; }
+
+/* ── white/opacity backgrounds → light tint ── */
+[data-theme="light"] [class*="bg-white\/"]  { background-color: rgba(15,23,42,0.04) !important; }
+[data-theme="light"] .hover\:bg-white\/10:hover { background-color: rgba(15,23,42,0.06) !important; }
+[data-theme="light"] .hover\:bg-white\/5:hover  { background-color: rgba(15,23,42,0.03) !important; }
+[data-theme="light"] .hover\:bg-white\/20:hover { background-color: rgba(15,23,42,0.10) !important; }
+
+/* ── Surface cards / glass panels ── */
+[data-theme="light"] .glass-panel {
+  background-color: rgba(255,255,255,0.90) !important;
+  border-color: rgba(15,23,42,0.08) !important;
+  box-shadow: 0 1px 8px rgba(15,23,42,0.06), 0 4px 20px rgba(15,23,42,0.04) !important;
+}
+
+/* Chart background containers */
+[data-theme="light"] [class*="bg-surface-900\/"] {
+  background-color: rgba(226,232,240,0.40) !important;
+  border-color: rgba(15,23,42,0.10) !important;
+}
+
+/* ── Header ── */
+[data-theme="light"] header {
+  background-color: #FFFFFF !important;
+  border-color: rgba(15,23,42,0.10) !important;
+  box-shadow: 0 1px 6px rgba(15,23,42,0.08) !important;
+}
+
+/* ── All surface-800 backgrounds ── */
+[data-theme="light"] [class*="bg-surface-800"] {
+  background-color: #FFFFFF !important;
+  border-color: rgba(15,23,42,0.10) !important;
+}
+
+/* ── Category / filter row ── */
+[data-theme="light"] [class*="bg-surface-800\/50"] {
+  background-color: rgba(226,232,240,0.70) !important;
+}
+
+/* ── Active category pill ── */
+[data-theme="light"] .bg-cyber-blue\/20 { background-color: rgba(3,105,161,0.12) !important; }
+
+/* ── Inactive category / hover states ── */
+[data-theme="light"] .hover\:bg-white\/5:hover { background-color: rgba(15,23,42,0.04) !important; }
+
+/* ── Threat bar backgrounds ── */
+[data-theme="light"] [class*="bg-surface-700"],
+[data-theme="light"] [class*="bg-surface-600"] {
+  background-color: #E2E8F0 !important;
+}
+
+/* ── Intelligence panel sidebar ── */
+[data-theme="light"] [class*="bg-surface-800"][class*="border-l"] {
+  background-color: #FFFFFF !important;
+}
+
+/* ── System drawer ── */
+[data-theme="light"] [class*="bg-surface-800"][class*="border-l"] {
+  background-color: #FFFFFF !important;
+}
+
+/* ── Ticker bar (keep it dark as accent strip) ── */
+[data-theme="light"] [class*="bg-black"] { background-color: #0F172A !important; }
+
+/* ── Scrollbar ── */
+[data-theme="light"] ::-webkit-scrollbar-track { background: #E2E8F0; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(15,23,42,0.18); }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(15,23,42,0.30); }
+
+/* ── Labels & accents ── */
+[data-theme="light"] .data-ink   { color: #0369A1 !important; }
+[data-theme="light"] .glowing-text { text-shadow: 0 0 12px rgba(3,105,161,0.30) !important; }
+
+/* ── Hover glow effects → softer in light mode ── */
+[data-theme="light"] .hover\:shadow-\[0_0_30px_rgba\(0\,243\,255\,0\.15\)\]:hover {
+  box-shadow: 0 4px 24px rgba(3,105,161,0.18) !important;
+}
+[data-theme="light"] [class*="shadow-\[0_0_"]:not([class*="text-shadow"]) {
+  box-shadow: 0 2px 12px rgba(15,23,42,0.08) !important;
+}
+
+/* ── Map launch card world map opacity tweak ── */
+[data-theme="light"] [class*="opacity-10"] { opacity: 0.06 !important; }
+
+/* ═══════════════════════════════════════════════════════════ */
+
 @layer base {
   body {
-    @apply bg-surface-900 text-white font-sans antialiased m-0 overflow-hidden;
+    @apply bg-surface-900 font-sans antialiased m-0 overflow-hidden;
+    color: white;
   }
 
   code {
@@ -27,7 +159,12 @@
 
 /* Custom GNIEM Aesthetics */
 @utility panel-border {
-  @apply border border-white/10;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+[data-theme="light"] .panel-border,
+[data-theme="light"] [class*="border-white"] {
+  border-color: rgba(15,23,42,0.1) !important;
 }
 
 @utility data-ink {
@@ -35,7 +172,8 @@
 }
 
 @utility glass-panel {
-  @apply bg-surface-800/80 backdrop-blur-md panel-border;
+  @apply bg-surface-800/80 backdrop-blur-md;
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 @utility glowing-text {
@@ -52,11 +190,11 @@
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-surface-900;
+  background: #0a0a0a;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-white/10 hover:bg-white/20;
+  background: rgba(255,255,255,0.1);
 }
 
 .slider-thumb {

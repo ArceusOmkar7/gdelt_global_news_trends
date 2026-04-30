@@ -45,7 +45,33 @@ export const IntelligencePanel: React.FC = () => {
     topThreats,
     dateRange,
     dateWindowReady,
+    isDarkTheme,
   } = useStore();
+
+  // Chart colour tokens that flip with the theme
+  const ct = isDarkTheme
+    ? {
+        axis:    'rgba(255,255,255,0.35)',
+        tick:    'rgba(255,255,255,0.55)',
+        axLine:  'rgba(255,255,255,0.15)',
+        clipFill:'rgba(10,10,10,0.85)',
+        gridBg:  'rgba(0,0,0,0)',
+        tooltip: { bg: 'rgba(15,23,42,0.95)', border: 'rgba(14,165,233,0.35)', color: '#e5e7eb' },
+        tooltipLabel: '#7dd3fc',
+        forecastTooltip: { bg: 'rgba(10,10,10,0.95)', border: 'rgba(255,0,60,0.35)', color: '#e5e7eb' },
+        forecastLabel: '#ff003c',
+      }
+    : {
+        axis:    'rgba(15,23,42,0.35)',
+        tick:    'rgba(15,23,42,0.55)',
+        axLine:  'rgba(15,23,42,0.12)',
+        clipFill:'rgba(248,250,252,1)',
+        gridBg:  'rgba(0,0,0,0)',
+        tooltip: { bg: 'rgba(255,255,255,0.97)', border: 'rgba(15,111,191,0.35)', color: '#0F172A' },
+        tooltipLabel: '#0F6FBF',
+        forecastTooltip: { bg: 'rgba(255,255,255,0.97)', border: 'rgba(220,38,38,0.35)', color: '#0F172A' },
+        forecastLabel: '#DC2626',
+      };
 
   const regionalMedian = useMemo(() => {
     if (!topThreats || topThreats.length === 0) return null;
@@ -657,28 +683,28 @@ export const IntelligencePanel: React.FC = () => {
                         >
                           <XAxis
                             dataKey="shortDate"
-                            stroke="rgba(255,255,255,0.35)"
-                            tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 10, fontFamily: 'monospace' }}
+                            stroke={ct.axis}
+                            tick={{ fill: ct.tick, fontSize: 10, fontFamily: 'monospace' }}
                             tickLine={false}
-                            axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                            axisLine={{ stroke: ct.axLine }}
                           />
                           <YAxis
-                            stroke="rgba(255,255,255,0.35)"
-                            tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 10, fontFamily: 'monospace' }}
+                            stroke={ct.axis}
+                            tick={{ fill: ct.tick, fontSize: 10, fontFamily: 'monospace' }}
                             tickLine={false}
                             width={30}
-                            axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                            axisLine={{ stroke: ct.axLine }}
                           />
                           <Tooltip
                             contentStyle={{
-                              background: 'rgba(15, 23, 42, 0.95)',
-                              border: '1px solid rgba(14, 165, 233, 0.35)',
+                              background: ct.tooltip.bg,
+                              border: `1px solid ${ct.tooltip.border}`,
                               borderRadius: 6,
                               fontFamily: 'monospace',
                               fontSize: 11,
-                              color: '#e5e7eb',
+                              color: ct.tooltip.color,
                             }}
-                            labelStyle={{ color: '#7dd3fc' }}
+                            labelStyle={{ color: ct.tooltipLabel }}
                           />
                           <Line
                             type="monotone"
@@ -733,29 +759,29 @@ export const IntelligencePanel: React.FC = () => {
                           </defs>
                           <XAxis
                             dataKey="shortDate"
-                            stroke="rgba(255,255,255,0.35)"
-                            tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 9, fontFamily: 'monospace' }}
+                            stroke={ct.axis}
+                            tick={{ fill: ct.tick, fontSize: 9, fontFamily: 'monospace' }}
                             tickLine={false}
-                            axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                            axisLine={{ stroke: ct.axLine }}
                             interval={6}
                           />
                           <YAxis
-                            stroke="rgba(255,255,255,0.35)"
-                            tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 9, fontFamily: 'monospace' }}
+                            stroke={ct.axis}
+                            tick={{ fill: ct.tick, fontSize: 9, fontFamily: 'monospace' }}
                             tickLine={false}
                             width={28}
-                            axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                            axisLine={{ stroke: ct.axLine }}
                           />
                           <Tooltip
                             contentStyle={{
-                              background: 'rgba(10, 10, 10, 0.95)',
-                              border: '1px solid rgba(255, 0, 60, 0.35)',
+                              background: ct.forecastTooltip.bg,
+                              border: `1px solid ${ct.forecastTooltip.border}`,
                               borderRadius: 6,
                               fontFamily: 'monospace',
                               fontSize: 11,
-                              color: '#e5e7eb',
+                              color: ct.forecastTooltip.color,
                             }}
-                            labelStyle={{ color: '#ff003c' }}
+                            labelStyle={{ color: ct.forecastLabel }}
                           />
                           {/* Uncertainty band: upper filled area */}
                           <Area
@@ -771,7 +797,7 @@ export const IntelligencePanel: React.FC = () => {
                             type="monotone"
                             dataKey="lower"
                             stroke="none"
-                            fill="rgba(10,10,10,0.8)"
+                            fill={ct.clipFill}
                             fillOpacity={1}
                             legendType="none"
                           />

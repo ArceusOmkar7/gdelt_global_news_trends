@@ -46,6 +46,10 @@ interface DashboardState {
   setThreatCardCollapsed: (v: boolean) => void;
   topThreats: ThreatCountryEntry[];
   setTopThreats: (threats: ThreatCountryEntry[]) => void;
+
+  // Theme
+  isDarkTheme: boolean;
+  setIsDarkTheme: (v: boolean) => void;
 }
 
 const getSevenDaysAgo = () => {
@@ -116,4 +120,7 @@ export const useStore = create<DashboardState>((set) => ({
   setThreatCardCollapsed: (threatCardCollapsed) => set({ threatCardCollapsed }),
   topThreats: [],
   setTopThreats: (topThreats) => set({ topThreats }),
+
+  isDarkTheme: true,
+  setIsDarkTheme: (isDarkTheme) => set({ isDarkTheme }),
 }));
