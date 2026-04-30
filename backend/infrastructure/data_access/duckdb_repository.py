@@ -903,3 +903,46 @@ class DuckDbRepository(IEventRepository):
         except Exception as e:
             logger.error("failed_to_load_briefings_cache", error=str(e))
             return {}
+
+    def get_daily_trend(
+        self,
+        start_date: date,
+        end_date: date,
+        event_root_code: str | None = None,
+    ) -> list[dict]:
+        """Return per-day total events vs conflict events for the given window.
+
+        Conflict = QuadClass >= 3 (Material/Verbal Conflict).
+        Returns [{date, total, conflict}] sorted ascending.
+        """
+        start_int = int(start_date.strftime("%Y%m%d"))
+        end_excl = end_date + timedelta(days=1)
+        end_int = int(end_excl.strftime("%Y%m%d"))
+
+        root_filter = f"AND EventRootCode = '{event_root_code}'" if event_root_code else ""
+
+        sql = f"""
+            SELECT
+                CAST(SQLDATE AS VARCHAR) AS day,
+                COUNT(*)                 AS total,
+                SUM(CASE WHEN QuadClass >= 3 THEN 1 ELSE 0 END) AS conflict
+            FROM read_parquet('{self._parquet_glob}')
+            WHERE SQLDATE >= {start_int}
+              AND SQLDATE <  {end_int}
+              {root_filter}
+            GROUP BY SQLDATE
+            ORDER BY SQLDATE ASC
+        """
+        try:
+            rows = self._get_con().execute(sql).fetchall()
+        except Exception as exc:
+            logger.error("get_daily_trend_failed", error=str(exc))
+            return []
+
+        result = []
+        for day_raw, total, conflict in rows:
+            day_str = str(day_raw)
+            formatted = f"{day_str[:4]}-{day_str[4:6]}-{day_str[6:8]}" if len(day_str) == 8 else day_str
+            result.append({"date": formatted, "total": int(total or 0), "conflict": int(conflict or 0)})
+        return result
+

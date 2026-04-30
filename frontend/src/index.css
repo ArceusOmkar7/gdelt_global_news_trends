@@ -142,23 +142,9 @@
 }
 
 /* ── Map launch card world map opacity tweak ── */
-[data-theme="light"] [class*="opacity-10"] { opacity: 0.06 !important; }
+[data-theme="light"] [class*="opacity-10"] { opacity: 0.12 !important; }
+[data-theme="light"] .map-launch-card:hover [class*="opacity-20"] { opacity: 0.22 !important; }
 
-/* ── Map Launch Card — always dark regardless of theme ── */
-.map-launch-card { color: white !important; }
-.map-launch-card * { color: inherit !important; }
-.map-launch-card .text-white,
-.map-launch-card [class*="text-white\/"],
-.map-launch-card h2,
-.map-launch-card p,
-.map-launch-card span { color: white !important; }
-.map-launch-card [class*="text-cyber-blue"] { color: #00f3ff !important; }
-/* Restore the world map SVG opacity for the dark card */
-.map-launch-card [class*="opacity-10"] { opacity: 0.12 !important; }
-.map-launch-card:hover [class*="opacity-20"] { opacity: 0.22 !important; }
-/* Restore border on hover */
-[data-theme="light"] .map-launch-card:hover { border-color: #00f3ff !important; }
-[data-theme="light"] .map-launch-card { box-shadow: 0 0 0 1px rgba(0,243,255,0.2), 0 4px 24px rgba(0,0,0,0.4) !important; }
 
 /* ═══════════════════════════════════════════════════════════ */
 

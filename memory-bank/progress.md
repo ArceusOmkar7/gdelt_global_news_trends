@@ -44,7 +44,7 @@
 - [x] `GET /api/v1/events/daily-trend` backend endpoint + `DuckDbRepository.get_daily_trend()`
 - [x] `getDailyTrend` frontend API service method
 - [x] Launch Interactive Map card: same premium design in both ALL and category views
-- [x] Map-launch card stays dark in light theme (`map-launch-card` CSS exemption)
+- [x] Map-launch card optimized for light theme (removed forced dark background, increased text opacity to 70%)
 - [x] Cold-tier monthly query limit raised to 999999 (was 100)
 
 ## In Progress

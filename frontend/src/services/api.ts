@@ -209,4 +209,16 @@ export const apiService = {
     }
     return response.json();
   },
+
+  getDailyTrend: async (
+    startDate: string,
+    endDate: string,
+    eventRootCode?: string | null
+  ): Promise<{ data: { date: string; total: number; conflict: number }[] }> => {
+    const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+    if (eventRootCode) params.append('event_root_code', eventRootCode);
+    const response = await fetch(`${API_BASE_URL}/events/daily-trend?${params}`);
+    if (!response.ok) throw new Error(`Failed to fetch daily trend: ${response.statusText}`);
+    return response.json();
+  },
 };

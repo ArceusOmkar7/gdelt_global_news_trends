@@ -356,3 +356,23 @@ def top_threat_countries(
  
     return response
  
+
+@router.get(
+    "/daily-trend",
+    summary="Daily event trend",
+    description=(
+        "Returns per-day total event counts and conflict event counts "
+        "(QuadClass >= 3) for the given date window, suitable for a "
+        "stacked area chart."
+    ),
+)
+def daily_trend(
+    start_date: date | None = Query(default=None, description="Inclusive start date"),
+    end_date: date | None = Query(default=None, description="Inclusive end date"),
+    event_root_code: str | None = Query(default=None, max_length=2),
+) -> dict:
+    end = end_date or date.today()
+    start = start_date or (end - timedelta(days=30))
+    repository = DuckDbRepository(settings)
+    rows = repository.get_daily_trend(start_date=start, end_date=end, event_root_code=event_root_code)
+    return {"data": rows}

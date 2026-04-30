@@ -7,6 +7,7 @@
   - System Control Panel moved into a slide-in side drawer (hidden from main view, accessible via header button).
   - Intelligence Panel auto-scrolls to top on every event selection.
   - `EventTrendChart` added to the dashboard showing per-day total vs conflict event volumes.
+  - Finalized light mode visibility for Map Launch cards by removing forced dark overrides and increasing text opacity.
 
 ## Last Session Summary (2026-04-30)
 
