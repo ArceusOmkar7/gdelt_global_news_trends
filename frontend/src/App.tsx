@@ -330,7 +330,7 @@ function App() {
                   {/* Map Launch Hero Card (Condensed) */}
                   <div 
                     onClick={() => setViewMode('map')}
-                    className="w-full h-32 glass-panel rounded-xl overflow-hidden relative group cursor-pointer border-cyber-blue/30 hover:border-cyber-blue transition-all duration-500 shadow-lg hover:shadow-[0_0_30px_rgba(0,243,255,0.15)] flex items-center px-8 justify-between"
+                    className="map-launch-card w-full h-32 glass-panel rounded-xl overflow-hidden relative group cursor-pointer border-cyber-blue/30 hover:border-cyber-blue transition-all duration-500 shadow-lg hover:shadow-[0_0_30px_rgba(0,243,255,0.15)] flex items-center px-8 justify-between"
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-cyber-blue/5 to-transparent group-hover:from-cyber-blue/10 transition-colors duration-500" />
                     <div className="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/e/ec/World_map_blank_without_borders.svg')] bg-right bg-cover opacity-10 group-hover:opacity-20 transition-opacity duration-700 pointer-events-none" />
@@ -372,7 +372,7 @@ function App() {
                   {/* Map Launch Hero Card (Condensed) */}
                   <div 
                     onClick={() => setViewMode('map')}
-                    className="w-full h-32 glass-panel rounded-xl overflow-hidden relative group cursor-pointer border-cyber-blue/30 hover:border-cyber-blue transition-all duration-500 shadow-lg hover:shadow-[0_0_30px_rgba(0,243,255,0.15)] flex items-center px-8 justify-between"
+                    className="map-launch-card w-full h-32 glass-panel rounded-xl overflow-hidden relative group cursor-pointer border-cyber-blue/30 hover:border-cyber-blue transition-all duration-500 shadow-lg hover:shadow-[0_0_30px_rgba(0,243,255,0.15)] flex items-center px-8 justify-between"
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-cyber-blue/5 to-transparent group-hover:from-cyber-blue/10 transition-colors duration-500" />
                     <div className="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/e/ec/World_map_blank_without_borders.svg')] bg-right bg-cover opacity-10 group-hover:opacity-20 transition-opacity duration-700 pointer-events-none" />

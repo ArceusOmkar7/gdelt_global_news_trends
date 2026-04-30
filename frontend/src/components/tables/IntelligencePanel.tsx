@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import { apiService } from '../../services/api';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -72,6 +72,15 @@ export const IntelligencePanel: React.FC = () => {
         forecastTooltip: { bg: 'rgba(255,255,255,0.97)', border: 'rgba(220,38,38,0.35)', color: '#0F172A' },
         forecastLabel: '#DC2626',
       };
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll panel back to top whenever the selected event changes
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [selectedEvent]);
 
   const regionalMedian = useMemo(() => {
     if (!topThreats || topThreats.length === 0) return null;
@@ -207,7 +216,7 @@ export const IntelligencePanel: React.FC = () => {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
         {selectedEvent ? (
           <>
             {selectedEvent.quad_class != null && QUAD_CLASS_LABELS[selectedEvent.quad_class] && (

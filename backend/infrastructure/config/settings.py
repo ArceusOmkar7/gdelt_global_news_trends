@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     cold_tier_monthly_query_limit: int = Field(
         default=10,
         ge=1,
-        le=100,
+        le=999999,
         description="Maximum cold-tier queries allowed per user per month.",
     )
 
