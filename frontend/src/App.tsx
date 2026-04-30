@@ -10,7 +10,7 @@ import { DateRangeSlider } from './components/ambient/DateRangeSlider';
 import { useStore } from './store/useStore';
 import { apiService } from './services/api';
 import { useQuery } from '@tanstack/react-query';
-import { Globe, Calendar, Terminal, Database, Activity, Layers, Map as MapIcon, ArrowLeft } from 'lucide-react';
+import { Globe, Calendar, Terminal, Database, Activity, Layers, Map as MapIcon, ArrowLeft, X } from 'lucide-react';
 
 function formatDistanceToNow(dateStr: string | null): string {
   if (!dateStr) return 'NEVER';
@@ -57,6 +57,7 @@ function App() {
   const [viewMode, setViewMode] = useState<'dashboard' | 'map'>('dashboard');
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [showDateSlider, setShowDateSlider] = useState(false);
+  const [showSystemPanel, setShowSystemPanel] = useState(false);
   const hasAlignedDateWindow = useRef(false);
 
   const healthQuery = useQuery({
@@ -145,7 +146,8 @@ function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3">
+          {/* Date range picker */}
           <div className="relative">
             <button 
               onClick={() => setShowDateSlider(!showDateSlider)}
@@ -162,8 +164,18 @@ function App() {
               </div>
             )}
           </div>
+
+          {/* System / Runtime Controls button */}
+          <button
+            onClick={() => setShowSystemPanel(true)}
+            className={`flex items-center gap-2 px-3 py-1.5 bg-surface-900 border border-white/10 hover:border-terminal-green/50 rounded transition-colors group`}
+            title="Runtime Controls & System Health"
+          >
+            <Terminal size={14} className="text-white/50 group-hover:text-terminal-green transition-colors" />
+            <span className="text-[10px] font-mono uppercase tracking-widest text-white/50 group-hover:text-terminal-green transition-colors hidden sm:block">System</span>
+          </button>
           
-          {/* Map Mode Toggle (Only show if in map mode or always useful?) */}
+          {/* Map Mode Toggle */}
           {viewMode === 'map' && (
             <div className="flex items-center bg-surface-900 border border-white/10 rounded overflow-hidden">
               <button
@@ -302,15 +314,9 @@ function App() {
                   </div>
                 </div>
 
-                {/* Right Column - Spikes & Controls */}
+                {/* Right Column - Spike Alerts only now */}
                 <div className="lg:col-span-4 flex flex-col gap-6">
-                  {/* System Control Panel */}
-                  <div className="rounded-xl overflow-hidden shadow-lg border border-white/5 glass-panel h-[350px]">
-                    <SystemControlPanel />
-                  </div>
-
-                  {/* Spike Alerts */}
-                  <div className="flex-1 rounded-xl overflow-hidden shadow-lg border border-white/5 min-h-[300px]">
+                  <div className="flex-1 rounded-xl overflow-hidden shadow-lg border border-white/5 min-h-[400px]">
                     <SpikeAlertsCard />
                   </div>
                 </div>
@@ -377,6 +383,37 @@ function App() {
         <div className="absolute bottom-0 w-full z-20">
           <GlobalStatsTicker />
         </div>
+
+        {/* ── System Panel Drawer ── */}
+        {showSystemPanel && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 z-40 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowSystemPanel(false)}
+            />
+            {/* Drawer */}
+            <div className="absolute top-0 right-0 h-full w-full max-w-md z-50 flex flex-col bg-surface-800 border-l border-white/10 shadow-2xl animate-in slide-in-from-right duration-300">
+              {/* Drawer Header */}
+              <div className="h-14 flex items-center justify-between px-5 border-b border-white/10 shrink-0">
+                <div className="flex items-center gap-3">
+                  <Terminal size={16} className="text-terminal-green" />
+                  <span className="font-mono text-sm font-bold uppercase tracking-widest text-white">Runtime Controls</span>
+                </div>
+                <button
+                  onClick={() => setShowSystemPanel(false)}
+                  className="p-2 rounded hover:bg-white/10 transition-colors text-white/50 hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              {/* Drawer Content */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+                <SystemControlPanel />
+              </div>
+            </div>
+          </>
+        )}
 
       </main>
     </div>
