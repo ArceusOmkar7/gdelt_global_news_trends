@@ -529,26 +529,44 @@ export const IntelligencePanel: React.FC = () => {
                       {analysisImages.length > 0 && (
                         <div className="space-y-2">
                           <span className="text-[10px] text-white/40 uppercase font-mono">Images</span>
-                          <div className="grid grid-cols-2 gap-2">
-                            {analysisImages.slice(0, 4).map((imageUrl, index) => (
-                              <a
-                                key={`${imageUrl}-${index}`}
-                                href={imageUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="group block overflow-hidden rounded border border-white/10 bg-surface-900/40"
-                              >
-                                <img
-                                  src={imageUrl}
-                                  alt={`Related media ${index + 1}`}
-                                  loading="lazy"
-                                  className="h-28 w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                                  onError={(event) => {
-                                    event.currentTarget.closest('a')?.classList.add('hidden');
-                                  }}
-                                />
-                              </a>
-                            ))}
+                          <div className="grid gap-2 md:grid-cols-[1.35fr_1fr]">
+                            <a
+                              href={analysisImages[0]}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="group block overflow-hidden rounded border border-white/10 bg-surface-900/40"
+                            >
+                              <img
+                                src={analysisImages[0]}
+                                alt="Primary media"
+                                loading="lazy"
+                                className="h-56 w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                onError={(event) => {
+                                  event.currentTarget.closest('a')?.classList.add('hidden');
+                                }}
+                              />
+                            </a>
+                            <div className="grid grid-cols-2 gap-2">
+                              {analysisImages.slice(1, 4).map((imageUrl, index) => (
+                                <a
+                                  key={`${imageUrl}-${index}`}
+                                  href={imageUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="group block overflow-hidden rounded border border-white/10 bg-surface-900/40"
+                                >
+                                  <img
+                                    src={imageUrl}
+                                    alt={`Related media ${index + 2}`}
+                                    loading="lazy"
+                                    className="h-28 w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                    onError={(event) => {
+                                      event.currentTarget.closest('a')?.classList.add('hidden');
+                                    }}
+                                  />
+                                </a>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       )}

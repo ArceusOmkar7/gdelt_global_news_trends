@@ -92,7 +92,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 status_code=503,
                 detail=(
                     "Analyze endpoint is unavailable. "
-                    "Configure APIFY_API_TOKEN, GROQ_API_KEY, and AI dependencies to enable it."
+                    "Configure GROQ_API_KEY and AI dependencies to enable it."
                 ),
             )
         return analyze_use_case

@@ -79,9 +79,13 @@ class Settings(BaseSettings):
         default=None,
         description="Groq API key used for on-demand event analysis and briefings.",
     )
+    jina_api_key: str | None = Field(
+        default=None,
+        description="Optional Jina AI Reader API key for higher scraping limits.",
+    )
     groq_model_name: str = Field(
-        default="llama3-70b-8192",
-        description="Groq model to use for analysis (e.g., llama3-70b-8192).",
+        default="llama-3.3-70b-versatile",
+        description="Groq model to use for analysis (e.g., llama-3.3-70b-versatile).",
     )
     apify_api_token: str | None = Field(
         default=None,
