@@ -75,40 +75,38 @@ export const GeoFilterBar = () => {
   };
 
   return (
-    <div className="border-b border-white/5 bg-surface-800/30 px-6 py-3">
-      <div className="flex flex-wrap items-end gap-4">
-        <SearchableDropdown
-          title="Country"
-          value={geoFilter.countryCode}
-          options={countryOptions}
-          placeholder="GLOBAL"
-          onChange={(value) => setGeoFilter({ countryCode: value, stateName: null, cityName: null })}
-        />
+    <>
+      <SearchableDropdown
+        title="Country"
+        value={geoFilter.countryCode}
+        options={countryOptions}
+        placeholder="GLOBAL"
+        onChange={(value) => setGeoFilter({ countryCode: value, stateName: null, cityName: null })}
+      />
 
-        <SearchableDropdown
-          title="State"
-          value={geoFilter.stateName}
-          options={stateOptions}
-          placeholder="All states"
-          disabled={!geoFilter.countryCode || !stateAvailable}
-          disabledReason={!geoFilter.countryCode ? 'Select a country first.' : stateReason}
-          onChange={(value) => setGeoFilter({
-            countryCode: geoFilter.countryCode,
-            stateName: value,
-            cityName: null,
-          })}
-        />
+      <SearchableDropdown
+        title="State"
+        value={geoFilter.stateName}
+        options={stateOptions}
+        placeholder="All states"
+        disabled={!geoFilter.countryCode || !stateAvailable}
+        disabledReason={!geoFilter.countryCode ? 'Select a country first.' : stateReason}
+        onChange={(value) => setGeoFilter({
+          countryCode: geoFilter.countryCode,
+          stateName: value,
+          cityName: null,
+        })}
+      />
 
-        {(geoFilter.countryCode || geoFilter.stateName || geoFilter.cityName) && (
-          <button
-            onClick={handleClear}
-            className="ml-auto flex items-center gap-1 px-3 py-2 rounded border border-cyber-red/40 text-cyber-red/80 hover:text-cyber-red hover:border-cyber-red/70 transition-all text-[10px] font-mono uppercase tracking-widest"
-          >
-            <X size={12} />
-            Clear
-          </button>
-        )}
-      </div>
-    </div>
+      {(geoFilter.countryCode || geoFilter.stateName || geoFilter.cityName) && (
+        <button
+          onClick={handleClear}
+          className="ml-auto flex items-center gap-1 px-3 py-2 rounded border border-cyber-red/40 text-cyber-red/80 hover:text-cyber-red hover:border-cyber-red/70 transition-all text-[10px] font-mono uppercase tracking-widest"
+        >
+          <X size={12} />
+          Clear
+        </button>
+      )}
+    </>
   );
 };

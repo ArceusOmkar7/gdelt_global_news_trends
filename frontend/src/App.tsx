@@ -211,8 +211,8 @@ function App() {
             {/* Animated background pill */}
             <span
               className={`absolute inset-0 rounded transition-all duration-500 ${isDarkTheme
-                  ? 'bg-transparent'
-                  : 'bg-gradient-to-r from-amber-100/30 to-sky-100/20'
+                ? 'bg-transparent'
+                : 'bg-gradient-to-r from-amber-100/30 to-sky-100/20'
                 }`}
             />
             <span className="relative flex items-center gap-2">
@@ -294,10 +294,10 @@ function App() {
             placeholder="ALL THEMES"
             onChange={(value) => setActiveThemeCategory(value)}
           />
+
+          <GeoFilterBar />
         </div>
       </div>
-
-      <GeoFilterBar />
 
       {/* ── Main Layout ── */}
       <main className="flex-1 relative overflow-hidden flex flex-col">
