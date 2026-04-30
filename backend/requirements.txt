@@ -19,3 +19,4 @@ lxml>=4.9.0
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
 reverse_geocoder>=1.5.1
+yt-dlp>=2026.3.17

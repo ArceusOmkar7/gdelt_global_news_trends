@@ -209,6 +209,26 @@ class EventAnalysisResponse(BaseModel):
     embeds: list[str] = Field(default_factory=list, description="Related embedded media URLs.")
 
 
+class LiveStreamChannelResponse(BaseModel):
+    """Live stream metadata for a single YouTube channel."""
+
+    id: str
+    name: str
+    video_id: str | None = None
+    embed_url: str | None = None
+    can_embed: bool = True
+    status: str = "ok"
+    error: str | None = None
+
+
+class LiveStreamGroupResponse(BaseModel):
+    """Live stream metadata for a country group."""
+
+    group_key: str
+    label: str
+    channels: list[LiveStreamChannelResponse]
+
+
 
 class BigQueryHealthDetail(BaseModel):
     """Nested detail for BigQuery connectivity in health check."""

@@ -24,6 +24,8 @@ from backend.api.schemas.schemas import (
     EventFilterRequest,
     ForecastPointResponse,
     ForecastResponse,
+    LiveStreamChannelResponse,
+    LiveStreamGroupResponse,
     SpikeAlertEntry,
     SpikeAlertResponse,
 )
@@ -32,6 +34,7 @@ from backend.application.use_cases.forecast_events import ForecastEventsUseCase
 from backend.domain.models.event import EventFilter
 from backend.infrastructure.data_access.duckdb_repository import DuckDbRepository
 from backend.infrastructure.config.settings import settings
+from backend.infrastructure.services.live_stream_service import live_stream_service
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -216,3 +219,34 @@ def get_theme_categories(
         return {"data": {}}
     import json
     return {"data": json.loads(cache_path.read_text())}
+
+
+@router.get(
+    "/live-streams",
+    response_model=LiveStreamGroupResponse,
+    summary="Resolve live stream embeds",
+    description="Returns cached live stream embed metadata for a country group.",
+)
+def get_live_streams(
+    country_code: str | None = Query(default=None, description="Country code (e.g., US, IN)."),
+) -> LiveStreamGroupResponse:
+    data = live_stream_service.get_group(country_code)
+    channels = [LiveStreamChannelResponse.model_validate(item) for item in data["channels"]]
+    return LiveStreamGroupResponse(
+        group_key=data["group_key"],
+        label=data["label"],
+        channels=channels,
+    )
+
+
+@router.get(
+    "/live-streams/refresh",
+    response_model=LiveStreamChannelResponse,
+    summary="Refresh a live stream embed",
+    description="Forces a refresh for a single channel when an embed fails.",
+)
+def refresh_live_stream(
+    channel_id: str = Query(..., description="YouTube channel ID."),
+) -> LiveStreamChannelResponse:
+    data = live_stream_service.refresh_channel(channel_id)
+    return LiveStreamChannelResponse.model_validate(data)

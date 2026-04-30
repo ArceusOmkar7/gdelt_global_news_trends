@@ -38,12 +38,15 @@
   - Y-axis formatted as `K`/`M`. Fully theme-aware via `isDarkTheme`.
   - Placed between KPI row and bento grid on the main dashboard.
   - Responds to active `eventRootCode` (category filter).
+  - **Media Evidence layout:** Intelligence Panel now renders one primary image with three supporting thumbnails (2x2) in the Media Evidence section.
+  - **Live News Wall:** Added a live YouTube embed grid in the main dashboard column that switches channels based on the selected country (GLOBAL/US/IR/IS/UK/RS/IN).
 
 ### Backend Changes
 - **Reverse geocoding:** Added `reverse_geocoder` dependency and `ReverseGeocodeService` (offline). DuckDB adds `get_geo_drill` for country/state/city drill-down.
 - **Geo drill endpoint:** New `GET /api/v1/events/geo-drill` (hot tier only) for drill-down options.
 - **Theme categories cache:** Nightly job writes `theme_categories.json`; new `GET /api/v1/analytics/theme-categories` endpoint serves it.
 - **Filter upgrades:** Event filters now use `event_root_codes` (list), plus geo and theme category filters across hot-tier queries.
+- **Jina AI Reader scraper:** Scraper refactor uses Jina Reader JSON, extracts images from markdown, scores candidates, and normalizes embed URLs to iframe-ready links.
 
 ## Known Issues / Technical Debt
 - ~10 ESLint `any` type warnings remain across the codebase (cleanup sprint needed).

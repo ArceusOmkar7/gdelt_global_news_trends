@@ -225,3 +225,19 @@ export interface GeoDrillResponse {
 export interface ThemeCategoriesResponse {
   data: Record<string, number>;
 }
+
+export interface LiveStreamChannel {
+  id: string;
+  name: string;
+  video_id?: string | null;
+  embed_url?: string | null;
+  can_embed: boolean;
+  status: string;
+  error?: string | null;
+}
+
+export interface LiveStreamGroupResponse {
+  group_key: string;
+  label: string;
+  channels: LiveStreamChannel[];
+}

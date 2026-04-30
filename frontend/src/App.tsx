@@ -9,6 +9,7 @@ import { TrendingNewsFeed } from './components/tables/TrendingNewsFeed';
 import { DateRangeSlider } from './components/ambient/DateRangeSlider';
 import { EventTrendChart } from './components/ambient/EventTrendChart';
 import { GeoFilterBar } from './components/ambient/GeoFilterBar';
+import { LiveNewsWall } from './components/ambient/LiveNewsWall';
 import { SearchableDropdown, type DropdownOption } from './components/ambient/SearchableDropdown';
 import { useStore } from './store/useStore';
 import { apiService } from './services/api';
@@ -395,6 +396,8 @@ function App() {
                         Open View <ArrowLeft size={14} className="rotate-180 group-hover:translate-x-1 transition-transform" />
                       </div>
                     </div>
+
+                    <LiveNewsWall />
 
                   </div>
 

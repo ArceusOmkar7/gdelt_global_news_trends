@@ -45,6 +45,9 @@
 - [x] Theme-aware IntelligencePanel charts (LineChart + AreaChart axis, fills, tooltips)
 - [x] Conflict Forecast dark clip-fill bug fixed for light mode
 - [x] Intelligence Panel scroll-to-top on event selection (`useRef` + `useEffect`)
+- [x] Media Evidence layout: primary image + three supporting thumbnails
+- [x] Live News Wall: country-specific YouTube live embeds (GLOBAL/US/IR/IS/UK/RS/IN)
+- [x] Jina AI Reader scraper refactor with scored image extraction + iframe-ready embeds
 - [x] `EventTrendChart` — stacked area chart (total events vs conflict events) on main dashboard
 - [x] `GET /api/v1/events/daily-trend` backend endpoint + `DuckDbRepository.get_daily_trend()`
 - [x] `getDailyTrend` frontend API service method

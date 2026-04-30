@@ -13,6 +13,8 @@ import type {
   BriefingsResponse,
   GeoDrillResponse,
   ThemeCategoriesResponse,
+  LiveStreamGroupResponse,
+  LiveStreamChannel,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
@@ -280,6 +282,25 @@ export const apiService = {
     const response = await fetch(`${API_BASE_URL}/analytics/theme-categories`);
     if (!response.ok) {
       throw new Error(`Failed to fetch theme categories: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getLiveStreams: async (countryCode?: string | null): Promise<LiveStreamGroupResponse> => {
+    const params = new URLSearchParams();
+    if (countryCode) params.append('country_code', countryCode);
+    const response = await fetch(`${API_BASE_URL}/analytics/live-streams?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch live streams: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  refreshLiveStream: async (channelId: string): Promise<LiveStreamChannel> => {
+    const params = new URLSearchParams({ channel_id: channelId });
+    const response = await fetch(`${API_BASE_URL}/analytics/live-streams/refresh?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to refresh live stream: ${response.statusText}`);
     }
     return response.json();
   },
