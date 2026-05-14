@@ -1,15 +1,22 @@
 """Unit tests for domain models — validates Pydantic schemas and constraints."""
 
 from datetime import date
-
 import pytest
 
-from backend.domain.models.event import Event, EventCountByDate, EventFilter
-
+from backend.domain.models.event import (
+    Event, 
+    EventCountByDate, 
+    EventFilter,
+    EventCluster,
+    ForecastPoint,
+    ForecastResult,
+    MapAggregation,
+    MapEventDetail,
+    ExtractedArticle,
+    EventAnalysis
+)
 
 class TestEvent:
-    """Tests for the Event domain model."""
-
     def test_create_valid_event(self) -> None:
         event = Event(
             global_event_id=123456789,
@@ -59,10 +66,7 @@ class TestEvent:
         restored = Event.model_validate(data)
         assert restored == original
 
-
 class TestEventFilter:
-    """Tests for the EventFilter model."""
-
     def test_default_values(self) -> None:
         f = EventFilter()
         assert f.start_date is None
@@ -90,10 +94,7 @@ class TestEventFilter:
         assert f.country_code == "US"
         assert f.limit == 500
 
-
 class TestEventCountByDate:
-    """Tests for the EventCountByDate model."""
-
     def test_create_valid_count(self) -> None:
         count = EventCountByDate(
             date=date(2024, 1, 15),
@@ -117,3 +118,90 @@ class TestEventCountByDate:
         count = EventCountByDate(date=date(2024, 1, 1), count=10)
         with pytest.raises(Exception):
             count.count = 999  # type: ignore[misc]
+
+class TestEventCluster:
+    def test_create_event_cluster(self):
+        event1 = Event(global_event_id=1, sql_date=date(2024, 1, 1))
+        cluster = EventCluster(
+            cluster_id=1,
+            label="Elections",
+            event_count=1,
+            avg_goldstein_scale=2.0,
+            top_country_codes=["US"],
+            top_event_codes=[],
+            event_ids=[1]
+        )
+        assert cluster.cluster_id == 1
+        assert cluster.event_count == 1
+        
+    def test_frozen(self):
+        cluster = EventCluster(cluster_id=1, label="L", event_count=1, top_country_codes=[], top_event_codes=[], event_ids=[])
+        with pytest.raises(Exception):
+            cluster.event_count = 2
+
+class TestForecastModels:
+    def test_forecast_point(self):
+        point = ForecastPoint(date=date(2024, 1, 1), predicted_count=100.5, lower_bound=50.0, upper_bound=150.0)
+        assert point.date == date(2024, 1, 1)
+        assert point.predicted_count == 100.5
+        
+        # Test frozen
+        with pytest.raises(Exception):
+            point.predicted_count = 200.0
+            
+    def test_forecast_result(self):
+        point = ForecastPoint(date=date(2024, 1, 1), predicted_count=100.5, lower_bound=50.0, upper_bound=150.0)
+        result = ForecastResult(
+            horizon_days=1,
+            country_code="US",
+            model_type="prophet",
+            predictions=[point]
+        )
+        assert result.horizon_days == 1
+        assert result.country_code == "US"
+        assert result.model_type == "prophet"
+        assert len(result.predictions) == 1
+
+class TestMapModels:
+    def test_map_aggregation(self):
+        agg = MapAggregation(lat=10.0, lon=20.0, intensity=5.5)
+        assert agg.lat == 10.0
+        assert agg.lon == 20.0
+        assert agg.intensity == 5.5
+        assert agg.country_code is None
+        
+    def test_map_event_detail(self):
+        detail = MapEventDetail(
+            global_event_id=1,
+            sql_date=date(2024, 1, 1),
+            lat=10.0,
+            lon=20.0
+        )
+        assert detail.global_event_id == 1
+        assert detail.lat == 10.0
+        assert detail.num_mentions == 0
+        
+class TestAnalysisModels:
+    def test_extracted_article(self):
+        article = ExtractedArticle(
+            title="Title",
+            text="Content",
+            images=["img1.jpg"],
+            embeds=[]
+        )
+        assert article.title == "Title"
+        assert article.text == "Content"
+        assert len(article.images) == 1
+        
+    def test_event_analysis(self):
+        analysis = EventAnalysis(
+            summary="Summary",
+            sentiment="Positive",
+            entities=["Joe"],
+            themes=["Politics"],
+            confidence=0.9,
+            images=[],
+            embeds=[]
+        )
+        assert analysis.sentiment == "Positive"
+        assert analysis.confidence == 0.9

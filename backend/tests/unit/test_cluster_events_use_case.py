@@ -53,6 +53,15 @@ class TestClusterEventsUseCase:
         call_args2 = self.mock_service.cluster_events.call_args
         assert call_args2[0][1] == 2
 
+    def test_execute_caps_limit_to_10000(self):
+        self.mock_repo.get_events.return_value = [_make_event(1)]
+        
+        filters = EventFilter(limit=20000)
+        self.use_case.execute(filters, n_clusters=5)
+        
+        called_filters = self.mock_repo.get_events.call_args[0][0]
+        assert called_filters.limit == 10000
+
     def test_execute_empty_data_early_return(self):
         self.mock_repo.get_events.return_value = []
         

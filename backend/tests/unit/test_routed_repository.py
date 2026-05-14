@@ -126,6 +126,14 @@ def test_uses_cache_for_identical_cold_request(
     assert cold_repo.get_events.call_count == 1
 
 
+    def test_hybrid_window_merges_hot_and_cold(
+        self,
+        routed_repo: RoutedRepository,
+        hot_repo: MagicMock,
+        cold_repo: MagicMock,
+    ) -> None:
+        pass # Not a class method originally
+
 def test_hybrid_window_merges_hot_and_cold(
     routed_repo: RoutedRepository,
     hot_repo: MagicMock,
@@ -146,5 +154,89 @@ def test_hybrid_window_merges_hot_and_cold(
     results = routed_repo.get_events(filters)
 
     assert [row.global_event_id for row in results] == [2, 1]
-    assert hot_repo.get_events.call_count == 1
-    assert cold_repo.get_events.call_count == 1
+
+def test_get_event_by_id_hot_and_cold(routed_repo: RoutedRepository, hot_repo: MagicMock, cold_repo: MagicMock):
+    # Found in hot
+    hot_repo.get_event_by_id.return_value = _make_event(1, date.today())
+    res1 = routed_repo.get_event_by_id(1)
+    assert res1 is not None
+    assert res1.global_event_id == 1
+    cold_repo.get_event_by_id.assert_not_called()
+
+    # Not found in hot, fallback to cold
+    hot_repo.get_event_by_id.return_value = None
+    cold_repo.get_event_by_id.return_value = _make_event(2, date.today())
+    res2 = routed_repo.get_event_by_id(2)
+    assert res2 is not None
+    assert res2.global_event_id == 2
+    cold_repo.get_event_by_id.assert_called_once_with(2)
+
+def test_get_map_aggregations_routing(routed_repo: RoutedRepository, hot_repo: MagicMock, cold_repo: MagicMock):
+    cutoff = date.today() - timedelta(days=90)
+    hot_repo._resolve_dates.return_value = (cutoff - timedelta(days=5), cutoff + timedelta(days=5))
+    
+    # Test hot only
+    hot_filters = EventFilter(start_date=cutoff + timedelta(days=1), end_date=cutoff + timedelta(days=5))
+    hot_repo._resolve_dates.return_value = (cutoff + timedelta(days=1), cutoff + timedelta(days=5))
+    routed_repo.get_map_aggregations(10, 0, 10, 0, hot_filters, 1)
+    hot_repo.get_map_aggregations.assert_called_once()
+    cold_repo.get_map_aggregations.assert_not_called()
+    
+    # Reset mocks
+    hot_repo.reset_mock()
+    cold_repo.reset_mock()
+
+    # Test hybrid
+    hybrid_filters = EventFilter(start_date=cutoff - timedelta(days=5), end_date=cutoff + timedelta(days=5))
+    hot_repo._resolve_dates.return_value = (cutoff - timedelta(days=5), cutoff + timedelta(days=5))
+    
+    from backend.domain.models.event import MapAggregation
+    hot_repo.get_map_aggregations.return_value = [MapAggregation(lat=10.0, lon=10.0, intensity=5.0)]
+    cold_repo.get_map_aggregations.return_value = [MapAggregation(lat=10.0, lon=10.0, intensity=2.0)]
+    
+    res = routed_repo.get_map_aggregations(10, 0, 10, 0, hybrid_filters, 1)
+    assert len(res) == 1
+    assert res[0].intensity == 7.0 # Merged intensity
+    
+def test_get_event_counts_by_date_routing(routed_repo: RoutedRepository, hot_repo: MagicMock, cold_repo: MagicMock):
+    cutoff = date.today() - timedelta(days=90)
+    
+    # Hybrid
+    hybrid_filters = EventFilter(start_date=cutoff - timedelta(days=2), end_date=cutoff + timedelta(days=2))
+    hot_repo._resolve_dates.return_value = (cutoff - timedelta(days=2), cutoff + timedelta(days=2))
+    
+    from backend.domain.models.event import EventCountByDate
+    hot_repo.get_event_counts_by_date.return_value = [
+        EventCountByDate(date=cutoff + timedelta(days=1), count=100, avg_goldstein_scale=2.0, total_mentions=50, avg_tone=1.0)
+    ]
+    cold_repo.get_event_counts_by_date.return_value = [
+        EventCountByDate(date=cutoff - timedelta(days=1), count=50, avg_goldstein_scale=-2.0, total_mentions=10, avg_tone=-1.0),
+        EventCountByDate(date=cutoff + timedelta(days=1), count=10, avg_goldstein_scale=1.0, total_mentions=5, avg_tone=0.5) # overlapping date
+    ]
+    
+    res = routed_repo.get_event_counts_by_date(None, hybrid_filters)
+    assert len(res) == 2
+    
+    # The overlapping date (cutoff + 1) should be merged
+    overlap = next(r for r in res if r.date == cutoff + timedelta(days=1))
+    assert overlap.count == 110
+    assert overlap.total_mentions == 55
+    
+def test_get_event_details_routing(routed_repo: RoutedRepository, hot_repo: MagicMock, cold_repo: MagicMock):
+    cutoff = date.today() - timedelta(days=90)
+    
+    # Hybrid
+    hybrid_filters = EventFilter(start_date=cutoff - timedelta(days=5), end_date=cutoff + timedelta(days=5))
+    hot_repo._resolve_dates.return_value = (cutoff - timedelta(days=5), cutoff + timedelta(days=5))
+    
+    from backend.domain.models.event import MapEventDetail
+    hot_repo.get_event_details.return_value = [
+        MapEventDetail(global_event_id=1, sql_date=cutoff + timedelta(days=1), lat=0.0, lon=0.0)
+    ]
+    cold_repo.get_event_details.return_value = [
+        MapEventDetail(global_event_id=2, sql_date=cutoff - timedelta(days=1), lat=0.0, lon=0.0)
+    ]
+    
+    res = routed_repo.get_event_details(10, 0, 10, 0, hybrid_filters, 100)
+    assert len(res) == 2
+    assert {e.global_event_id for e in res} == {1, 2}

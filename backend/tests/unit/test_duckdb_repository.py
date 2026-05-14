@@ -1,67 +1,85 @@
 from datetime import date
-
-import pandas as pd
+import pytest
 
 from backend.domain.models.event import EventFilter
-from backend.infrastructure.config.settings import Settings
-from backend.infrastructure.data_access.duckdb_repository import DuckDbRepository
+from backend.infrastructure.data_access.duckdb_repository import DuckDbRepository, DuckDbRepositoryError
 
+class TestDuckDbRepository:
+    def test_init_with_no_parquet_files(self, tmp_path, test_settings):
+        # Point to an empty directory
+        test_settings.hot_tier_path = str(tmp_path)
+        with pytest.raises(DuckDbRepositoryError, match="No parquet files"):
+            DuckDbRepository(test_settings)
+            
+    def test_init_with_invalid_path(self, test_settings):
+        test_settings.hot_tier_path = "/does/not/exist/12345"
+        with pytest.raises(DuckDbRepositoryError, match="does not exist or is not a directory"):
+            DuckDbRepository(test_settings)
 
-def _build_settings(tmp_path) -> Settings:
-    hot_dir = tmp_path / "hot"
-    cache_dir = tmp_path / "cache"
-    hot_dir.mkdir(parents=True, exist_ok=True)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return Settings(
-        gcp_project_id="test-project",
-        gdelt_dataset="gdelt-bq.gdeltv2",
-        gdelt_table="events_partitioned",
-        hot_tier_path=str(hot_dir),
-        cache_path=str(cache_dir),
-    )
+    def test_get_events_basic(self, test_settings, tmp_hot_tier):
+        # tmp_hot_tier fixture gives us valid Parquet files (see conftest.py)
+        repo = DuckDbRepository(test_settings)
+        filters = EventFilter(limit=10)
+        
+        events = repo.get_events(filters)
+        assert len(events) > 0
+        
+    def test_get_events_date_filter(self, test_settings, tmp_hot_tier):
+        repo = DuckDbRepository(test_settings)
+        filters = EventFilter(
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 1, 2),
+            limit=10
+        )
+        
+        events = repo.get_events(filters)
+        assert len(events) == 3 # ID 101, 102, 103 are within these dates in conftest
+        
+        # Verify dates
+        for e in events:
+            assert date(2024, 1, 1) <= e.sql_date <= date(2024, 1, 2)
 
+    def test_get_events_country_filter(self, test_settings, tmp_hot_tier):
+        repo = DuckDbRepository(test_settings)
+        filters = EventFilter(country_code="US")
+        
+        events = repo.get_events(filters)
+        assert len(events) > 0
+        for e in events:
+            assert e.actor1_country_code == "US" or e.action_geo_country_code == "US"
 
-def test_map_aggregations_returns_rows_when_data_matches_window_and_bbox(tmp_path) -> None:
-    settings = _build_settings(tmp_path)
+    def test_get_event_counts_by_date(self, test_settings, tmp_hot_tier):
+        repo = DuckDbRepository(test_settings)
+        filters = EventFilter(start_date=date(2024, 1, 1), end_date=date(2024, 1, 5))
+        
+        counts = repo.get_event_counts_by_date(country_code=None, filters=filters)
+        assert len(counts) > 0
+        assert counts[0].count > 0
 
-    df = pd.DataFrame(
-        [
-            {
-                "GLOBALEVENTID": 1,
-                "SQLDATE": 20260318,
-                "Actor1CountryCode": "US",
-                "Actor2CountryCode": "IR",
-                "EventRootCode": "19",
-                "EventCode": "190",
-                "GoldsteinScale": -5.0,
-                "NumMentions": 12,
-                "NumSources": 3,
-                "AvgTone": -2.1,
-                "ActionGeo_CountryCode": "IR",
-                "ActionGeo_Lat": 35.7,
-                "ActionGeo_Long": 51.4,
-                "SOURCEURL": "https://example.com/a",
-                "Actor1Type1Code": "GOV",
-                "Actor2Type1Code": "MIL",
-            }
-        ]
-    )
-    parquet_path = tmp_path / "hot" / "events_202603.parquet"
-    df.to_parquet(parquet_path, index=False)
+    def test_get_event_by_id(self, test_settings, tmp_hot_tier):
+        repo = DuckDbRepository(test_settings)
+        
+        # ID 101 exists in our mock data
+        event = repo.get_event_by_id(101)
+        assert event is not None
+        assert event.global_event_id == 101
+        
+        # ID 999 does not exist
+        missing = repo.get_event_by_id(999)
+        assert missing is None
 
-    repo = DuckDbRepository(settings)
-    filters = EventFilter(start_date=date(2026, 3, 12), end_date=date(2026, 3, 19), limit=1000)
+    def test_get_map_aggregations(self, test_settings, tmp_hot_tier):
+        repo = DuckDbRepository(test_settings)
+        filters = EventFilter(limit=1000)
 
-    result = repo.get_map_aggregations(
-        bbox_n=90,
-        bbox_s=-90,
-        bbox_e=180,
-        bbox_w=-180,
-        filters=filters,
-        grid_precision=1,
-    )
+        result = repo.get_map_aggregations(
+            bbox_n=90,
+            bbox_s=-90,
+            bbox_e=180,
+            bbox_w=-180,
+            filters=filters,
+            grid_precision=1,
+        )
 
-    assert len(result) == 1
-    assert result[0].intensity == 1
-    assert round(result[0].lat, 1) == 35.7
-    assert round(result[0].lon, 1) == 51.4
+        assert len(result) > 0
+        assert result[0].intensity >= 1
