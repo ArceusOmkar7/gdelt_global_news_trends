@@ -122,6 +122,16 @@ class BigQueryClient:
                 f"BigQuery dry run failed: {exc}",
                 query=sql,
             ) from exc
+        except Exception as exc:
+            logger.error(
+                "bigquery_dry_run_unexpected_error",
+                error=str(exc),
+                sql=sql[:500],
+            )
+            raise BigQueryClientError(
+                f"Unexpected error during BigQuery dry run: {exc}",
+                query=sql,
+            ) from exc
 
         max_scan_bytes = int(self._settings.bq_max_scan_bytes)
         if estimated_bytes > max_scan_bytes:
