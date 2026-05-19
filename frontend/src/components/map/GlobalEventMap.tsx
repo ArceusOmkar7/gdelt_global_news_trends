@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useStore } from '../../store/useStore';
 import { apiService } from '../../services/api';
 import type { MapAggregation, Event } from '../../types';
+import { MapLegend } from './MapLegend';
 
 const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 const HAS_MAPBOX_TOKEN =
@@ -579,6 +580,8 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
            <span className="data-ink text-white/50">NO SIGNAL DETECTED IN THIS SECTOR</span>
         </div>
       )}
+
+      <MapLegend />
       
       <div className="absolute bottom-4 right-4 z-10 bg-surface-900/50 backdrop-blur-sm p-2 panel-border rounded">
          <span className="data-ink">Zoom: {viewState.zoom.toFixed(1)} | Points: {mapResponse?.count || 0}</span>

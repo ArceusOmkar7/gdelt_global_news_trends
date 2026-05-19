@@ -39,6 +39,9 @@ THEME_CATEGORY_MAP = {
     "SECURITY": ["TERROR", "WEAPONS", "TAX_MILITARY"],
 }
 
+POPULAR_NEWS_THEME = "POPULAR_NEWS"
+POPULAR_MENTION_THRESHOLD = 10
+
 
 def compute_risk_score(conflict_ratio, avg_goldstein, avg_tone) -> int:
     # conflict_ratio: 0.0–1.0, higher = more conflict
@@ -52,6 +55,22 @@ def compute_risk_score(conflict_ratio, avg_goldstein, avg_tone) -> int:
     tone_score = max(0, min(100, ((-avg_tone + 30) / 60) * 100))
     conflict_score = conflict_ratio * 100
     return round(conflict_score * 0.4 + goldstein_score * 0.35 + tone_score * 0.25)
+
+
+def _build_theme_filter(theme_category: str | None) -> tuple[str, list[Any]]:
+    if not theme_category:
+        return "", []
+
+    normalized = theme_category.upper()
+    if normalized == POPULAR_NEWS_THEME:
+        return "NumMentions > ?", [POPULAR_MENTION_THRESHOLD]
+
+    prefixes = THEME_CATEGORY_MAP.get(normalized)
+    if not prefixes:
+        return "", []
+
+    clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
+    return f"({clauses})", [f"%{p}%" for p in prefixes]
 
 
 class DuckDbRepositoryError(Exception):
@@ -163,12 +182,10 @@ class DuckDbRepository(IEventRepository):
             where_clauses.append("ActionGeo_CountryCode = ?")
             params.append(filters.geo_country.upper())
 
-        if filters.theme_category:
-            prefixes = THEME_CATEGORY_MAP.get(filters.theme_category.upper())
-            if prefixes:
-                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
-                where_clauses.append(f"({clauses})")
-                params.extend([f"%{p}%" for p in prefixes])
+        theme_clause, theme_params = _build_theme_filter(filters.theme_category)
+        if theme_clause:
+            where_clauses.append(theme_clause)
+            params.extend(theme_params)
 
         sql = f"""
             SELECT
@@ -236,12 +253,10 @@ class DuckDbRepository(IEventRepository):
             where_clauses.append("ActionGeo_CountryCode = ?")
             params.append(filters.geo_country.upper())
 
-        if filters.theme_category:
-            prefixes = THEME_CATEGORY_MAP.get(filters.theme_category.upper())
-            if prefixes:
-                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
-                where_clauses.append(f"({clauses})")
-                params.extend([f"%{p}%" for p in prefixes])
+        theme_clause, theme_params = _build_theme_filter(filters.theme_category)
+        if theme_clause:
+            where_clauses.append(theme_clause)
+            params.extend(theme_params)
 
         sql = f"""
             SELECT
@@ -317,12 +332,10 @@ class DuckDbRepository(IEventRepository):
             where_clauses.append("ActionGeo_CountryCode = ?")
             params.append(filters.geo_country.upper())
 
-        if filters.theme_category:
-            prefixes = THEME_CATEGORY_MAP.get(filters.theme_category.upper())
-            if prefixes:
-                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
-                where_clauses.append(f"({clauses})")
-                params.extend([f"%{p}%" for p in prefixes])
+        theme_clause, theme_params = _build_theme_filter(filters.theme_category)
+        if theme_clause:
+            where_clauses.append(theme_clause)
+            params.extend(theme_params)
 
         sql = f"""
             SELECT
@@ -408,12 +421,10 @@ class DuckDbRepository(IEventRepository):
             where_clauses.append("ActionGeo_CountryCode = ?")
             params.append(filters.geo_country.upper())
 
-        if filters.theme_category:
-            prefixes = THEME_CATEGORY_MAP.get(filters.theme_category.upper())
-            if prefixes:
-                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
-                where_clauses.append(f"({clauses})")
-                params.extend([f"%{p}%" for p in prefixes])
+        theme_clause, theme_params = _build_theme_filter(filters.theme_category)
+        if theme_clause:
+            where_clauses.append(theme_clause)
+            params.extend(theme_params)
 
         sql = f"""
             SELECT
@@ -695,12 +706,10 @@ class DuckDbRepository(IEventRepository):
             where_clause += " AND ActionGeo_CountryCode = ?"
             params.append(geo_country.upper())
 
-        if theme_category:
-            prefixes = THEME_CATEGORY_MAP.get(theme_category.upper())
-            if prefixes:
-                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
-                where_clause += f" AND ({clauses})"
-                params.extend([f"%{p}%" for p in prefixes])
+        theme_clause, theme_params = _build_theme_filter(theme_category)
+        if theme_clause:
+            where_clause += f" AND {theme_clause}"
+            params.extend(theme_params)
  
         # Query 1 — global aggregates + most-active country
         sql_global = f"""
@@ -1129,12 +1138,10 @@ class DuckDbRepository(IEventRepository):
             where_clauses.append("ActionGeo_CountryCode = ?")
             params.append(geo_country.upper())
 
-        if theme_category:
-            prefixes = THEME_CATEGORY_MAP.get(theme_category.upper())
-            if prefixes:
-                clauses = " OR ".join(["array_to_string(themes, ';') ILIKE ?" for _ in prefixes])
-                where_clauses.append(f"({clauses})")
-                params.extend([f"%{p}%" for p in prefixes])
+        theme_clause, theme_params = _build_theme_filter(theme_category)
+        if theme_clause:
+            where_clauses.append(theme_clause)
+            params.extend(theme_params)
 
         sql = f"""
             SELECT
