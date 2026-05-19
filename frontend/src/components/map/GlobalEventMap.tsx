@@ -125,7 +125,9 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
         signal
       );
     },
-    enabled: dateWindowReady && Boolean(mapResponse?.is_aggregated),
+    // Enable when the map is aggregated OR when the special "POPULAR_NEWS"
+    // theme is active (set by selecting the Popular category in the UI).
+    enabled: dateWindowReady && (Boolean(mapResponse?.is_aggregated) || themeCategory === 'POPULAR_NEWS'),
     staleTime: 1000 * 60 * 5,
     placeholderData: (prev) => prev,
   });
@@ -217,6 +219,8 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
       ),
     };
   }, [mapResponse]);
+
+  const showOnlyPopular = themeCategory === 'POPULAR_NEWS';
 
   const onMapClick = (evt: MapMouseEvent) => {
     // 1. Individual events (detailed view) — include popular overlay layer
@@ -330,7 +334,7 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
               type="heatmap"
               maxzoom={22}
               layout={{
-                visibility: mapMode === 'heatmap' ? 'visible' : 'none',
+                visibility: showOnlyPopular ? 'none' : (mapMode === 'heatmap' ? 'visible' : 'none'),
               }}
               paint={{
                 'heatmap-weight': [
@@ -402,7 +406,7 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
               minzoom={0}
               maxzoom={22}
               layout={{
-                visibility: mapMode === 'clusters' ? 'visible' : 'none',
+                visibility: showOnlyPopular ? 'none' : (mapMode === 'clusters' ? 'visible' : 'none'),
               }}
               paint={{
                 'circle-color': [
@@ -493,7 +497,7 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
           </Source>
         )}
 
-        {detailedGeoJson && (
+        {detailedGeoJson && !showOnlyPopular && (
           <Source id="events-source" type="geojson" data={detailedGeoJson} maxzoom={24}>
             <Layer
               id="events-layer"
@@ -539,7 +543,9 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
                 'text-field': '★',
                 'text-size': 18,
                 'text-allow-overlap': true,
-                'visibility': mapMode === 'heatmap' ? 'none' : 'visible',
+                // Show stars when Popular category is active, otherwise follow
+                // the normal mapMode visibility (hide in heatmap mode).
+                'visibility': showOnlyPopular ? 'visible' : (mapMode === 'heatmap' ? 'none' : 'visible'),
               }}
               paint={{
                 'text-color': 'silver',
