@@ -107,6 +107,29 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
     refetchInterval: 300_000,
   });
 
+  // --- Low-zoom overlay: fetch detailed events even when map is aggregated ---
+  const popularOverlayQuery = useQuery({
+    queryKey: ['popular-overlay', queryBBox, dateRange, eventRootCodes, geoFilter, themeCategory],
+    queryFn: async ({ signal }) => {
+      if (!isValidBBox(queryBBox))
+        return { zoom: queryZoom, is_aggregated: false, count: 0, data: [] };
+      // Force a detail-mode fetch by using DETAIL_ZOOM_THRESHOLD + small epsilon
+      return apiService.getMapData(
+        queryBBox,
+        DETAIL_ZOOM_THRESHOLD + 0.1,
+        dateRange[0],
+        dateRange[1],
+        eventRootCodes,
+        geoFilter,
+        themeCategory,
+        signal
+      );
+    },
+    enabled: dateWindowReady && Boolean(mapResponse?.is_aggregated),
+    staleTime: 1000 * 60 * 5,
+    placeholderData: (prev) => prev,
+  });
+
   const anomalyGeoJson = useMemo<FeatureCollection<Point, any> | null>(() => {
     if (!anomalyQuery.data?.data || !mapResponse?.is_aggregated) return null;
     const anomalies = anomalyQuery.data.data;
@@ -150,6 +173,31 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
     };
   }, [mapResponse]);
 
+  const popularOverlayGeoJson = useMemo<FeatureCollection<Point, any> | null>(() => {
+    const src = popularOverlayQuery.data;
+    if (!src || !src.data || (src.count || 0) === 0) return null;
+    const eventData = src.data as any[];
+    const popular = eventData.filter(d => {
+      const mentions = Number(d.num_mentions ?? d.NumMentions ?? 0);
+      return mentions > 10;
+    });
+    if (popular.length === 0) return null;
+    return {
+      type: 'FeatureCollection',
+      features: popular.map(
+        (d): Feature<Point, any> => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [d.lon ?? d.ActionGeo_Long, d.lat ?? d.ActionGeo_Lat] },
+          properties: {
+            ...d,
+            global_event_id: Number(d.global_event_id ?? d.GLOBALEVENTID),
+            num_mentions: Number(d.num_mentions ?? d.NumMentions ?? 0),
+          },
+        })
+      ),
+    };
+  }, [popularOverlayQuery.data]);
+
   const detailedGeoJson = useMemo<FeatureCollection<Point, any> | null>(() => {
     if (!mapResponse || mapResponse.is_aggregated || mapResponse.count === 0) return null;
     const eventData = mapResponse.data as any[];
@@ -171,8 +219,11 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
   }, [mapResponse]);
 
   const onMapClick = (evt: MapMouseEvent) => {
-    // 1. Individual events (detailed view)
-    const eventFeature = evt.features?.find((f) => f.layer?.id === 'events-layer');
+    // 1. Individual events (detailed view) — include popular overlay layer
+    const eventFeature = evt.features?.find((f) => {
+      const id = f.layer?.id;
+      return id === 'events-layer' || id === 'popular-stars-layer';
+    });
     if (eventFeature && eventFeature.properties) {
       const eventId = Number(eventFeature.properties.global_event_id);
       const originalEvent = (mapResponse?.data as Event[])?.find(e => Number(e.global_event_id) === eventId);
@@ -267,7 +318,7 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
         onLoad={updateBBox}
           onMoveEnd={updateBBox}
         onClick={onMapClick}
-        interactiveLayerIds={['agg-circle-layer', 'events-layer']}
+        interactiveLayerIds={['agg-circle-layer', 'events-layer', 'popular-stars-layer']}
         mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
         mapStyle="mapbox://styles/mapbox/dark-v11"
         style={{ width: '100%', height: '100%' }}
@@ -474,6 +525,29 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
                 'circle-stroke-color': '#ffffff',
                 'circle-opacity': 1.0,
               }}
+            />
+          </Source>
+        )}
+        {/* Popular stars overlay (shows only events with num_mentions > 10).
+            Rendered both in detailed view and as a low-zoom overlay when aggregated. */}
+        {popularOverlayGeoJson && (
+          <Source id="popular-overlay-source" type="geojson" data={popularOverlayGeoJson} maxzoom={24}>
+            <Layer
+              id="popular-stars-layer"
+              type="symbol"
+              layout={{
+                'text-field': '★',
+                'text-size': 18,
+                'text-allow-overlap': true,
+                'visibility': mapMode === 'heatmap' ? 'none' : 'visible',
+              }}
+              paint={{
+                'text-color': 'silver',
+                'text-halo-color': '#000000',
+                'text-halo-width': 1,
+                'text-opacity': 0.95,
+              }}
+              filter={['>', ['coalesce', ['get', 'num_mentions'], 0], 10]}
             />
           </Source>
         )}
