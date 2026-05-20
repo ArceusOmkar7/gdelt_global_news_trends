@@ -13,7 +13,8 @@ from backend.domain.models.event import (
     MapAggregation,
     MapEventDetail,
     ExtractedArticle,
-    EventAnalysis
+    EventAnalysis,
+    EntityGroup
 )
 
 class TestEvent:
@@ -197,7 +198,7 @@ class TestAnalysisModels:
         analysis = EventAnalysis(
             summary="Summary",
             sentiment="Positive",
-            entities=["Joe"],
+            entities=EntityGroup(persons=["Joe"]),
             themes=["Politics"],
             confidence=0.9,
             images=[],

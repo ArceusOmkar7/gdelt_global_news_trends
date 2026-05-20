@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import structlog
 
-from backend.domain.models.event import EventAnalysis
+from backend.domain.models.event import EventAnalysis, EntityGroup
 from backend.domain.ports.ports import IEventRepository, ILLMAnalysisService
 from backend.infrastructure.services.scraper_service import ScraperService
 
@@ -47,7 +47,7 @@ class AnalyzeEventUseCase:
             return EventAnalysis(
                 summary="Source URL not available for this event.",
                 sentiment="Neutral",
-                entities=[],
+                entities=EntityGroup(),
                 themes=[],
                 confidence=0.0,
                 images=[],
@@ -62,7 +62,7 @@ class AnalyzeEventUseCase:
             return EventAnalysis(
                 summary=f"Failed to scrape article from source URL: {event.source_url}.",
                 sentiment="Neutral",
-                entities=[],
+                entities=EntityGroup(),
                 themes=[],
                 confidence=0.0,
                 images=[],

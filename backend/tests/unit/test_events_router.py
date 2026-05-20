@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.main import app
-from backend.domain.models.event import Event, EventAnalysis, ExtractedArticle
+from backend.domain.models.event import Event, EventAnalysis, ExtractedArticle, EntityGroup
 from backend.application.use_cases.get_events import GetEventsUseCase
 from backend.application.use_cases.analyze_event import AnalyzeEventUseCase
 
@@ -25,7 +25,7 @@ def _mock_analyze_event():
     mock.execute.return_value = EventAnalysis(
         summary="Test analysis",
         sentiment="Positive",
-        entities=[],
+        entities=EntityGroup(),
         themes=[],
         confidence=0.9,
         images=[],

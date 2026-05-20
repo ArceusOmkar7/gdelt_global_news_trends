@@ -42,16 +42,22 @@ class LLMAnalysisService(ILLMAnalysisService):
                     {
                         "role": "system",
                         "content": (
-                            "You are a structured intelligence analyst. "
-                            "Return only JSON with keys: summary, sentiment, entities, themes, confidence. "
-                            "Sentiment must be one of Positive, Neutral, or Negative."
+                            "You are a geopolitical intelligence analyst specializing in GDELT event data. "
+                            "Analyze news articles and return a JSON object with exactly these keys:\n\n"
+                            "- summary: 2–3 sentence factual summary of the core event, actors, and location. No speculation.\n"
+                            "- sentiment: Overall tone of the article. Must be exactly one of: 'Positive', 'Neutral', 'Negative'.\n"
+                            "- entities: Object with three arrays — 'countries' (ISO country names), 'organizations' (named orgs, alliances, bodies), 'persons' (named individuals). Each array may be empty.\n"
+                            "- themes: Array of 3–6 short thematic tags relevant to this event (e.g. 'armed conflict', 'sanctions', 'diplomatic talks', 'humanitarian crisis'). Use lowercase, specific terms — not generic words like 'news' or 'world'.\n"
+                            "- confidence: Float from 0.0 to 1.0 reflecting how much of the article was usable for analysis. "
+                            "Use 0.9+ for full, clear articles. Use 0.4–0.6 for fragments, paywalled, or mostly-boilerplate text. Use below 0.4 if the article is largely unintelligible or irrelevant.\n\n"
+                            "Return only the JSON object. No markdown, no explanation, no preamble."
                         ),
                     },
                     {
                         "role": "user",
                         "content": (
-                            "Analyze the following news article text and provide a concise intelligence report.\n\n"
-                            f"Article Text:\n---\n{article_text}\n---"
+                            f"Article Text:\n---\n{article_text}\n---\n\n"
+                            "Analyze the article above and return the JSON intelligence report."
                         ),
                     },
                 ],
