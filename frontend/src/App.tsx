@@ -185,7 +185,7 @@ function App() {
             >
               <Calendar size={14} className={showDateSlider ? 'text-cyber-blue' : 'text-white/70'} />
               <span className={`text-[10px] font-mono uppercase tracking-widest ${showDateSlider ? 'text-cyber-blue' : 'text-white/70'}`}>
-                {dateRange[0]} — {dateRange[1]}
+                {dateRange[0] === dateRange[1] ? dateRange[0] : `${dateRange[0]} — ${dateRange[1]}`}
               </span>
             </button>
             {showDateSlider && (

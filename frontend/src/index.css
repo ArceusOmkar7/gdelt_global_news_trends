@@ -200,8 +200,15 @@
   background: rgba(255,255,255,0.1);
 }
 
+/* Dual-range slider fix:
+   The track of each input gets pointer-events: none so it doesn't
+   intercept interactions meant for the other input's thumb.
+   Only the thumb pseudo-element gets pointer-events: all so it
+   remains fully draggable. z-index is managed in the component. */
 .slider-thumb {
   touch-action: none;
+  /* Disable pointer events on the whole input (track area).  */
+  pointer-events: none;
 }
 
 .slider-thumb::-webkit-slider-runnable-track {
@@ -220,6 +227,8 @@
   box-shadow: 0 0 0 2px rgba(0, 243, 255, 0.2), 0 0 14px rgba(0, 243, 255, 0.55);
   margin-top: -8px;
   cursor: ew-resize;
+  /* Re-enable pointer events on the thumb itself. */
+  pointer-events: all;
 }
 
 .slider-thumb::-moz-range-track {
@@ -235,6 +244,7 @@
   background: #0a0a0a;
   box-shadow: 0 0 0 2px rgba(0, 243, 255, 0.2), 0 0 14px rgba(0, 243, 255, 0.55);
   cursor: ew-resize;
+  pointer-events: all;
 }
 
 .slider-thumb:disabled::-webkit-slider-thumb,
@@ -242,4 +252,5 @@
   opacity: 0.35;
   box-shadow: none;
   cursor: not-allowed;
+  pointer-events: none;
 }
