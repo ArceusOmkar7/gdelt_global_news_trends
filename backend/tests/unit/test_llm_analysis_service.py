@@ -31,7 +31,7 @@ class _FakeGroqClient:
 @pytest.mark.asyncio
 async def test_llm_analysis_service_parses_groq_json(monkeypatch, tmp_path):
     fake_content = (
-        '{"summary":"Test summary","sentiment":"Neutral","entities":["UN"],'
+        '{"summary":"Test summary","sentiment":"Neutral","entities":{"organizations":["UN"]},'
         '"themes":["Diplomacy"],"confidence":0.83}'
     )
 
@@ -49,7 +49,7 @@ async def test_llm_analysis_service_parses_groq_json(monkeypatch, tmp_path):
 
     assert analysis.summary == "Test summary"
     assert analysis.sentiment == "Neutral"
-    assert analysis.entities == ["UN"]
+    assert analysis.entities.organizations == ["UN"]
     assert analysis.themes == ["Diplomacy"]
     assert analysis.confidence == 0.83
 
@@ -57,7 +57,7 @@ async def test_llm_analysis_service_parses_groq_json(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_llm_analysis_service_sends_json_response_format(monkeypatch, tmp_path):
     fake_completion = _FakeCompletionClient(
-        '{"summary":"Test summary","sentiment":"Positive","entities":[],"themes":[],"confidence":0.5}'
+        '{"summary":"Test summary","sentiment":"Positive","entities":{"countries":[],"organizations":[],"persons":[]},"themes":[],"confidence":0.5}'
     )
     fake_client = SimpleNamespace(chat=SimpleNamespace(completions=fake_completion))
     monkeypatch.setattr(llm_module, "AsyncGroq", lambda api_key: fake_client)

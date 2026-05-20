@@ -43,10 +43,16 @@ export interface MapDataResponse {
   data: MapAggregation[] | Event[];
 }
 
+export interface EntityGroup {
+  countries: string[];
+  organizations: string[];
+  persons: string[];
+}
+
 export interface EventAnalysis {
   summary: string;
   sentiment: 'Positive' | 'Neutral' | 'Negative';
-  entities: string[];
+  entities: EntityGroup;
   themes: string[];
   confidence: number;
   images: string[];

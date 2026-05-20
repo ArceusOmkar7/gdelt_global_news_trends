@@ -503,13 +503,39 @@ export const IntelligencePanel: React.FC<{ dockToHeader?: boolean }> = ({ dockTo
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <span className="data-ink">Entities Detected</span>
-                      <div className="flex flex-wrap gap-1">
-                        {currentAnalysis?.entities.map((e, i) => (
-                          <span key={i} className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-white/70 border border-white/5">
-                            {e}
-                          </span>
-                        ))}
-                      </div>
+                      
+                      {currentAnalysis && currentAnalysis.entities.countries.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <span className="text-[10px] text-white/40 mr-1 self-center">Countries:</span>
+                          {currentAnalysis.entities.countries.map((e, i) => (
+                            <span key={`c-${i}`} className="text-[10px] bg-blue-500/10 px-2 py-0.5 rounded text-blue-300 border border-blue-500/20">
+                              {e}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {currentAnalysis && currentAnalysis.entities.organizations.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <span className="text-[10px] text-white/40 mr-1 self-center">Orgs:</span>
+                          {currentAnalysis.entities.organizations.map((e, i) => (
+                            <span key={`o-${i}`} className="text-[10px] bg-purple-500/10 px-2 py-0.5 rounded text-purple-300 border border-purple-500/20">
+                              {e}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {currentAnalysis && currentAnalysis.entities.persons.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <span className="text-[10px] text-white/40 mr-1 self-center">Persons:</span>
+                          {currentAnalysis.entities.persons.map((e, i) => (
+                            <span key={`p-${i}`} className="text-[10px] bg-amber-500/10 px-2 py-0.5 rounded text-amber-300 border border-amber-500/20">
+                              {e}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <span className="data-ink">Intelligence Themes</span>

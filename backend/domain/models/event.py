@@ -286,15 +286,22 @@ class ExtractedArticle(BaseModel):
     model_config = {"frozen": True}
 
 
+class EntityGroup(BaseModel):
+    countries: list[str] = Field(default_factory=list)
+    organizations: list[str] = Field(default_factory=list)
+    persons: list[str] = Field(default_factory=list)
+
+    model_config = {"frozen": True}
+
 class EventAnalysis(BaseModel):
     """LLM-generated intelligence analysis for a news article."""
     
     summary: str = Field(description="A concise summary of the event.")
     sentiment: str = Field(description="Overall sentiment (Positive, Neutral, Negative).")
-    entities: list[str] = Field(default_factory=list, description="Key entities mentioned (people, orgs, places).")
+    entities: EntityGroup = Field(default_factory=EntityGroup, description="Named entities grouped by type.")
     themes: list[str] = Field(default_factory=list, description="Thematic categories detected.")
     confidence: float = Field(description="LLM's confidence in the analysis (0.0 to 1.0).")
     images: list[str] = Field(default_factory=list, description="Related image URLs for the sidebar.")
-    embeds: list[str] = Field(default_factory=list, description="Related embedded media URLs (e.g., YouTube).")
+    embeds: list[str] = Field(default_factory=list, description="Related embedded media URLs.")
 
     model_config = {"frozen": True}

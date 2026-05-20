@@ -198,11 +198,16 @@ class MapDataResponse(BaseModel):
     data: list[MapAggregationResponse] | list[MapEventDetailResponse]
 
 
+class EntityGroupResponse(BaseModel):
+    countries: list[str] = Field(default_factory=list)
+    organizations: list[str] = Field(default_factory=list)
+    persons: list[str] = Field(default_factory=list)
+
 class EventAnalysisResponse(BaseModel):
     """Serialised representation of an LLM intelligence analysis."""
     summary: str
     sentiment: str
-    entities: list[str] = Field(default_factory=list)
+    entities: EntityGroupResponse = Field(default_factory=EntityGroupResponse)
     themes: list[str] = Field(default_factory=list)
     confidence: float
     images: list[str] = Field(default_factory=list, description="Related image URLs for the sidebar.")

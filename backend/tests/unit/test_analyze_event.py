@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, AsyncMock
 import pytest
 
 from backend.application.use_cases.analyze_event import AnalyzeEventUseCase
-from backend.domain.models.event import Event, EventAnalysis, ExtractedArticle
+from backend.domain.models.event import Event, EventAnalysis, ExtractedArticle, EntityGroup
 from backend.domain.ports.ports import IEventRepository, ILLMAnalysisService
 from backend.infrastructure.services.scraper_service import ScraperService
 
@@ -54,7 +54,7 @@ async def test_analyze_event_success_with_media(use_case, mock_repo, mock_scrape
     llm_analysis = EventAnalysis(
         summary="Test summary",
         sentiment="Positive",
-        entities=["Actor A"],
+        entities=EntityGroup(persons=["Actor A"]),
         themes=["Peace"],
         confidence=0.9,
         images=[],  # LLM doesn't provide images

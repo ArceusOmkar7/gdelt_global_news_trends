@@ -1,3 +1,4 @@
+import pytest
 """Unit tests for the TF-IDF KMeans Clustering Service."""
 
 from datetime import date
