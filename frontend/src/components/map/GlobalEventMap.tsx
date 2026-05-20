@@ -52,6 +52,7 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
     selectedEventId,
     mapMode,
     dateWindowReady,
+    isDarkTheme,
   } = useStore();
 
   const mapRef = useRef<MapRef>(null);
@@ -325,7 +326,7 @@ export const GlobalEventMap: React.FC<{ themeCategory?: string | null }> = ({ th
         onClick={onMapClick}
         interactiveLayerIds={['agg-circle-layer', 'events-layer', 'popular-stars-layer']}
         mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
-        mapStyle="mapbox://styles/mapbox/dark-v11"
+        mapStyle={isDarkTheme ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/light-v11'}
         style={{ width: '100%', height: '100%' }}
       >
         {aggregatedGeoJson && (

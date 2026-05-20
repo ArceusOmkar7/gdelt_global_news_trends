@@ -14,6 +14,8 @@
 
 ## Recent Changes (2026-05-20)
 ### UI / Frontend Changes
+- **Theme-Responsive Mapbox Map Integration**: Updated `GlobalEventMap.tsx` to dynamically switch the Mapbox style between `mapbox://styles/mapbox/dark-v11` and `mapbox://styles/mapbox/light-v11` in real time as the user toggles dark/light themes. Also updated the parent map container element in `App.tsx` to switch background color to prevent theme flashing during map loads.
+- **System Panel Backdrop Blur Tweak**: Resolved the light-mode wildcard CSS rule collision where a solid dark navy color overrode the system panel's backdrop by dynamically selecting `bg-slate-900/20` in light mode (which lacks the `bg-black` string that gets intercepted by index.css).
 - **Bar Chart Scale and Exact Formatting Resolved**: Modified both `PeopleMentionsChart.tsx` and `SourceMentionsChart.tsx` to completely remove dynamic `K`-scale rounding and legend badges, displaying the exact, comma-formatted counts directly on the X-axis, bar labels, and custom tooltips. This completely resolves the duplicate tick collision bug (e.g. `2K` showing twice on close values).
 - **ESLint & TypeScript Type-Safety Improvements**: Removed raw `any` types in both charts, replacing them with a type-safe `unknown` and a detailed `CustomTooltipProps` interface, resolving all 4 pre-existing chart linting errors.
 - **Header Geo Filter Bar Refactored**: Added the "City" dropdown directly in the upper horizontal filter bar (`GeoFilterBar.tsx`). The dropdown fetches matching cities under the selected state via React Query `citiesQuery` dynamically.

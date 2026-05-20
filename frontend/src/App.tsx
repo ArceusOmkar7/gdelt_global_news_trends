@@ -478,7 +478,7 @@ function App() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 relative overflow-hidden bg-black">
+          <div className={`flex-1 relative overflow-hidden ${isDarkTheme ? 'bg-black' : 'bg-slate-50'}`}>
             <GlobalEventMap themeCategory={activeThemeCategory} />
 
             {/* Map overlay controls */}
@@ -511,7 +511,9 @@ function App() {
           <>
             {/* Backdrop */}
             <div
-              className="absolute inset-0 z-40 bg-black/60 backdrop-blur-sm"
+              className={`absolute inset-0 z-40 backdrop-blur-sm transition-all duration-300 ${
+                isDarkTheme ? 'bg-black/60' : 'bg-slate-900/20'
+              }`}
               onClick={() => setShowSystemPanel(false)}
             />
             {/* Drawer */}
