@@ -22,6 +22,14 @@
 - **Latency behavior:** First uncached requests are parquet-scan bound; warm responses are primarily API/cache bound.
 - **Data Source:** Querying local Parquet files in `/data/hot_tier/`.
 
+### Top-people query notes
+- The `/api/v1/events/top-people` endpoint aggregates people from the GKG `persons` array. By design the default metric is `SUM(NumMentions)` (total mentions across events), not distinct articles or event-counts. This can produce totals larger than the number of events because a single article/event can contain multiple mentions of the same person.
+- Performance optimisations applied:
+  - Predicate pushdown: filters (date, country, theme, event root codes) are applied in a subquery before `UNNEST(persons)` to avoid exploding arrays and reduce I/O.
+  - Non-empty array check (`persons <> []`) is used to skip rows with no persons.
+  - Responses are cached in-process for identical filter sets for `_PEOPLE_TTL` seconds (default 120s) to avoid repeated UNNEST/aggregation runs.
+- Recommended next steps: persistent disk cache (under `CACHE_PATH/top_people/`), nightly precompute of top people per (date,country,theme) to serve the dashboard instantly, or expose a lighter `metric` parameter (mentions|events|rows) so the frontend can request cheaper counts when needed.
+
 ## Frontend Query Flow
 - **Date alignment:** On app bootstrap, date range is aligned to latest hot-tier `last_updated_at` when local data lags behind current date.
 - **Readiness gate:** `dateWindowReady` gates date-dependent queries (`map`, `global-pulse`, `top-threat`, regional dossier queries) to avoid duplicate stale+aligned fetch cycles.

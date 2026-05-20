@@ -16,6 +16,8 @@ from fastapi import APIRouter, Depends, Query
 from backend.api.schemas.schemas import (
     EventAnalysisResponse,
     EventCountListResponse,
+    EntityCountResponse,
+    EntityCountListResponse,
     EventCountResponse,
     EventFilterRequest,
     EventListResponse,
@@ -93,6 +95,60 @@ def list_events(
     events = use_case.execute(filters)
     data = [EventResponse.model_validate(e.model_dump()) for e in events]
     return EventListResponse(count=len(data), data=data)
+
+
+@router.get(
+    "/top-people",
+    response_model=EntityCountListResponse,
+    summary="Top people mentioned",
+    description=(
+        "Return the most frequently mentioned people from the GKG persons list "
+        "based on current event filters and the hot-tier dataset."
+    ),
+)
+def top_people(
+    hot_repo: Annotated[DuckDbRepository, Depends(_get_hot_repository)],
+    start_date: date | None = Query(default=None, description="Inclusive start date"),
+    end_date: date | None = Query(default=None, description="Inclusive end date"),
+    country_code: str | None = Query(default=None, max_length=3, description="Country code"),
+    event_root_codes: str | None = Query(default=None, description="CAMEO root codes (comma-separated)"),
+    geo_country: str | None = Query(default=None, description="ActionGeo country code"),
+    geo_state: str | None = Query(default=None, description="Reverse-geocoded state/province"),
+    geo_city: str | None = Query(default=None, description="Reverse-geocoded city"),
+    theme_category: str | None = Query(default=None, description="GKG theme category"),
+    limit: int = Query(default=10, ge=1, le=50, description="Maximum number of people to return."),
+) -> EntityCountListResponse:
+    codes = _parse_event_root_codes(event_root_codes)
+    filters = EventFilter(
+        start_date=start_date,
+        end_date=end_date,
+        country_code=country_code,
+        event_root_codes=codes,
+        geo_country=geo_country,
+        geo_state=geo_state,
+        geo_city=geo_city,
+        theme_category=theme_category,
+        limit=limit,
+    )
+    # Check in-process cache first to avoid expensive re-scans/UNNESTs.
+    now = _time.monotonic()
+    cache_key = f"{filters.start_date}:{filters.end_date}:{filters.country_code}:{filters.event_root_codes}:{filters.geo_country}:{filters.geo_state}:{filters.geo_city}:{filters.theme_category}:{limit}"
+    with _people_cache_lock:
+        entry = _people_cache.get(cache_key)
+        if entry is not None and (now - entry["ts"]) < _PEOPLE_TTL:
+            return entry["data"]
+
+    people = hot_repo.get_top_people(filters, limit=limit)
+    response = EntityCountListResponse(count=len(people), data=[EntityCountResponse.model_validate(person) for person in people])
+
+    with _people_cache_lock:
+        _people_cache[cache_key] = {"ts": now, "data": response}
+        # Evict stale keys
+        stale = [k for k, v in _people_cache.items() if (now - v["ts"]) > _PEOPLE_TTL * 5]
+        for k in stale:
+            _people_cache.pop(k, None)
+
+    return response
 
 
 @router.get("/geo-drill")
@@ -334,6 +390,12 @@ _PULSE_TTL = 60.0   # 60 s
 _threat_cache: dict = {}
 _threat_cache_lock = threading.Lock()
 _THREAT_TTL = 120.0  # 2 min
+
+# Cache for /top-people endpoint to avoid re-scanning and UNNEST work on
+# repeated requests with the same filters. In-process only (resets on restart).
+_people_cache: dict = {}
+_people_cache_lock = threading.Lock()
+_PEOPLE_TTL = 120.0  # seconds
  
  
 # ---------------------------------------------------------------------------

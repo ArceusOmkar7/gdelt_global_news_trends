@@ -6,6 +6,7 @@ import type {
   RiskScoreResponse,
   ForecastResponse,
   GlobalPulseResponse,
+  EntityCountListResponse,
   TopThreatCountriesResponse,
   AnalyticsDeltaResponse,
   SpikeAlertResponse,
@@ -282,6 +283,30 @@ export const apiService = {
     const response = await fetch(`${API_BASE_URL}/analytics/theme-categories`);
     if (!response.ok) {
       throw new Error(`Failed to fetch theme categories: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  getTopPeople: async (
+    startDate: string,
+    endDate: string,
+    eventRootCodes?: string[] | null,
+    geoFilter?: GeoFilter,
+    themeCategory?: string | null,
+    limit: number = 10,
+  ): Promise<EntityCountListResponse> => {
+    const params = new URLSearchParams({
+      start_date: startDate,
+      end_date: endDate,
+      limit: limit.toString(),
+    });
+    if (eventRootCodes?.length) params.append('event_root_codes', eventRootCodes.join(','));
+    if (themeCategory) params.append('theme_category', themeCategory);
+    appendGeoFilters(params, geoFilter);
+
+    const response = await fetch(`${API_BASE_URL}/events/top-people?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch top people: ${response.statusText}`);
     }
     return response.json();
   },

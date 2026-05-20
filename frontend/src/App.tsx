@@ -8,6 +8,7 @@ import { SpikeAlertsCard } from './components/ambient/SpikeAlertsCard';
 import { TrendingNewsFeed } from './components/tables/TrendingNewsFeed';
 import { DateRangeSlider } from './components/ambient/DateRangeSlider';
 import { EventTrendChart } from './components/ambient/EventTrendChart';
+import { PeopleMentionsChart } from './components/ambient/PeopleMentionsChart';
 import { GeoFilterBar } from './components/ambient/GeoFilterBar';
 import { LiveNewsWall } from './components/ambient/LiveNewsWall';
 import { SearchableDropdown, type DropdownOption } from './components/ambient/SearchableDropdown';
@@ -367,6 +368,12 @@ function App() {
 
               {/* Event Volume Trend Chart */}
               <EventTrendChart
+                eventRootCodes={eventRootCodes}
+                geoFilter={geoFilter}
+                themeCategory={activeThemeCategory}
+              />
+
+              <PeopleMentionsChart
                 eventRootCodes={eventRootCodes}
                 geoFilter={geoFilter}
                 themeCategory={activeThemeCategory}

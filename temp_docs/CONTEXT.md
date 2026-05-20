@@ -46,6 +46,20 @@ SOURCEURL
 ```
 **Do NOT select:** Actor1Name, Actor2Name, Actor1Geo_FullName, Actor2Geo_FullName, MentionDocLen, or any column not in the list above, unless explicitly required. Every extra column costs money in BigQuery.
 
+---
+
+### Top-People (GKG `persons`) metric note
+
+The dashboard `Top People` panel is computed from the hot-tier `persons` array included in our Parquet hot-tier. Important implementation details:
+
+- Current metric: `SUM(NumMentions)` grouped by person. This sums the `NumMentions` field from Events for each appearance of a person and therefore can exceed the count of unique events or articles.
+- Alternatives you may want to use:
+  - `COUNT(DISTINCT GLOBALEVENTID)` — number of distinct events mentioning the person (de-duplicates multiple mentions within the same event).
+  - `COUNT(*)` after UNNEST — number of event rows containing the person (each row once).
+- Performance: UNNEST can be expensive if applied before filtering. The implementation applies row-level filters first (date, country, theme, event root codes) then UNNESTs to reduce work. An in-process TTL cache is used to avoid re-scanning for identical filter sets (default TTL 120s).
+
+If you want the dashboard to show event-unique counts instead of mentions, request the `events` metric and we will add a `metric` query parameter and update the frontend accordingly.
+
 ### BigQuery query safety rules (MANDATORY)
 1. **Always filter by SQLDATE** using integer comparison: `WHERE SQLDATE >= 20250101`
 2. **Never use `BETWEEN` on SQLDATE** — use `>=` and `<` with integer literals

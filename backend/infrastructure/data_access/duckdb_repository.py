@@ -274,6 +274,73 @@ class DuckDbRepository(IEventRepository):
         rows = self._query(sql, params)
         return [self._row_to_count(row) for row in rows]
 
+    def get_top_people(
+        self,
+        filters: EventFilter,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        start_date, end_date = self._resolve_dates(filters)
+        start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
+
+        # Apply row-level filters first (before UNNEST) to avoid exploding arrays
+        where_clauses = [
+            "SQLDATE >= ?",
+            "SQLDATE < ?",
+            "persons IS NOT NULL",
+            "persons <> []",
+        ]
+        params: list[Any] = [start_int, end_exclusive_int]
+
+        if filters.country_code:
+            where_clauses.append(
+                "(Actor1CountryCode = ? OR ActionGeo_CountryCode = ?)"
+            )
+            cc = filters.country_code.upper()
+            params.extend([cc, cc])
+
+        if filters.event_root_codes:
+            placeholders = ", ".join(["?" for _ in filters.event_root_codes])
+            where_clauses.append(f"EventRootCode IN ({placeholders})")
+            params.extend(filters.event_root_codes)
+
+        if filters.geo_country:
+            where_clauses.append("ActionGeo_CountryCode = ?")
+            params.append(filters.geo_country.upper())
+
+        theme_clause, theme_params = _build_theme_filter(filters.theme_category)
+        if theme_clause:
+            where_clauses.append(theme_clause)
+            params.extend(theme_params)
+
+        # Push filters into a subquery so DuckDB reads and filters rows first,
+        # then UNNESTs the smaller set of `persons`. After UNNEST we still
+        # filter out empty person strings.
+        sub_where = ' AND '.join(where_clauses)
+        sql = f"""
+            SELECT
+                person AS name,
+                SUM(NumMentions) AS count
+            FROM (
+                SELECT GLOBALEVENTID, NumMentions, persons
+                FROM read_parquet('{self._parquet_glob}')
+                WHERE {sub_where}
+            ) AS ev, UNNEST(ev.persons) AS people(person)
+            WHERE person IS NOT NULL AND person != ''
+            GROUP BY person
+            ORDER BY count DESC
+            LIMIT ?
+        """
+
+        params.append(limit)
+        rows = self._query(sql, params)
+        return [
+            {
+                "name": row.get("name") or "Unknown",
+                "count": int(row.get("count") or 0),
+            }
+            for row in rows
+        ]
+
     def get_map_aggregations(
         self,
         bbox_n: float,

@@ -116,6 +116,20 @@ class EventCountListResponse(BaseModel):
     data: list[EventCountResponse] = Field(description="Daily aggregated counts.")
 
 
+class EntityCountResponse(BaseModel):
+    """Count of a named entity or person."""
+
+    name: str
+    count: int
+
+
+class EntityCountListResponse(BaseModel):
+    """A list of aggregated entity counts."""
+
+    count: int = Field(description="Number of entities returned.")
+    data: list[EntityCountResponse] = Field(description="List of entity count records.")
+
+
 class EventClusterResponse(BaseModel):
     """Serialised representation of an event cluster."""
 
