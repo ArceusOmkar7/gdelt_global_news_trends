@@ -37,12 +37,14 @@ def _cache_key(
     zoom: float, start_date: date | None, end_date: date | None,
     event_root_codes: list[str] | None,
     geo_country: str | None,
+    geo_state: str | None,
+    geo_city: str | None,
     theme_category: str | None,
 ) -> str:
     payload = json.dumps(
         [round(bbox_n, 2), round(bbox_s, 2), round(bbox_e, 2), round(bbox_w, 2),
          round(zoom, 1),
-         str(start_date), str(end_date), event_root_codes, geo_country, theme_category],
+         str(start_date), str(end_date), event_root_codes, geo_country, geo_state, geo_city, theme_category],
         sort_keys=True,
     )
     return hashlib.md5(payload.encode()).hexdigest()
@@ -81,7 +83,20 @@ def get_map_data(
 
     codes = _parse_event_root_codes(event_root_codes)
 
-    key = _cache_key(bbox_n, bbox_s, bbox_e, bbox_w, zoom, start_date, end_date, codes, geo_country, theme_category)
+    key = _cache_key(
+        bbox_n,
+        bbox_s,
+        bbox_e,
+        bbox_w,
+        zoom,
+        start_date,
+        end_date,
+        codes,
+        geo_country,
+        geo_state,
+        geo_city,
+        theme_category,
+    )
     cached = _map_cache.get(key)
     if cached is not None:
         cached_at, response = cached
@@ -106,6 +121,8 @@ def get_map_data(
             start_date=start_date, end_date=end_date,
             event_root_codes=codes,
             geo_country=geo_country,
+            geo_state=geo_state,
+            geo_city=geo_city,
             theme_category=theme_category,
             grid_precision=grid_precision, limit=limit,
         )
@@ -126,6 +143,8 @@ def get_map_data(
             end_date=end_date,
             event_root_codes=codes,
             geo_country=geo_country,
+            geo_state=geo_state,
+            geo_city=geo_city,
             theme_category=theme_category,
             limit=detail_limit,
             min_mentions=min_mentions,

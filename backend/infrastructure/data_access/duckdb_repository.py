@@ -187,6 +187,13 @@ class DuckDbRepository(IEventRepository):
             where_clauses.append(theme_clause)
             params.extend(theme_params)
 
+        self._apply_geo_state_city_filter(
+            where_clauses,
+            params,
+            filters.geo_state,
+            filters.geo_city,
+        )
+
         sql = f"""
             SELECT
                 GLOBALEVENTID,
@@ -257,6 +264,13 @@ class DuckDbRepository(IEventRepository):
         if theme_clause:
             where_clauses.append(theme_clause)
             params.extend(theme_params)
+
+        self._apply_geo_state_city_filter(
+            where_clauses,
+            params,
+            filters.geo_state,
+            filters.geo_city,
+        )
 
         sql = f"""
             SELECT
@@ -472,6 +486,13 @@ class DuckDbRepository(IEventRepository):
             where_clauses.append(theme_clause)
             params.extend(theme_params)
 
+        self._apply_geo_state_city_filter(
+            where_clauses,
+            params,
+            filters.geo_state,
+            filters.geo_city,
+        )
+
         sql = f"""
             SELECT
                 ROUND(ActionGeo_Lat, ?) AS lat,
@@ -561,6 +582,13 @@ class DuckDbRepository(IEventRepository):
             where_clauses.append(theme_clause)
             params.extend(theme_params)
 
+        self._apply_geo_state_city_filter(
+            where_clauses,
+            params,
+            filters.geo_state,
+            filters.geo_city,
+        )
+
         sql = f"""
             SELECT
                 GLOBALEVENTID,
@@ -634,8 +662,30 @@ class DuckDbRepository(IEventRepository):
         country_code: str,
         start_date: date,
         end_date: date,
+        geo_state: str | None = None,
+        geo_city: str | None = None,
+        theme_category: str | None = None,
     ) -> dict[str, Any]:
         start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
+
+        where_clauses = [
+            "ActionGeo_CountryCode = ?",
+            "SQLDATE >= ?",
+            "SQLDATE < ?",
+        ]
+        params: list[Any] = [country_code.upper(), start_int, end_exclusive_int]
+
+        theme_clause, theme_params = _build_theme_filter(theme_category)
+        if theme_clause:
+            where_clauses.append(theme_clause)
+            params.extend(theme_params)
+
+        self._apply_geo_state_city_filter(
+            where_clauses,
+            params,
+            geo_state,
+            geo_city,
+        )
 
         sql = f"""
             SELECT
@@ -648,12 +698,10 @@ class DuckDbRepository(IEventRepository):
                 AVG(AvgTone) AS avg_tone,
                 COALESCE(SUM(NumMentions), 0) AS total_mentions
             FROM read_parquet('{self._parquet_glob}')
-            WHERE ActionGeo_CountryCode = ?
-              AND SQLDATE >= ?
-              AND SQLDATE < ?
+            WHERE {' AND '.join(where_clauses)}
         """
 
-        rows = self._query(sql, [country_code.upper(), start_int, end_exclusive_int])
+        rows = self._query(sql, params)
         if not rows:
             return {
                 "total_events": 0,
@@ -675,6 +723,63 @@ class DuckDbRepository(IEventRepository):
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_geo_name(value: str | None) -> str:
+        return (value or "").strip().casefold()
+
+    def _apply_geo_state_city_filter(
+        self,
+        where_clauses: list[str],
+        params: list[Any],
+        geo_state: str | None,
+        geo_city: str | None,
+    ) -> None:
+        if not geo_state and not geo_city:
+            return
+
+        from backend.infrastructure.services.reverse_geocode_service import reverse_geocode_service
+
+        lookup_where = list(where_clauses)
+        lookup_params = list(params)
+
+        if "ActionGeo_Lat IS NOT NULL" not in lookup_where:
+            lookup_where.append("ActionGeo_Lat IS NOT NULL")
+        if "ActionGeo_Long IS NOT NULL" not in lookup_where:
+            lookup_where.append("ActionGeo_Long IS NOT NULL")
+
+        sql = f"""
+            SELECT GLOBALEVENTID, ActionGeo_Lat, ActionGeo_Long
+            FROM read_parquet('{self._parquet_glob}')
+            WHERE {' AND '.join(lookup_where)}
+        """
+
+        rows = self._query(sql, lookup_params)
+        if not rows:
+            where_clauses.append("1 = 0")
+            return
+
+        coords = [(row["ActionGeo_Lat"], row["ActionGeo_Long"]) for row in rows]
+        geo_results = reverse_geocode_service.lookup_batch(coords)
+
+        target_state = self._normalize_geo_name(geo_state)
+        target_city = self._normalize_geo_name(geo_city)
+        matched_ids: list[int] = []
+
+        for row, geo in zip(rows, geo_results):
+            if target_state and self._normalize_geo_name(geo.get("state")) != target_state:
+                continue
+            if target_city and self._normalize_geo_name(geo.get("city")) != target_city:
+                continue
+            matched_ids.append(row["GLOBALEVENTID"])
+
+        if not matched_ids:
+            where_clauses.append("1 = 0")
+            return
+
+        placeholders = ", ".join(["?" for _ in matched_ids])
+        where_clauses.append(f"GLOBALEVENTID IN ({placeholders})")
+        params.extend(matched_ids)
 
     def _query(self, sql: str, params: list[Any]) -> list[dict[str, Any]]:
         """Execute a DuckDB query and return rows as dictionaries."""
@@ -825,26 +930,43 @@ class DuckDbRepository(IEventRepository):
         end_date: date,
         event_root_codes: list[str] | None = None,
         geo_country: str | None = None,
+        geo_state: str | None = None,
+        geo_city: str | None = None,
         theme_category: str | None = None,
     ) -> dict[str, Any]:
         """Return global aggregate stats for the stats ticker."""
         start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
-        
-        where_clause = "SQLDATE >= ? AND SQLDATE < ? AND ActionGeo_CountryCode IS NOT NULL AND ActionGeo_CountryCode != ''"
+
+        where_clauses = [
+            "SQLDATE >= ?",
+            "SQLDATE < ?",
+            "ActionGeo_CountryCode IS NOT NULL",
+            "ActionGeo_CountryCode != ''",
+        ]
         params = [start_int, end_exclusive_int]
+
         if event_root_codes:
             placeholders = ", ".join(["?" for _ in event_root_codes])
-            where_clause += f" AND EventRootCode IN ({placeholders})"
+            where_clauses.append(f"EventRootCode IN ({placeholders})")
             params.extend(event_root_codes)
 
         if geo_country:
-            where_clause += " AND ActionGeo_CountryCode = ?"
+            where_clauses.append("ActionGeo_CountryCode = ?")
             params.append(geo_country.upper())
 
         theme_clause, theme_params = _build_theme_filter(theme_category)
         if theme_clause:
-            where_clause += f" AND {theme_clause}"
+            where_clauses.append(theme_clause)
             params.extend(theme_params)
+
+        self._apply_geo_state_city_filter(
+            where_clauses,
+            params,
+            geo_state,
+            geo_city,
+        )
+
+        where_clause = " AND ".join(where_clauses)
  
         # Query 1 — global aggregates + most-active country
         sql_global = f"""
@@ -907,10 +1029,38 @@ class DuckDbRepository(IEventRepository):
         start_date: date,
         end_date: date,
         limit: int = 5,
+        geo_country: str | None = None,
+        geo_state: str | None = None,
+        geo_city: str | None = None,
+        theme_category: str | None = None,
     ) -> list[dict[str, Any]]:
         """Return the top-N countries ranked by computed risk score."""
         start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
- 
+
+        where_clauses = [
+            "SQLDATE >= ?",
+            "SQLDATE < ?",
+            "ActionGeo_CountryCode IS NOT NULL",
+            "ActionGeo_CountryCode != ''",
+        ]
+        params: list[Any] = [start_int, end_exclusive_int]
+
+        if geo_country:
+            where_clauses.append("ActionGeo_CountryCode = ?")
+            params.append(geo_country.upper())
+
+        theme_clause, theme_params = _build_theme_filter(theme_category)
+        if theme_clause:
+            where_clauses.append(theme_clause)
+            params.extend(theme_params)
+
+        self._apply_geo_state_city_filter(
+            where_clauses,
+            params,
+            geo_state,
+            geo_city,
+        )
+
         sql = f"""
             SELECT
                 ActionGeo_CountryCode                                                     AS country_code,
@@ -919,14 +1069,12 @@ class DuckDbRepository(IEventRepository):
                 AVG(GoldsteinScale)                                                       AS avg_goldstein,
                 AVG(AvgTone)                                                              AS avg_tone
             FROM read_parquet('{self._parquet_glob}')
-            WHERE SQLDATE >= ? AND SQLDATE < ?
-              AND ActionGeo_CountryCode IS NOT NULL
-              AND ActionGeo_CountryCode != ''
+            WHERE {' AND '.join(where_clauses)}
             GROUP BY ActionGeo_CountryCode
             ORDER BY total_events DESC
             LIMIT 50
         """
-        rows = self._query(sql, [start_int, end_exclusive_int])
+        rows = self._query(sql, params)
  
         scored: list[dict[str, Any]] = []
         for row in rows:
@@ -1250,6 +1398,8 @@ class DuckDbRepository(IEventRepository):
         end_date: date,
         event_root_codes: list[str] | None = None,
         geo_country: str | None = None,
+        geo_state: str | None = None,
+        geo_city: str | None = None,
         theme_category: str | None = None,
     ) -> list[dict]:
         """Return per-day total events vs conflict events for the given window.
@@ -1277,6 +1427,13 @@ class DuckDbRepository(IEventRepository):
         if theme_clause:
             where_clauses.append(theme_clause)
             params.extend(theme_params)
+
+        self._apply_geo_state_city_filter(
+            where_clauses,
+            params,
+            geo_state,
+            geo_city,
+        )
 
         sql = f"""
             SELECT

@@ -36,8 +36,22 @@ export const GeoFilterBar = () => {
     staleTime: 60_000,
   });
 
+  const citiesQuery = useQuery({
+    queryKey: ['geo-drill', 'cities', dateRange[0], dateRange[1], geoFilter.countryCode, geoFilter.stateName],
+    queryFn: () =>
+      apiService.getGeoDrill(
+        dateRange[0],
+        dateRange[1],
+        geoFilter.countryCode,
+        geoFilter.stateName
+      ),
+    enabled: !!geoFilter.countryCode && !!geoFilter.stateName && dateWindowReady,
+    staleTime: 60_000,
+  });
+
   const countries = countriesQuery.data?.items ?? [];
   const states = statesQuery.data?.items ?? [];
+  const cities = citiesQuery.data?.items ?? [];
   const stateAvailable = statesQuery.data?.state_available ?? true;
   const stateReason =
     statesQuery.data?.state_reason ||
@@ -68,6 +82,16 @@ export const GeoFilterBar = () => {
     }));
   }, [stateAvailable, states]);
 
+  const cityOptions = useMemo<DropdownOption[]>(() => {
+    const base: DropdownOption = { value: null, label: 'All cities' };
+    const options = cities.map((item) => ({
+      value: item.name,
+      label: item.name,
+      count: item.count,
+    }));
+    return [base, ...options];
+  }, [cities]);
+
   const handleClear = () => {
     setGeoFilter({ countryCode: null, stateName: null, cityName: null });
   };
@@ -93,6 +117,26 @@ export const GeoFilterBar = () => {
           countryCode: geoFilter.countryCode,
           stateName: value,
           cityName: null,
+        })}
+      />
+
+      <SearchableDropdown
+        title="City"
+        value={geoFilter.cityName}
+        options={cityOptions}
+        placeholder="All cities"
+        disabled={!geoFilter.countryCode || !geoFilter.stateName}
+        disabledReason={
+          !geoFilter.countryCode
+            ? 'Select a country first.'
+            : !geoFilter.stateName
+            ? 'Select a state first.'
+            : undefined
+        }
+        onChange={(value) => setGeoFilter({
+          countryCode: geoFilter.countryCode,
+          stateName: geoFilter.stateName,
+          cityName: value,
         })}
       />
 

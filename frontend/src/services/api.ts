@@ -57,7 +57,7 @@ export const apiService = {
 
     if (eventRootCodes?.length) params.append('event_root_codes', eventRootCodes.join(','));
     if (themeCategory) params.append('theme_category', themeCategory);
-    appendGeoFilters(params, geoFilter, false);
+    appendGeoFilters(params, geoFilter, true);
 
     const response = await fetch(`${API_BASE_URL}/events/map?${params}`, { signal });
     if (!response.ok) {

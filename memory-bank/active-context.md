@@ -8,8 +8,20 @@
   - Intelligence Panel auto-scrolls to top on every event selection.
   - `EventTrendChart` added to the dashboard showing per-day total vs conflict event volumes.
   - Finalized light mode visibility for Map Launch cards by removing forced dark overrides and increasing text opacity.
-  - Geo filter system added (country/state/city drill-down) using offline reverse geocoding from hot-tier lat/long.
+  - Country ➔ State ➔ City drill-down filtering is fully completed. Integrated the City dropdown directly into the upper horizontal header filter bar (`GeoFilterBar`) next to Country and State. Permanently deleted the redundant `GeoDrillPanel` sidebar block.
+  - Map filtering for cities is fully resolved and operational. All zoom levels (both low-zoom grid intensity aggregates and high-zoom detailed markers) now correctly respect geocoded boundaries inside the DuckDB repository.
   - Theme category pills added as a secondary filter (backed by nightly cache).
+
+## Recent Changes (2026-05-20)
+### UI / Frontend Changes
+- **Header Geo Filter Bar Refactored**: Added the "City" dropdown directly in the upper horizontal filter bar (`GeoFilterBar.tsx`). The dropdown fetches matching cities under the selected state via React Query `citiesQuery` dynamically.
+- **Sidebar Clutter Cleanup**: Removed all imports and logic of `GeoDrillPanel` from `IntelligencePanel.tsx`. The drawer now cleanly triggers only for concrete events and regional dossiers, ignoring location-only adjustments.
+- **Redundant Components Pruned**: Permanently deleted the unused component file `GeoDrillPanel.tsx` from the codebase.
+- **Unit Test Alignments**: Fixed pre-existing failures in `test_map_api.py` by aligning requested paths from `/api/v1/map/data` to `/api/v1/events/map` and updating the zoom level to `10.0` for detailed mode testing.
+
+### Backend Changes
+- **Map Geocoding Queries Resolved**: Applied `_apply_geo_state_city_filter` in both `get_map_aggregations` and `get_event_details` inside `duckdb_repository.py`. Selecting a geocoded city now correctly filters map markers and grid cells within city boundaries.
+- **SQL Parameter Safety**: Maintained full parameterization on geolocated query constructs to block SQL injection.
 
 ## Last Session Summary (2026-04-30)
 
