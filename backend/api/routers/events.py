@@ -151,6 +151,59 @@ def top_people(
     return response
 
 
+@router.get(
+    "/top-sources",
+    response_model=EntityCountListResponse,
+    summary="Top news sources",
+    description=(
+        "Return the most active source domains from the hot-tier dataset based on current filters. "
+        "The source domain is derived from the SOURCEURL field."
+    ),
+)
+def top_sources(
+    hot_repo: Annotated[DuckDbRepository, Depends(_get_hot_repository)],
+    start_date: date | None = Query(default=None, description="Inclusive start date"),
+    end_date: date | None = Query(default=None, description="Inclusive end date"),
+    country_code: str | None = Query(default=None, max_length=3, description="Country code"),
+    event_root_codes: str | None = Query(default=None, description="CAMEO root codes (comma-separated)"),
+    geo_country: str | None = Query(default=None, description="ActionGeo country code"),
+    geo_state: str | None = Query(default=None, description="Reverse-geocoded state/province"),
+    geo_city: str | None = Query(default=None, description="Reverse-geocoded city"),
+    theme_category: str | None = Query(default=None, description="GKG theme category"),
+    limit: int = Query(default=10, ge=1, le=50, description="Maximum number of sources to return."),
+) -> EntityCountListResponse:
+    codes = _parse_event_root_codes(event_root_codes)
+    filters = EventFilter(
+        start_date=start_date,
+        end_date=end_date,
+        country_code=country_code,
+        event_root_codes=codes,
+        geo_country=geo_country,
+        geo_state=geo_state,
+        geo_city=geo_city,
+        theme_category=theme_category,
+        limit=limit,
+    )
+
+    now = _time.monotonic()
+    cache_key = f"{filters.start_date}:{filters.end_date}:{filters.country_code}:{filters.event_root_codes}:{filters.geo_country}:{filters.geo_state}:{filters.geo_city}:{filters.theme_category}:{limit}"
+    with _source_cache_lock:
+        entry = _source_cache.get(cache_key)
+        if entry is not None and (now - entry["ts"]) < _SOURCES_TTL:
+            return entry["data"]
+
+    sources = hot_repo.get_top_sources(filters, limit=limit)
+    response = EntityCountListResponse(count=len(sources), data=[EntityCountResponse.model_validate(source) for source in sources])
+
+    with _source_cache_lock:
+        _source_cache[cache_key] = {"ts": now, "data": response}
+        stale = [k for k, v in _source_cache.items() if (now - v["ts"]) > _SOURCES_TTL * 5]
+        for k in stale:
+            _source_cache.pop(k, None)
+
+    return response
+
+
 @router.get("/geo-drill")
 def get_geo_drill(
     hot_repo: Annotated[DuckDbRepository, Depends(_get_hot_repository)],
@@ -396,7 +449,10 @@ _THREAT_TTL = 120.0  # 2 min
 _people_cache: dict = {}
 _people_cache_lock = threading.Lock()
 _PEOPLE_TTL = 120.0  # seconds
- 
+
+_source_cache: dict = {}
+_source_cache_lock = threading.Lock()
+_SOURCES_TTL = 120.0  # seconds
  
 # ---------------------------------------------------------------------------
 # 15.1 — Global Pulse endpoint

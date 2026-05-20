@@ -37,9 +37,9 @@ export function TrendingNewsFeed({ category, eventRootCodes, geoFilter, themeCat
   const events = useMemo(() => {
     const rawEvents = data?.data || [];
     if (!showOnlyPopular) return rawEvents;
-    const filtered = rawEvents.filter((event) => Number(event.num_mentions ?? 0) > popularityThreshold);
+    const filtered = rawEvents.filter((event: Event) => Number(event.num_mentions ?? 0) > popularityThreshold);
     // Sort by mentions in descending order (highest first)
-    return filtered.sort((a, b) => Number(b.num_mentions ?? 0) - Number(a.num_mentions ?? 0));
+    return filtered.sort((a: Event, b: Event) => Number(b.num_mentions ?? 0) - Number(a.num_mentions ?? 0));
   }, [data?.data, showOnlyPopular]);
 
   if (isLoading) {

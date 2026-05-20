@@ -56,6 +56,7 @@
 - [x] Cold-tier monthly query limit raised to 999999 (was 100)
 
 - [x] Top-people chart: optimized hot-tier query (prefilter before UNNEST) + in-process TTL cache (120s). Backend aggregates `SUM(NumMentions)` by default; label clarified in UI to "Top people by mentions". Recommended: persistent cache or nightly precompute for further speedups.
+- [x] Top news sources chart: hot-tier source-domain aggregation from `SOURCEURL`, `GET /events/top-sources`, and frontend chart panel added beside Top People.
 
 ## In Progress
 - [ ] UI Phase 4.3 (Country Choropleth Layer)

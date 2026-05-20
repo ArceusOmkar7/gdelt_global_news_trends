@@ -69,6 +69,18 @@ class TestDuckDbRepository:
         assert counts['Joe Biden'] == 100
         assert 'Rishi Sunak' in counts
 
+    def test_get_top_sources_aggregates_source_domains(self, test_settings, tmp_hot_tier):
+        repo = DuckDbRepository(test_settings)
+        filters = EventFilter(start_date=date(2024, 1, 1), end_date=date(2024, 1, 4), limit=10)
+
+        sources = repo.get_top_sources(filters, limit=5)
+
+        assert len(sources) == 3
+        counts = {s['name']: s['count'] for s in sources}
+        assert counts['example.com'] == 3
+        assert counts['bbc.com'] == 1
+        assert counts['example.org'] == 1
+
     def test_get_event_by_id(self, test_settings, tmp_hot_tier):
         repo = DuckDbRepository(test_settings)
         

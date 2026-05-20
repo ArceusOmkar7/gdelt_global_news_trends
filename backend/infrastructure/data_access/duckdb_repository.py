@@ -341,6 +341,74 @@ class DuckDbRepository(IEventRepository):
             for row in rows
         ]
 
+    def get_top_sources(
+        self,
+        filters: EventFilter,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        start_date, end_date = self._resolve_dates(filters)
+        start_int, end_exclusive_int = self._sql_date_bounds(start_date, end_date)
+
+        where_clauses = [
+            "SQLDATE >= ?",
+            "SQLDATE < ?",
+            "SOURCEURL IS NOT NULL",
+            "SOURCEURL <> ''",
+        ]
+        params: list[Any] = [start_int, end_exclusive_int]
+
+        if filters.country_code:
+            where_clauses.append(
+                "(Actor1CountryCode = ? OR ActionGeo_CountryCode = ?)"
+            )
+            cc = filters.country_code.upper()
+            params.extend([cc, cc])
+
+        if filters.event_root_codes:
+            placeholders = ", ".join(["?" for _ in filters.event_root_codes])
+            where_clauses.append(f"EventRootCode IN ({placeholders})")
+            params.extend(filters.event_root_codes)
+
+        if filters.geo_country:
+            where_clauses.append("ActionGeo_CountryCode = ?")
+            params.append(filters.geo_country.upper())
+
+        theme_clause, theme_params = _build_theme_filter(filters.theme_category)
+        if theme_clause:
+            where_clauses.append(theme_clause)
+            params.extend(theme_params)
+
+        sub_where = ' AND '.join(where_clauses)
+        sql = f"""
+            SELECT
+                source_domain AS name,
+                COUNT(*) AS count
+            FROM (
+                SELECT
+                    split_part(
+                        REPLACE(REPLACE(REPLACE(LOWER(SOURCEURL), 'https://', ''), 'http://', ''), 'www.', ''),
+                        '/',
+                        1
+                    ) AS source_domain
+                FROM read_parquet('{self._parquet_glob}')
+                WHERE {sub_where}
+            ) AS sources
+            WHERE source_domain IS NOT NULL AND source_domain != ''
+            GROUP BY source_domain
+            ORDER BY count DESC
+            LIMIT ?
+        """
+
+        params.append(limit)
+        rows = self._query(sql, params)
+        return [
+            {
+                "name": row.get("name") or "Unknown",
+                "count": int(row.get("count") or 0),
+            }
+            for row in rows
+        ]
+
     def get_map_aggregations(
         self,
         bbox_n: float,

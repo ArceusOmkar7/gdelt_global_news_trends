@@ -273,6 +273,7 @@ backend/
 | GET | `/api/v1/analytics/spikes` | Activity spike alerts (2.0x vs 7d avg) |
 | GET | `/api/v1/analytics/anomalies` | IsolationForest regional anomalies |
 | GET | `/api/v1/events/{id}/analyze` | LLM deep analysis of a single event |
+| GET | `/api/v1/events/top-sources` | Top source domains aggregated from hot-tier `SOURCEURL` |
 | GET | `/api/v1/health` | Service health check |
 | GET | `/api/v1/health/settings` | Runtime settings |
 

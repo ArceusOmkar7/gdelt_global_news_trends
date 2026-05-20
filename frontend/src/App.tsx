@@ -9,6 +9,7 @@ import { TrendingNewsFeed } from './components/tables/TrendingNewsFeed';
 import { DateRangeSlider } from './components/ambient/DateRangeSlider';
 import { EventTrendChart } from './components/ambient/EventTrendChart';
 import { PeopleMentionsChart } from './components/ambient/PeopleMentionsChart';
+import { SourceMentionsChart } from './components/ambient/SourceMentionsChart';
 import { GeoFilterBar } from './components/ambient/GeoFilterBar';
 import { LiveNewsWall } from './components/ambient/LiveNewsWall';
 import { SearchableDropdown, type DropdownOption } from './components/ambient/SearchableDropdown';
@@ -373,11 +374,18 @@ function App() {
                 themeCategory={activeThemeCategory}
               />
 
-              <PeopleMentionsChart
-                eventRootCodes={eventRootCodes}
-                geoFilter={geoFilter}
-                themeCategory={activeThemeCategory}
-              />
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <PeopleMentionsChart
+                  eventRootCodes={eventRootCodes}
+                  geoFilter={geoFilter}
+                  themeCategory={activeThemeCategory}
+                />
+                <SourceMentionsChart
+                  eventRootCodes={eventRootCodes}
+                  geoFilter={geoFilter}
+                  themeCategory={activeThemeCategory}
+                />
+              </div>
 
               {/* Bento Grid layout */}
               {activeCategory === 'ALL' ? (
