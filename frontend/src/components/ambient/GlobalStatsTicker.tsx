@@ -54,7 +54,6 @@ interface TickerItem {
 }
 
 function buildItems(data: {
-  total_events_today: number;
   most_active_country: string | null;
   most_active_display?: string | null;
   most_active_count: number;
@@ -64,7 +63,6 @@ function buildItems(data: {
   global_conflict_ratio: number;
 }): TickerItem[] {
   return [
-    { label: 'EVENTS TODAY', value: fmtCount(data.total_events_today) },
     {
       label: 'MOST ACTIVE',
       value: data.most_active_display
