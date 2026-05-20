@@ -20,21 +20,22 @@ interface SourceMentionsChartProps {
   themeCategory?: string | null;
 }
 
-function formatValue(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
-  return String(value);
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{ value: number }>;
+  label?: string;
+  isDark?: boolean;
 }
 
 const truncateName = (name: string): string => {
   return name.length > 24 ? `${name.slice(0, 24)}…` : name;
 };
 
-const formatLabel = (value: any): string => {
-  return formatValue(Number(value) || 0);
+const formatLabel = (value: unknown): string => {
+  return (Number(value) || 0).toLocaleString();
 };
 
-const CustomTooltip = ({ active, payload, label, isDark }: any) => {
+const CustomTooltip = ({ active, payload, label, isDark }: CustomTooltipProps) => {
   if (!active || !payload?.length) return null;
   const entry = payload[0];
 
@@ -51,7 +52,7 @@ const CustomTooltip = ({ active, payload, label, isDark }: any) => {
       <div className="font-bold tracking-widest uppercase text-[10px] opacity-60 mb-1">{label}</div>
       <div className="flex items-center justify-between gap-4">
         <span style={{ color: '#22c55e' }}>Sources</span>
-        <span className="font-bold">{formatValue(entry?.value ?? 0)}</span>
+        <span className="font-bold">{(entry?.value ?? 0).toLocaleString()}</span>
       </div>
     </div>
   );
@@ -102,14 +103,14 @@ export const SourceMentionsChart: React.FC<SourceMentionsChartProps> = ({
             <BarChart
               layout="vertical"
               data={chartData}
-              margin={{ top: 12, right: 24, left: 16, bottom: 12 }}
+              margin={{ top: 12, right: 48, left: 16, bottom: 12 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke={isDarkTheme ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'} vertical={false} />
               <XAxis
                 type="number"
                 stroke={isDarkTheme ? 'rgba(255,255,255,0.35)' : 'rgba(15,23,42,0.35)'}
                 tick={{ fill: isDarkTheme ? '#E5E7EB' : '#0F172A', fontSize: 10, fontFamily: 'monospace' }}
-                tickFormatter={formatValue}
+                tickFormatter={formatLabel}
                 axisLine={false}
                 tickLine={false}
               />

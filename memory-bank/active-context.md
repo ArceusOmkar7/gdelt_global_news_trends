@@ -14,6 +14,8 @@
 
 ## Recent Changes (2026-05-20)
 ### UI / Frontend Changes
+- **Bar Chart Scale and Exact Formatting Resolved**: Modified both `PeopleMentionsChart.tsx` and `SourceMentionsChart.tsx` to completely remove dynamic `K`-scale rounding and legend badges, displaying the exact, comma-formatted counts directly on the X-axis, bar labels, and custom tooltips. This completely resolves the duplicate tick collision bug (e.g. `2K` showing twice on close values).
+- **ESLint & TypeScript Type-Safety Improvements**: Removed raw `any` types in both charts, replacing them with a type-safe `unknown` and a detailed `CustomTooltipProps` interface, resolving all 4 pre-existing chart linting errors.
 - **Header Geo Filter Bar Refactored**: Added the "City" dropdown directly in the upper horizontal filter bar (`GeoFilterBar.tsx`). The dropdown fetches matching cities under the selected state via React Query `citiesQuery` dynamically.
 - **Sidebar Clutter Cleanup**: Removed all imports and logic of `GeoDrillPanel` from `IntelligencePanel.tsx`. The drawer now cleanly triggers only for concrete events and regional dossiers, ignoring location-only adjustments.
 - **Redundant Components Pruned**: Permanently deleted the unused component file `GeoDrillPanel.tsx` from the codebase.
