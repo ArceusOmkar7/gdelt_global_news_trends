@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
 import { useStore } from '../../store/useStore';
@@ -16,6 +16,8 @@ interface TrendingNewsFeedProps {
 export function TrendingNewsFeed({ category, eventRootCodes, geoFilter, themeCategory }: TrendingNewsFeedProps) {
   const { dateRange, setSelectedEvent } = useStore();
   const [limit] = useState(50);
+  const showOnlyPopular = category === 'POPULAR' || themeCategory === 'POPULAR_NEWS';
+  const popularityThreshold = 10;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['global-events', dateRange[0], dateRange[1], eventRootCodes, geoFilter, themeCategory, limit],
@@ -32,7 +34,13 @@ export function TrendingNewsFeed({ category, eventRootCodes, geoFilter, themeCat
     staleTime: 60000,
   });
 
-  const events = data?.data || [];
+  const events = useMemo(() => {
+    const rawEvents = data?.data || [];
+    if (!showOnlyPopular) return rawEvents;
+    const filtered = rawEvents.filter((event: Event) => Number(event.num_mentions ?? 0) > popularityThreshold);
+    // Sort by mentions in descending order (highest first)
+    return filtered.sort((a: Event, b: Event) => Number(b.num_mentions ?? 0) - Number(a.num_mentions ?? 0));
+  }, [data?.data, showOnlyPopular]);
 
   if (isLoading) {
     return (

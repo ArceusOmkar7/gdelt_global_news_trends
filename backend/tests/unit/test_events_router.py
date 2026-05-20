@@ -7,9 +7,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.main import app
+from backend.api.routers.events import _get_analyze_use_case, _get_hot_repository, _get_use_case
 from backend.domain.models.event import Event, EventAnalysis, ExtractedArticle, EntityGroup
 from backend.application.use_cases.get_events import GetEventsUseCase
 from backend.application.use_cases.analyze_event import AnalyzeEventUseCase
+from backend.infrastructure.data_access.duckdb_repository import DuckDbRepository
 
 client = TestClient(app)
 
@@ -33,22 +35,30 @@ def _mock_analyze_event():
     )
     return mock
 
-from backend.api.routers.events import _get_use_case, _get_analyze_use_case
+
+def _mock_hot_repository():
+    mock = MagicMock(spec=DuckDbRepository)
+    mock.get_top_sources.return_value = [
+        {"name": "example.com", "count": 3},
+    ]
+    return mock
 
 @pytest.fixture
 def override_dependencies():
     get_mock = _mock_get_events()
     analyze_mock = _mock_analyze_event()
-    
+    hot_repo_mock = _mock_hot_repository()
+
     app.dependency_overrides[_get_use_case] = lambda: get_mock
     app.dependency_overrides[_get_analyze_use_case] = lambda: analyze_mock
-    
-    yield get_mock, analyze_mock
-    
+    app.dependency_overrides[_get_hot_repository] = lambda: hot_repo_mock
+
+    yield get_mock, analyze_mock, hot_repo_mock
+
     app.dependency_overrides.clear()
 
 def test_get_events(override_dependencies):
-    get_mock, _ = override_dependencies
+    get_mock, _, _ = override_dependencies
     
     response = client.get("/api/v1/events?limit=10")
     
@@ -59,9 +69,8 @@ def test_get_events(override_dependencies):
     
     get_mock.execute.assert_called_once()
 
-@pytest.mark.asyncio
 def test_analyze_event_api(override_dependencies):
-    _, analyze_mock = override_dependencies
+    _, analyze_mock, _ = override_dependencies
     
     response = client.get("/api/v1/events/1/analyze")
     
@@ -71,3 +80,17 @@ def test_analyze_event_api(override_dependencies):
     assert data["sentiment"] == "Positive"
     
     analyze_mock.execute.assert_called_once_with(1)
+
+
+def test_top_sources_api(override_dependencies):
+    _, _, hot_repo_mock = override_dependencies
+
+    response = client.get("/api/v1/events/top-sources?limit=5")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 1
+    assert data["data"][0]["name"] == "example.com"
+    assert data["data"][0]["count"] == 3
+
+    hot_repo_mock.get_top_sources.assert_called_once()

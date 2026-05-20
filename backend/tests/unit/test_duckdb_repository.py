@@ -56,6 +56,31 @@ class TestDuckDbRepository:
         assert len(counts) > 0
         assert counts[0].count > 0
 
+    def test_get_top_people_aggregates_person_mentions(self, test_settings, tmp_hot_tier):
+        repo = DuckDbRepository(test_settings)
+        filters = EventFilter(start_date=date(2024, 1, 1), end_date=date(2024, 1, 3), limit=10)
+
+        people = repo.get_top_people(filters, limit=5)
+
+        assert len(people) == 5
+        counts = {p['name']: p['count'] for p in people}
+        assert counts['Vladimir Putin'] == 500
+        assert counts['Volodymyr Zelenskyy'] == 500
+        assert counts['Joe Biden'] == 100
+        assert 'Rishi Sunak' in counts
+
+    def test_get_top_sources_aggregates_source_domains(self, test_settings, tmp_hot_tier):
+        repo = DuckDbRepository(test_settings)
+        filters = EventFilter(start_date=date(2024, 1, 1), end_date=date(2024, 1, 4), limit=10)
+
+        sources = repo.get_top_sources(filters, limit=5)
+
+        assert len(sources) == 3
+        counts = {s['name']: s['count'] for s in sources}
+        assert counts['example.com'] == 3
+        assert counts['bbc.com'] == 1
+        assert counts['example.org'] == 1
+
     def test_get_event_by_id(self, test_settings, tmp_hot_tier):
         repo = DuckDbRepository(test_settings)
         

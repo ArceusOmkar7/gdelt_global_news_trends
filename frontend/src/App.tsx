@@ -8,6 +8,8 @@ import { SpikeAlertsCard } from './components/ambient/SpikeAlertsCard';
 import { TrendingNewsFeed } from './components/tables/TrendingNewsFeed';
 import { DateRangeSlider } from './components/ambient/DateRangeSlider';
 import { EventTrendChart } from './components/ambient/EventTrendChart';
+import { PeopleMentionsChart } from './components/ambient/PeopleMentionsChart';
+import { SourceMentionsChart } from './components/ambient/SourceMentionsChart';
 import { GeoFilterBar } from './components/ambient/GeoFilterBar';
 import { LiveNewsWall } from './components/ambient/LiveNewsWall';
 import { SearchableDropdown, type DropdownOption } from './components/ambient/SearchableDropdown';
@@ -35,7 +37,7 @@ function toIsoDateLocal(d: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-const CATEGORIES = ['ALL', 'CONFLICT', 'DIPLOMACY', 'COOPERATION', 'PRESSURE'];
+const CATEGORIES = ['ALL', 'CONFLICT', 'DIPLOMACY', 'COOPERATION', 'PRESSURE', 'POPULAR'];
 
 const CATEGORY_TO_ROOT_CODES: Record<string, string[] | null> = {
   ALL: null,
@@ -270,12 +272,20 @@ function App() {
           <SearchableDropdown
             title="Category"
             value={activeCategory}
-            options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+            options={CATEGORIES.map((cat) => ({ value: cat, label: cat === 'POPULAR' ? 'POPULAR NEWS' : cat }))}
             placeholder="ALL"
             onChange={(value) => {
               const next = value || 'ALL';
               setActiveCategory(next);
               setEventRootCodes(CATEGORY_TO_ROOT_CODES[next] || null);
+              // When the user chooses the special Popular category, toggle a
+              // special theme flag so the map renders the popular-stars overlay.
+              if (next === 'POPULAR') {
+                setActiveThemeCategory('POPULAR_NEWS');
+              } else if (activeThemeCategory === 'POPULAR_NEWS') {
+                // Clear the special theme if another category is selected.
+                setActiveThemeCategory(null);
+              }
             }}
           />
 
@@ -363,6 +373,19 @@ function App() {
                 geoFilter={geoFilter}
                 themeCategory={activeThemeCategory}
               />
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <PeopleMentionsChart
+                  eventRootCodes={eventRootCodes}
+                  geoFilter={geoFilter}
+                  themeCategory={activeThemeCategory}
+                />
+                <SourceMentionsChart
+                  eventRootCodes={eventRootCodes}
+                  geoFilter={geoFilter}
+                  themeCategory={activeThemeCategory}
+                />
+              </div>
 
               {/* Bento Grid layout */}
               {activeCategory === 'ALL' ? (

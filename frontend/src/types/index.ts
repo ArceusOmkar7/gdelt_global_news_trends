@@ -156,6 +156,16 @@ export interface GlobalPulseResponse {
   avg_global_tone: number | null;
   global_conflict_ratio: number;
 }
+
+export interface EntityCountResponse {
+  name: string;
+  count: number;
+}
+
+export interface EntityCountListResponse {
+  count: number;
+  data: EntityCountResponse[];
+}
  
 // ---------------------------------------------------------------------------
 // PHASE 4 — Activity Spikes & Anomalies
