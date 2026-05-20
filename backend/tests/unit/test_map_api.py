@@ -35,7 +35,7 @@ def override_dependencies():
 def test_map_data_aggregated(override_dependencies):
     repo_mock = override_dependencies
     
-    response = client.get("/api/v1/map/data?zoom=2.0&bbox_n=90&bbox_s=-90&bbox_e=180&bbox_w=-180")
+    response = client.get("/api/v1/events/map?zoom=2.0&bbox_n=90&bbox_s=-90&bbox_e=180&bbox_w=-180")
     
     assert response.status_code == 200
     data = response.json()
@@ -49,7 +49,7 @@ def test_map_data_aggregated(override_dependencies):
 def test_map_data_detailed(override_dependencies):
     repo_mock = override_dependencies
     
-    response = client.get("/api/v1/map/data?zoom=8.0&bbox_n=90&bbox_s=-90&bbox_e=180&bbox_w=-180")
+    response = client.get("/api/v1/events/map?zoom=10.0&bbox_n=90&bbox_s=-90&bbox_e=180&bbox_w=-180")
     
     assert response.status_code == 200
     data = response.json()

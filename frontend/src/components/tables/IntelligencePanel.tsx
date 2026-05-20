@@ -2,7 +2,6 @@ import React, { useMemo, useRef, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import { apiService } from '../../services/api';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { GeoDrillPanel } from './GeoDrillPanel';
 import {
   QUAD_CLASS_LABELS,
   CAMEO_ROOT_LABELS,
@@ -48,7 +47,6 @@ export const IntelligencePanel: React.FC<{ dockToHeader?: boolean }> = ({ dockTo
     dateWindowReady,
     isDarkTheme,
     geoFilter,
-    setGeoFilter,
   } = useStore();
 
   // Chart colour tokens that flip with the theme
@@ -194,19 +192,14 @@ export const IntelligencePanel: React.FC<{ dockToHeader?: boolean }> = ({ dockTo
   const analysisImages = currentAnalysis?.images ?? [];
   const analysisEmbeds = currentAnalysis?.embeds ?? [];
 
-  const showGeoOnly = !selectedEvent && !selectedCountry && !!geoFilter.stateName;
-  const headerTitle = showGeoOnly
-    ? 'Location Filter'
-    : selectedEvent
+  const headerTitle = selectedEvent
     ? 'Event Intelligence'
     : `Regional Dossier: ${regionalRiskScoreQuery.data?.country_display || selectedCountry}`;
-  const headerSubtitle = showGeoOnly
-    ? `${geoFilter.countryCode || 'GLOBAL'} / ${geoFilter.stateName}`
-    : selectedEvent
+  const headerSubtitle = selectedEvent
     ? `EID-${selectedEvent.global_event_id}`
     : 'Sector Analysis';
 
-  if (!selectedEvent && !selectedCountry && !geoFilter.stateName) return null;
+  if (!selectedEvent && !selectedCountry) return null;
 
   const panelClassName = dockToHeader
     ? 'fixed right-0 top-14 h-[calc(100vh-3.5rem)] w-[450px] z-50 glass-panel shadow-2xl transition-transform duration-300 animate-in slide-in-from-right flex flex-col'
@@ -230,8 +223,6 @@ export const IntelligencePanel: React.FC<{ dockToHeader?: boolean }> = ({ dockTo
               setSelectedEvent(null);
             } else if (selectedCountry) {
               setSelectedCountry(null);
-            } else {
-              setGeoFilter({ countryCode: null, stateName: null, cityName: null });
             }
           }}
           className="p-2 hover:bg-white/10 rounded transition-colors text-white/50 hover:text-white"
@@ -241,8 +232,7 @@ export const IntelligencePanel: React.FC<{ dockToHeader?: boolean }> = ({ dockTo
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-        <GeoDrillPanel />
-        {showGeoOnly ? null : selectedEvent ? (
+        {selectedEvent ? (
           <>
             {selectedEvent.quad_class != null && QUAD_CLASS_LABELS[selectedEvent.quad_class] && (
               <section className="pt-1">

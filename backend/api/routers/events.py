@@ -284,6 +284,9 @@ def country_risk_score(
         country_code=country_code,
         start_date=start,
         end_date=end,
+        geo_state=geo_state,
+        geo_city=geo_city,
+        theme_category=theme_category,
     )
     score = compute_risk_score(
         metrics["conflict_ratio"],
@@ -483,7 +486,7 @@ def global_pulse(
     start = start_date or (end - timedelta(days=7))
     codes = _parse_event_root_codes(event_root_codes)
  
-    cache_key = f"{start}:{end}:{codes}:{geo_country}:{theme_category}"
+    cache_key = f"{start}:{end}:{codes}:{geo_country}:{geo_state}:{geo_city}:{theme_category}"
     with _pulse_cache_lock:
         entry = _pulse_cache.get(cache_key)
         if entry is not None and (now - entry["ts"]) < _PULSE_TTL:
@@ -495,6 +498,8 @@ def global_pulse(
         end_date=end,
         event_root_codes=codes,
         geo_country=geo_country,
+        geo_state=geo_state,
+        geo_city=geo_city,
         theme_category=theme_category,
     )
  
@@ -551,14 +556,22 @@ def top_threat_countries(
     end = end_date or date.today()
     start = start_date or (end - timedelta(days=7))
  
-    cache_key = f"{start}:{end}:{limit}:{geo_country}:{theme_category}"
+    cache_key = f"{start}:{end}:{limit}:{geo_country}:{geo_state}:{geo_city}:{theme_category}"
     with _threat_cache_lock:
         entry = _threat_cache.get(cache_key)
         if entry is not None and (now - entry["ts"]) < _THREAT_TTL:
             return entry["data"]
  
     repository = DuckDbRepository(settings)
-    rows = repository.get_top_threat_countries(start_date=start, end_date=end, limit=limit)
+    rows = repository.get_top_threat_countries(
+        start_date=start,
+        end_date=end,
+        limit=limit,
+        geo_country=geo_country,
+        geo_state=geo_state,
+        geo_city=geo_city,
+        theme_category=theme_category,
+    )
  
     data = [
         ThreatCountryEntry(
@@ -609,6 +622,8 @@ def daily_trend(
         end_date=end,
         event_root_codes=codes,
         geo_country=geo_country,
+        geo_state=geo_state,
+        geo_city=geo_city,
         theme_category=theme_category,
     )
     return {"data": rows}

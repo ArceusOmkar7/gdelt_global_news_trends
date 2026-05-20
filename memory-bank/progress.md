@@ -33,7 +33,8 @@
 - [x] Dashboard-first UI with categories row and responsive bento grid
 - [x] Category system mapped to CAMEO root codes (ALL/WAR/POLITICS/ECONOMY/SPORTS/TECH/HEALTH)
 - [x] Category tabs updated to CAMEO groups (ALL/CONFLICT/DIPLOMACY/COOPERATION/PRESSURE)
-- [x] Geo filter bar + drill-down panel (country/state/city) with reverse geocoding
+- [x] Geo filter bar in header containing Country, State, and City dropdowns (fully integrated directly into `GeoFilterBar`)
+- [x] Backend geo-filtering fixes (DuckDB map aggregations and detailed event markers now respect reverse-geocoded cities correctly)
 - [x] Geo drill hot-tier endpoint (`/events/geo-drill`) and offline reverse geocoder service
 - [x] Theme category nightly cache + analytics endpoint (`/analytics/theme-categories`)
 - [x] Theme category pills as secondary filter in dashboard
